@@ -1,6 +1,6 @@
 # `ai` image
 
-Create `$HOME/ai/settings` with `.claude.tmpl.json`
+Create `$HOME/ai/settings` with `.claude.tmpl.json`:
 
 ```json
 {
@@ -9,6 +9,8 @@ Create `$HOME/ai/settings` with `.claude.tmpl.json`
   "primaryApiKey": "op://vault-name/long-id/password",
 }
 ```
+
+Add `CLAUDE.md` to `$HOME/ai/settings` if you want.
 
 ```shell
 # start podman and share the current working directory
