@@ -1,5 +1,33 @@
 # `ai` image
 
+Create `$HOME/ai/settings` with `.claude.tmpl.json`
+
+```json
+{
+  "bypassPermissionsModeAccepted": true,
+  "hasCompletedOnboarding": true,
+  "primaryApiKey": "op://vault-name/long-id/password",
+}
+```
+
+```shell
+# start podman and share the current working directory
+bin/ai
+
+# launch claude
+cool_claude
+```
+
+## Tricks
+
+```shell
+docker run --rm -it --net=container:<container> nicolaka/netshoot tcpdump -i any
+
+docker image inspect ai:latest
+```
+
+## Stuff
+
 - [x] Claude Code
 - [x] GitHub Copilot
 - [x] Google Gemini
@@ -12,27 +40,3 @@
 - [x] Go
 - [ ] PostgreSQL
 - [ ] LavinMQ
-
-```json
-{
-  "bypassPermissionsModeAccepted": true,
-  "hasCompletedOnboarding": true,
-  "primaryApiKey": "...",
-}
-```
-
-```shell
-# This triggers prompt "Detected a custom API key in your environment"
-# primaryApiKey in JSON config does not
-export ANTHROPIC_API_KEY=your-api-key-here
-
-IS_SANDBOX=1 claude --dangerously-skip-permissions --model opus
-```
-
-## Tricks
-
-```shell
-docker run --rm -it --net=container:<container> nicolaka/netshoot tcpdump -i any
-
-docker image inspect ai:latest
-```
