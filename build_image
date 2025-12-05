@@ -6,4 +6,4 @@ date=$(date +%Y%m%d)
 
 set -x
 
-docker build . --tag ai:latest --tag ai:${date}
+docker build . --tag ai:latest

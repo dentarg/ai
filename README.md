@@ -33,4 +33,6 @@ IS_SANDBOX=1 claude --dangerously-skip-permissions --model opus
 
 ```shell
 docker run --rm -it --net=container:<container> nicolaka/netshoot tcpdump -i any
+
+docker image inspect ai:latest
 ```
