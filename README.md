@@ -18,6 +18,15 @@ bin/ai
 cool_claude
 ```
 
+## Prerequisites
+
+```shell
+brew install podman
+podman machine init
+podman machine start
+./build_image
+```
+
 ## Tricks
 
 ```shell
