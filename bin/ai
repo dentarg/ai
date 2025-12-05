@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -e
+set -u
+
+SETTINGS_DIR=$HOME/ai/settings
+
+op inject --force --in-file="${SETTINGS_DIR}/.claude.tmpl.json" --out-file="${SETTINGS_DIR}/.claude.json"
+
+podman run --rm -it \
+  -v ${HOME}/ai/commandhistory:/commandhistory \
+  -v ${SETTINGS_DIR}:/settings \
+  -v $(pwd):/app \
+  -w /app \
+  ai:latest bash

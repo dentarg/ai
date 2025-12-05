@@ -32,15 +32,14 @@ RUN rm _brew.sh \
 
 # Homebrew does not let you pick HOMEBREW_PREFIX on Linux, always /home/linuxbrew/.linuxbrew
 COPY <<-EOT /etc/bash.bashrc
-  export HOME=/workspace
-  export HISTFILE=/commandhistory/.bash_history
-
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
   eval "$($HOME/.local/bin/mise activate bash)"
   eval "$($HOME/.cargo/bin/rv shell init bash)"
   eval "$($HOME/.cargo/bin/rv shell env bash)"
   eval "$($HOME/.cargo/bin/rv shell completions bash)"
+
+  test -f /etc/profile.bashrc && source /etc/profile.bashrc
 EOT
 
 # --login needed for rv to be found (?)
@@ -73,3 +72,5 @@ RUN bash -c "bundle --version"
 
 RUN bash -c "brew install crystal"
 RUN bash -c "crystal --version"
+
+COPY profile.bashrc /etc/profile.bashrc
