@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -eux
 
@@ -14,6 +14,7 @@ apt-get install -y \
   zsh
 
 sh _mise.sh
+~/.local/bin/mise activate bash
 echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc
 source ~/.bashrc
 

@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -eu
+
+date=$(date +%Y%m%d)
+
+set -x
+
+docker build . --tag ai:latest --tag ai:${date}
