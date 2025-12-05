@@ -1,9 +1,15 @@
 #!/bin/sh
 
-set -eu
-
-date=$(date +%Y%m%d)
-
+set -e
+set -u
 set -x
 
-docker build . --tag ai:latest
+# Docker Desktop started to crash when building the image
+# podman at least told me installing Crystal with mise ran out of memory
+#
+# docker build . --tag ai:latest
+
+# check date when it was built with
+# podman image inspect ai:latest | jq '.[].Created'
+
+podman build . --tag ai:latest

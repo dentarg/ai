@@ -6,9 +6,10 @@ function download() {
   local name=$1
   local url=$2
 
-  curl --location --silent --output _${name}.sh ${url}
+  curl --location --silent --output inside_deps/_${name}.sh ${url}
   echo "✓ ${name}"
 }
 
+download brew https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
 download mise https://mise.run
 download rv https://github.com/spinel-coop/rv/releases/download/v0.2.0/rv-installer.sh
