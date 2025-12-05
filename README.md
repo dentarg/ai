@@ -20,6 +20,8 @@ cool_claude
 
 ## Prerequisites
 
+Your Anthropic API key in 1Password.
+
 ```shell
 brew install podman
 podman machine init
