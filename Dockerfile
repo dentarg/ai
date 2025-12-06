@@ -4,6 +4,7 @@ ARG RUBY_VERSION=3.4.7
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
      build-essential\
+     ca-certificates \
      cmake \
      curl \
      gcc \
@@ -13,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      postgresql \
      sudo \
      unminimize \
-     ca-certificates \
+     vim \
      zsh \
      && yes | unminimize \
      && rm -rf /var/lib/apt/lists /var/cache/apt/archives
