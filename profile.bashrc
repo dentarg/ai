@@ -9,8 +9,8 @@ link_dotfiles () {
   local dir=/settings/dotfiles
 
   for file in ${dir}/* ${dir}/.*; do
-    [[ "$file" == "." || "$file" == ".." ]] && continue
-    ln -sf $(realpath $file) $HOME
+    [[ "$(basename $file)" == "*" ]] && continue
+    ln -sf $file $HOME
   done
 }
 
