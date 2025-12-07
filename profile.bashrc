@@ -1,3 +1,5 @@
+# due to https://github.com/ruby/rubygems/issues/9124
+export BUNDLE_DEFAULT_CLI_COMMAND=install
 export HOME=/workspace
 export HISTFILE=/commandhistory/.bash_history
 # append to history file after each command
