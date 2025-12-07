@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      gcc \
      git \
      jq \
+     libpq-dev \
+     libyaml-dev \
      man-db \
      postgresql \
      sudo \
