@@ -23,9 +23,9 @@ cool_claude () {
   ln -s $claude_home $HOME/.claude
   cp -f /settings/CLAUDE.md $HOME/.claude || true
 
-  link_dotfiles
-
   claude \
     --dangerously-skip-permissions \
     --model opus
 }
+
+link_dotfiles
