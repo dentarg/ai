@@ -6,17 +6,20 @@ set -u
 AI_DIR=${AI_DIR:-"${HOME}/ai"}
 COMMAND_HISTORY_DIR=${AI_DIR}/commandhistory
 HISTORY_DIR=${AI_DIR}/history
+REPOS_DIR=${AI_DIR}/repos
 SETTINGS_DIR=${AI_DIR}/settings
 
 mkdir -p $COMMAND_HISTORY_DIR
 mkdir -p $HISTORY_DIR
-mkdir -p $SETTINGS_DIR
+mkdir -p $REPOS_DIR
+mkdir -p $SETTINGS_DIR/dotfiles
 
-op inject --force --in-file="${SETTINGS_DIR}/.claude.tmpl.json" --out-file="${SETTINGS_DIR}/.claude.json"
+op inject --force --in-file="${SETTINGS_DIR}/.claude.tmpl.json" --out-file="${SETTINGS_DIR}/dotfiles/.claude.json"
 
 podman run --rm -it \
   -v ${COMMAND_HISTORY_DIR}:/commandhistory \
   -v ${HISTORY_DIR}:/history \
+  -v ${REPOS_DIR}:/repos \
   -v ${SETTINGS_DIR}:/settings \
   -v $(pwd):/app \
   -w /app \
