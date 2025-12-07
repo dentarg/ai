@@ -6,9 +6,14 @@ export PROMPT_COMMAND="history -a"
 export IS_SANDBOX=1
 
 cool_claude () {
-  mkdir -p $HOME/.claude
-  cp -f /settings/CLAUDE.md $HOME/.claude
+  local claude_home="/history/claude_$(date +%Y%m%d%H%M)"
+
+  mkdir -p $claude_home
+  ln -s $claude_home $HOME/.claude
+
+  cp -f /settings/CLAUDE.md $HOME/.claude || true
   cp -f /settings/.claude.json $HOME/.claude.json
+
   claude \
     --dangerously-skip-permissions \
     --model opus
