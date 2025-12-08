@@ -23,4 +23,4 @@ podman run --rm -it \
   -v ${SETTINGS_DIR}:/settings \
   -v $(pwd):/app \
   -w /app \
-  ai:latest bash
+  ai:latest

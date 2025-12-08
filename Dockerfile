@@ -77,3 +77,10 @@ RUN bash -c "brew install crystal"
 RUN bash -c "crystal --version"
 
 COPY profile.bashrc /etc/profile.bashrc
+
+RUN sed -i 's/scram-sha-256/trust/' /etc/postgresql/17/main/pg_hba.conf
+RUN service postgresql start && sudo -u postgres psql --command='CREATE ROLE root WITH LOGIN SUPERUSER;'
+
+COPY ./start.sh /start.sh
+RUN chmod +x /start.sh
+ENTRYPOINT ["/start.sh", "bash"]
