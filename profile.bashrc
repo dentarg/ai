@@ -7,6 +7,8 @@ export PROMPT_COMMAND="history -a"
 # allows claude to start with --dangerously-skip-permissions as root
 export IS_SANDBOX=1
 
+alias b=bundle
+
 link_dotfiles () {
   local dir=/settings/dotfiles
 
