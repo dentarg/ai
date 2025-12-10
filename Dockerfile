@@ -3,7 +3,7 @@ FROM ubuntu:26.04
 ARG RUBY_VERSION=3.4.7
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-     build-essential\
+     build-essential \
      ca-certificates \
      cmake \
      curl \
@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      libpq-dev \
      libyaml-dev \
      man-db \
+     openssh-client \
      postgresql \
      sudo \
      unminimize \
