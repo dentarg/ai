@@ -9,13 +9,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      curl \
      gcc \
      git \
+     gpg \
+     gpg-agent \
      jq \
      libpq-dev \
      libyaml-dev \
      man-db \
+     netcat-openbsd \
      openssh-client \
      postgresql \
      sudo \
+     systemd \
+     systemd-sysv \
      unminimize \
      vim \
      zsh \
@@ -35,7 +40,9 @@ RUN rm _brew.sh \
        _rv.sh
 
 # Homebrew does not let you pick HOMEBREW_PREFIX on Linux, always /home/linuxbrew/.linuxbrew
+# $HOME must be set to run brew
 COPY <<-EOT /etc/bash.bashrc
+  export HOME=/workspace
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
   eval "$($HOME/.local/bin/mise activate bash)"
@@ -77,11 +84,61 @@ RUN bash -c "bundle --version"
 RUN bash -c "brew install crystal"
 RUN bash -c "crystal --version"
 
-COPY profile.bashrc /etc/profile.bashrc
-
+# PostgreSQL
 RUN sed -i 's/scram-sha-256/trust/' /etc/postgresql/17/main/pg_hba.conf
 RUN service postgresql start && sudo -u postgres psql --command='CREATE ROLE root WITH LOGIN SUPERUSER;'
 
+# LavinMQ
+RUN curl -sL https://packagecloud.io/cloudamqp/lavinmq/gpgkey | gpg --dearmor > /usr/share/keyrings/lavinmq.gpg
+# no resolute packages yet
+COPY <<-EOT /etc/apt/sources.list.d/lavinmq.list
+deb [signed-by=/usr/share/keyrings/lavinmq.gpg] https://packagecloud.io/cloudamqp/lavinmq/ubuntu noble main
+EOT
+RUN apt-get update && apt-get install -y --no-install-recommends lavinmq
+
+# we don't want to wait when starting the container
+RUN systemctl disable postgresql lavinmq
+
+# convenience script to start services
 COPY ./start.sh /start.sh
 RUN chmod +x /start.sh
-ENTRYPOINT ["/start.sh", "bash"]
+
+#
+# systemd
+#
+
+# Default is SIGTERM (15), but systemd ignores that. Systemd expects SIGRTMIN+3 (37) to initiate a clean shutdown
+# Without it, podman would send SIGTERM, systemd ignores it, then after a timeout podman sends SIGKILL
+STOPSIGNAL SIGRTMIN+3
+
+# disables login prompt
+RUN systemctl mask getty.target console-getty.service
+
+# this gets us the behaviour we had without systemd
+COPY <<-EOT /etc/systemd/system/shell.service
+[Unit]
+Description=Interactive Shell
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash
+WorkingDirectory=/app
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/console
+TTYReset=yes
+TTYVHangup=yes
+ExecStopPost=/usr/bin/systemctl poweroff
+
+[Install]
+WantedBy=multi-user.target
+EOT
+
+RUN systemctl enable shell.service
+
+# do this late to allow tweaking without rebuilding previous layers
+COPY profile.bashrc /etc/profile.bashrc
+
+CMD ["/sbin/init"]

@@ -53,4 +53,4 @@ docker image inspect ai:latest
 - [x] Go
 - [x] SSH (`ssh-keygen`, ...)
 - [x] PostgreSQL
-- [ ] LavinMQ
+- [x] LavinMQ

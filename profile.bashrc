@@ -2,7 +2,7 @@
 export BUNDLE_DEFAULT_CLI_COMMAND=install
 export BUNDLE_IGNORE_FUNDING_REQUESTS=1 # no post install messages will be printed
 export BUNDLE_IGNORE_MESSAGES=1 # no funding requests will be printed
-export HOME=/workspace
+export BUNDLE_SILENCE_ROOT_WARNING=1
 export HISTFILE=/commandhistory/.bash_history
 # append to history file after each command
 export PROMPT_COMMAND="history -a"
@@ -10,6 +10,7 @@ export PROMPT_COMMAND="history -a"
 export IS_SANDBOX=1
 
 alias b=bundle
+alias s=/start.sh
 
 link_dotfiles () {
   local dir=/settings/dotfiles

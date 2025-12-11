@@ -2,5 +2,6 @@
 
 set -eux
 
-service postgresql start
-exec "$@"
+systemctl enable --now --no-block postgresql
+systemctl enable --now --no-block lavinmq
+test -f Gemfile && bundle install || true
