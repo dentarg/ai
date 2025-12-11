@@ -114,7 +114,7 @@ STOPSIGNAL SIGRTMIN+3
 # disables login prompt
 RUN systemctl mask getty.target console-getty.service
 
-# this gets us the behaviour we had without systemd
+# this gets us the behaviour we had without systemd: a shell is started, container stops when we exit the shell
 COPY <<-EOT /etc/systemd/system/shell.service
 [Unit]
 Description=Interactive Shell
@@ -130,7 +130,7 @@ StandardError=tty
 TTYPath=/dev/console
 TTYReset=yes
 TTYVHangup=yes
-ExecStopPost=/usr/bin/systemctl poweroff
+ExecStopPost=/usr/bin/systemctl poweroff --force
 
 [Install]
 WantedBy=multi-user.target
