@@ -1,5 +1,7 @@
 # due to https://github.com/ruby/rubygems/issues/9124
 export BUNDLE_DEFAULT_CLI_COMMAND=install
+export BUNDLE_IGNORE_FUNDING_REQUESTS=1 # no post install messages will be printed
+export BUNDLE_IGNORE_MESSAGES=1 # no funding requests will be printed
 export HOME=/workspace
 export HISTFILE=/commandhistory/.bash_history
 # append to history file after each command
