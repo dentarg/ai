@@ -35,8 +35,17 @@ podman machine start
 
 ```shell
 docker run --rm -it --net=container:<container> nicolaka/netshoot tcpdump -i any
+podman run --rm -it --cap-add=NET_RAW --cap-add=NET_ADMIN --net=container:<container> nicolaka/netshoot tcpdump -i eth0
 
 docker image inspect ai:latest
+
+# give more memory (memory is in MB, so 8192 = 8GB)
+podman machine stop
+podman machine set --memory 8192
+podman machine start
+
+# to see current settings
+podman machine inspect
 ```
 
 ## Stuff
