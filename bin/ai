@@ -9,6 +9,8 @@ HISTORY_DIR=${AI_DIR}/history
 REPOS_DIR=${AI_DIR}/repos
 SETTINGS_DIR=${AI_DIR}/settings
 
+PORT=${PORT:-1337}
+
 mkdir -p $COMMAND_HISTORY_DIR
 mkdir -p $HISTORY_DIR
 mkdir -p $REPOS_DIR
@@ -23,4 +25,5 @@ podman run --rm --interactive --tty \
   --volume ${SETTINGS_DIR}:/settings \
   --volume $(pwd):/app \
   --workdir /app \
+  --publish ${PORT}:${PORT} \
   ai:latest
