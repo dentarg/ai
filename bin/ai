@@ -16,7 +16,10 @@ mkdir -p $HISTORY_DIR
 mkdir -p $REPOS_DIR
 mkdir -p $SETTINGS_DIR/dotfiles
 
-op inject --force --in-file="${SETTINGS_DIR}/.claude.tmpl.json" --out-file="${SETTINGS_DIR}/dotfiles/.claude.json"
+CLAUDE_JSON="${SETTINGS_DIR}/dotfiles/.claude.json"
+if [ ! -f "$CLAUDE_JSON" ]; then
+  op inject --force --in-file="${SETTINGS_DIR}/.claude.tmpl.json" --out-file="$CLAUDE_JSON"
+fi
 
 podman run --rm --interactive --tty \
   --volume ${COMMAND_HISTORY_DIR}:/commandhistory \
