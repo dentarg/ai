@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      systemd-sysv \
      unminimize \
      vim \
+     zlib1g-dev \
      zsh \
      && yes | unminimize \
      && rm -rf /var/lib/apt/lists /var/cache/apt/archives
