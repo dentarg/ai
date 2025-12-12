@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      jq \
      libpq-dev \
      libyaml-dev \
+     libzstd-dev \
      man-db \
      netcat-openbsd \
      openssh-client \
