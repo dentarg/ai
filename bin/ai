@@ -25,5 +25,5 @@ podman run --rm --interactive --tty \
   --volume ${SETTINGS_DIR}:/settings \
   --volume $(pwd):/app \
   --workdir /app \
-  --publish ${PORT}:${PORT} \
+  --publish ${PORT} \
   ai:latest
