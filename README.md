@@ -39,8 +39,9 @@ podman run --rm -it --cap-add=NET_RAW --cap-add=NET_ADMIN --net=container:<conta
 
 docker image inspect ai:latest
 
-# give more memory (memory is in MB, so 8192 = 8GB)
+# give more disk/memory (memory is in MiB, disk in GiB)
 podman machine stop
+podman machine set --disk-size 200
 podman machine set --memory 8192
 podman machine start
 
