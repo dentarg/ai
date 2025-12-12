@@ -3,6 +3,7 @@ FROM ubuntu:26.04
 ARG RUBY_VERSION=3.4.7
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+     bind9-host \
      build-essential \
      ca-certificates \
      cmake \
@@ -11,6 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      git \
      gpg \
      gpg-agent \
+     inetutils-traceroute \
+     iputils-ping \
+     iputils-tracepath \
      jq \
      libpq-dev \
      libyaml-dev \
@@ -81,7 +85,12 @@ RUN bash -c "gem install bundler"
 RUN bash -c "ruby --yjit --version"
 RUN bash -c "bundle --version"
 
-RUN bash -c "brew install crystal"
+# Crystal
+RUN curl --location https://packagecloud.io/84codes/crystal/gpgkey | gpg --dearmor > /etc/apt/trusted.gpg.d/84codes_crystal.gpg
+COPY <<-EOT /etc/apt/sources.list.d/84codes_crystal.list
+deb https://packagecloud.io/84codes/crystal/ubuntu noble main
+EOT
+RUN apt-get update && apt-get install -y --no-install-recommends crystal
 RUN bash -c "crystal --version"
 
 # PostgreSQL
@@ -89,7 +98,7 @@ RUN sed -i 's/scram-sha-256/trust/' /etc/postgresql/17/main/pg_hba.conf
 RUN service postgresql start && sudo -u postgres psql --command='CREATE ROLE root WITH LOGIN SUPERUSER;'
 
 # LavinMQ
-RUN curl -sL https://packagecloud.io/cloudamqp/lavinmq/gpgkey | gpg --dearmor > /usr/share/keyrings/lavinmq.gpg
+RUN curl --location https://packagecloud.io/cloudamqp/lavinmq/gpgkey | gpg --dearmor > /usr/share/keyrings/lavinmq.gpg
 # no resolute packages yet
 COPY <<-EOT /etc/apt/sources.list.d/lavinmq.list
 deb [signed-by=/usr/share/keyrings/lavinmq.gpg] https://packagecloud.io/cloudamqp/lavinmq/ubuntu noble main
