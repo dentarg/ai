@@ -21,7 +21,14 @@ if [ ! -f "$CLAUDE_JSON" ]; then
   op inject --force --in-file="${SETTINGS_DIR}/.claude.tmpl.json" --out-file="$CLAUDE_JSON"
 fi
 
+# NET_ADMIN  tcpdump
+# NET_RAW    ping
+# SYS_PTRACE strace
+
 podman run --rm --interactive --tty \
+  --cap-add=NET_ADMIN \
+  --cap-add=NET_RAW \
+  --cap-add=SYS_PTRACE \
   --volume ${COMMAND_HISTORY_DIR}:/commandhistory \
   --volume ${HISTORY_DIR}:/history \
   --volume ${REPOS_DIR}:/repos \
