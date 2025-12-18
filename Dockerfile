@@ -152,6 +152,6 @@ EOT
 RUN systemctl enable shell.service
 
 # do this late to allow tweaking without rebuilding previous layers
-COPY profile.bashrc /etc/profile.bashrc
+COPY .bashrc /etc/profile.bashrc
 
 CMD ["/sbin/init"]
