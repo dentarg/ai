@@ -47,6 +47,9 @@ podman machine start
 
 # to see current settings
 podman machine inspect
+
+# when we can't build because we're out of space
+podman system prune--all
 ```
 
 ## Stuff
