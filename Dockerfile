@@ -153,5 +153,6 @@ RUN systemctl enable shell.service
 
 # do this late to allow tweaking without rebuilding previous layers
 COPY .bashrc /etc/profile.bashrc
+COPY .gitconfig /etc/gitconfig
 
 CMD ["/sbin/init"]

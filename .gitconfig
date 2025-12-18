@@ -1,0 +1,22 @@
+[alias]
+	st = status
+	co = checkout
+	ci = commit
+	br = branch
+	df = diff
+	dc = diff --cached
+	lg = log --oneline --graph --decorate
+	aa = add --all
+	ap = add --patch
+	cm = commit -m
+	ca = commit --amend
+	cp = cherry-pick
+	rb = rebase
+	ri = rebase -i
+	pu = push
+	pl = pull
+	fe = fetch
+	sw = switch
+	rs = restore
+	last = log -1 HEAD
+	unstage = reset HEAD --
