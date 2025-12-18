@@ -109,16 +109,6 @@ deb [signed-by=/usr/share/keyrings/lavinmq.gpg] https://packagecloud.io/cloudamq
 EOT
 RUN apt-get update && apt-get install -y --no-install-recommends lavinmq
 
-# LavinMQ shutdown timeout override (reduces 90s default to 5s)
-# https://github.com/dentarg/ai/issues/1
-RUN <<-EOT
-mkdir -p /etc/systemd/system/lavinmq.service.d
-cat > /etc/systemd/system/lavinmq.service.d/timeout.conf <<CONF
-[Service]
-TimeoutStopSec=5
-CONF
-EOT
-
 # we don't want to wait when starting the container
 RUN systemctl disable postgresql lavinmq
 
