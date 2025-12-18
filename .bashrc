@@ -1,4 +1,3 @@
-export GIT_CONFIG_GLOBAL=/workspace/.gitconfig
 # due to https://github.com/ruby/rubygems/issues/9124
 export BUNDLE_DEFAULT_CLI_COMMAND=install
 export BUNDLE_IGNORE_FUNDING_REQUESTS=1 # no post install messages will be printed
