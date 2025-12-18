@@ -33,4 +33,27 @@ cool_claude () {
     --model opus
 }
 
+__git_ps1() {
+  local branch
+  branch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
+  [[ -z "$branch" ]] && return
+
+  local status=""
+  local git_status
+  git_status=$(git status --porcelain 2>/dev/null)
+
+  [[ -n "$git_status" ]] && status="*"
+  git rev-parse --verify --quiet @{upstream} >/dev/null 2>&1 && {
+    local ahead behind
+    ahead=$(git rev-list --count @{upstream}..HEAD 2>/dev/null)
+    behind=$(git rev-list --count HEAD..@{upstream} 2>/dev/null)
+    [[ "$ahead" -gt 0 ]] && status="${status}↑${ahead}"
+    [[ "$behind" -gt 0 ]] && status="${status}↓${behind}"
+  }
+
+  echo " (${branch}${status})"
+}
+
+PS1='\[\e[1;32m\]\h\[\e[0m\]:\[\e[1;34m\]\w\[\e[1;33m\]$(__git_ps1)\[\e[0m\]\$ '
+
 link_dotfiles
