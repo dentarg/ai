@@ -143,7 +143,7 @@ StandardError=tty
 TTYPath=/dev/console
 TTYReset=yes
 TTYVHangup=yes
-ExecStopPost=/usr/bin/systemctl poweroff --force
+ExecStopPost=/bin/sh -c 'kill -9 -1; systemctl poweroff --force'
 
 [Install]
 WantedBy=multi-user.target
