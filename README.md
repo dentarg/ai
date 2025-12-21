@@ -67,3 +67,4 @@ podman system prune--all
 - [x] SSH (`ssh-keygen`, ...)
 - [x] PostgreSQL
 - [x] LavinMQ
+- [x] [amqpcat](https://github.com/cloudamqp/amqpcat)
