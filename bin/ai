@@ -16,9 +16,8 @@ mkdir -p $HISTORY_DIR
 mkdir -p $REPOS_DIR
 mkdir -p $SETTINGS_DIR/dotfiles
 
-CLAUDE_JSON="${SETTINGS_DIR}/dotfiles/.claude.json"
-if [ ! -f "$CLAUDE_JSON" ]; then
-  op inject --force --in-file="${SETTINGS_DIR}/.claude.tmpl.json" --out-file="$CLAUDE_JSON"
+if [ "${1:-}" = "--1p" ]; then
+  op inject --force --in-file="${SETTINGS_DIR}/.claude.tmpl.json" --out-file="${SETTINGS_DIR}/dotfiles/.claude.json"
 fi
 
 # NET_ADMIN  tcpdump

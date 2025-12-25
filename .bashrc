@@ -22,10 +22,36 @@ link_dotfiles () {
 }
 
 cool_claude () {
-  local claude_home="/history/claude_$(date +%Y%m%d%H%M)"
+  local profile=${1:-}
+  local settings_claude_json
+  local settings_claude_home="/history/claude_$(date +%Y%m%d%H%M)"
+  local settings_credentials=/settings/.credentials.json
 
-  mkdir -p $claude_home
-  ln -s $claude_home $HOME/.claude
+  rm $HOME/.claude/.credentials.json || true
+  rm $HOME/.claude || true
+  rm $HOME/.claude.json || true
+
+  mkdir -p $settings_claude_home
+  ln -s $settings_claude_home $HOME/.claude
+
+  if [[ -n "$profile" ]]; then
+    settings_claude_json=/settings/claude.json/${profile}.json
+
+    # oauth accounts uses separate file with access token and refresh token
+    if [[ -f $settings_claude_json ]] && grep -q "oauthAccount" "$settings_claude_json"; then
+      test -f $settings_credentials && cp -f $settings_credentials $HOME/.claude/.credentials.json
+    fi
+  else
+    settings_claude_json=/settings/.claude.json
+  fi
+
+  if [[ ! -f $settings_claude_json ]]; then
+    echo "$settings_claude_json not found!"
+    return 1
+  fi
+
+  cp -f $settings_claude_json $settings_claude_home/.claude.json # keep a copy
+  ln -sf $settings_claude_home/.claude.json $HOME/.claude.json   # link it
   cp -f /settings/CLAUDE.md $HOME/.claude || true
 
   claude \
