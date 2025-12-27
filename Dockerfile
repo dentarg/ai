@@ -23,7 +23,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      man-db \
      netcat-openbsd \
      openssh-client \
+     pandoc \
      postgresql \
+     ripgrep \
+     silversearcher-ag \
      strace \
      sudo \
      systemd \
