@@ -17,6 +17,7 @@ link_dotfiles () {
 
   for file in ${dir}/* ${dir}/.*; do
     [[ "$(basename $file)" == "*" ]] && continue
+    [[ "$(basename $file)" == ".*" ]] && continue
     ln -sf $file $HOME
   done
 }
