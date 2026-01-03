@@ -25,21 +25,22 @@ link_dotfiles () {
 cool_claude () {
   local profile=${1:-}
   local settings_claude_json
-  local settings_claude_home="/history/claude_$(date +%Y%m%d%H%M)"
-  local settings_credentials=/settings/.credentials.json
+  local settings_claude_home="/history/claude_$(date +%Y-%m-%d_%H%M%S)"
 
-  rm $HOME/.claude/.credentials.json || true
-  rm $HOME/.claude || true
-  rm $HOME/.claude.json || true
-
-  mkdir -p $settings_claude_home
-  ln -s $settings_claude_home $HOME/.claude
+  rm -f $HOME/.claude/.credentials.json
+  rm -f $HOME/.claude # should be a symlink
+  rm -f $HOME/.claude.json
+  rm -f $HOME/.claude.json.backup
 
   if [[ -n "$profile" ]]; then
-    settings_claude_json=/settings/claude.json/${profile}.json
+    settings_claude_json=/settings/.claude.${profile}.json
 
     # oauth accounts uses separate file with access token and refresh token
     if [[ -f $settings_claude_json ]] && grep -q "oauthAccount" "$settings_claude_json"; then
+      mkdir -p $settings_claude_home
+      ln -s $settings_claude_home $HOME/.claude
+
+      local settings_credentials=/settings/.credentials.${profile}.json
       test -f $settings_credentials && cp -f $settings_credentials $HOME/.claude/.credentials.json
     fi
   else
@@ -51,9 +52,11 @@ cool_claude () {
     return 1
   fi
 
+  [[ ! -L $HOME/.claude ]] && mkdir -p $settings_claude_home && ln -s $settings_claude_home $HOME/.claude
+
   cp -f $settings_claude_json $settings_claude_home/.claude.json # keep a copy
-  ln -sf $settings_claude_home/.claude.json $HOME/.claude.json   # link it
-  cp -f /settings/CLAUDE.md $HOME/.claude || true
+  ln -s $settings_claude_home/.claude.json $HOME/.claude.json    # link it
+  [[ -f /settings/CLAUDE.md ]] && cp -f /settings/CLAUDE.md $HOME/.claude
 
   claude \
     --dangerously-skip-permissions \

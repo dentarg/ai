@@ -10,14 +10,22 @@ Create `$HOME/ai/settings` with `.claude.tmpl.json`:
 }
 ```
 
+or `.claude.json` or `.claude.<profile>.json` (and optionally `.credentials.<profile>.json` with oauth tokens)
+
 Add `CLAUDE.md` to `$HOME/ai/settings` if you want.
 
 ```shell
 # start podman and share the current working directory
 bin/ai
 
+# start services (and run "bundle install" if Gemfile.lock exist)
+s
+
 # launch claude
 cool_claude
+
+# launch claude with a specific config
+cool_claude <profile>
 ```
 
 ## Prerequisites
