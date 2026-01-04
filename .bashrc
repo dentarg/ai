@@ -22,6 +22,23 @@ link_dotfiles () {
   done
 }
 
+g () {
+  local settings_home="/history/gemini_$(date +%Y-%m-%d_%H%M%S)"
+
+  rm -f $HOME/.gemini # should be a symlink
+  mkdir -p $settings_home
+  ln -s $settings_home $HOME/.gemini
+
+  cp /settings/gemini/google_accounts.json $HOME/.gemini
+  cp /settings/gemini/installation_id      $HOME/.gemini
+  cp /settings/gemini/oauth_creds.json     $HOME/.gemini
+  cp /settings/gemini/settings.json        $HOME/.gemini
+  cp /settings/gemini/state.json           $HOME/.gemini
+  cp /settings/GEMINI.md                   $HOME/.gemini
+
+  gemini --yolo
+}
+
 cool_claude () {
   local profile=${1:-}
   local settings_claude_json
