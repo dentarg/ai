@@ -27,11 +27,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      pandoc \
      postgresql \
      ripgrep \
+     rsync \
      silversearcher-ag \
      strace \
      sudo \
      systemd \
      systemd-sysv \
+     tree \
      unminimize \
      vim \
      zlib1g-dev \
