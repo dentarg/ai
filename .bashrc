@@ -23,6 +23,15 @@ link_dotfiles () {
 }
 
 g () {
+  if [[ ! -d /settings/gemini ]]; then
+    echo "/settings/gemini not found!"
+    echo ""
+    echo "  First time? Start gemini and authenticate."
+    echo "  Inspect ~/.gemini and copy needed files (see /etc/profile.bashrc) to /settings/gemini"
+    echo ""
+    return 1
+  fi
+
   local settings_home="/history/gemini_$(date +%Y-%m-%d_%H%M%S)"
 
   rm -f $HOME/.gemini # should be a symlink

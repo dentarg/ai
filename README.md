@@ -26,6 +26,9 @@ cool_claude
 
 # launch claude with a specific config
 cool_claude <profile>
+
+# launch gemini
+g
 ```
 
 ## Prerequisites
