@@ -24,6 +24,14 @@ link_dotfiles () {
   done
 }
 
+history_dir () {
+  local tool=$1
+  local year=$(date +%Y)
+  local month=$(date +%m_%b)
+  local day_time=$(date +%d_%a_%H-%M)
+  echo "/history/${year}/${month}/${day_time}_${tool}"
+}
+
 oc () {
   if [[ ! -d /settings/codex ]]; then
     echo "/settings/codex not found!"
@@ -33,7 +41,7 @@ oc () {
     return 1
   fi
 
-  local settings_home="/history/codex_$(date +%Y-%m-%d_%H%M%S)"
+  local settings_home=$(history_dir codex)
 
   rm -f $HOME/.codex # should be a symlink
   mkdir -p $settings_home
@@ -57,7 +65,7 @@ g () {
     return 1
   fi
 
-  local settings_home="/history/gemini_$(date +%Y-%m-%d_%H%M%S)"
+  local settings_home=$(history_dir gemini)
 
   rm -f $HOME/.gemini # should be a symlink
   mkdir -p $settings_home
@@ -76,7 +84,7 @@ g () {
 cool_claude () {
   local profile=${1:-}
   local settings_claude_json
-  local settings_claude_home="/history/claude_$(date +%Y-%m-%d_%H%M%S)"
+  local settings_claude_home=$(history_dir claude)
 
   rm -f $HOME/.claude/.credentials.json
   rm -f $HOME/.claude # should be a symlink
