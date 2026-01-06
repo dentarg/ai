@@ -17,6 +17,7 @@ Add `AGENTS.md` to `$HOME/ai/settings` if you want. It will populate `CLAUDE.md`
 ```shell
 # start podman and share the current working directory
 bin/ai
+bin/ai --1p # if you want to use claude.tmpl.json with op:// reference
 
 # start services (and run "bundle install" if Gemfile.lock exist)
 s
@@ -40,24 +41,15 @@ Your Anthropic API key in 1Password.
 
 ```shell
 brew install podman
-podman machine init
-podman machine start
+# memory is in MiB, disk in GiB
+podman machine init --disk-size 200 --memory 8192 --now
 ./build_image
 ```
 
 ## Tricks
 
 ```shell
-docker run --rm -it --net=container:<container> nicolaka/netshoot tcpdump -i any
 podman run --rm -it --cap-add=NET_RAW --cap-add=NET_ADMIN --net=container:<container> nicolaka/netshoot tcpdump -i eth0
-
-docker image inspect ai:latest
-
-# give more disk/memory (memory is in MiB, disk in GiB)
-podman machine stop
-podman machine set --disk-size 200
-podman machine set --memory 8192
-podman machine start
 
 # to see current settings
 podman machine inspect
