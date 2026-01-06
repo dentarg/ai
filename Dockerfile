@@ -41,6 +41,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      && yes | unminimize \
      && rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
+# Install Chromium dependencies and browser from Debian sid
+# (Ubuntu's chromium-browser is a snap wrapper that won't work in containers)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gnupg \
+    ca-certificates \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2t64 \
+    libpango-1.0-0 \
+    libcairo2 \
+    fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Debian sid repository for Chromium (Ubuntu snaps don't work in containers)
+RUN curl -fsSL "https://ftp-master.debian.org/keys/archive-key-12.asc" -o /tmp/debian.asc \
+    && gpg --batch --yes --dearmor -o /usr/share/keyrings/debian-archive.gpg /tmp/debian.asc \
+    && echo "deb [signed-by=/usr/share/keyrings/debian-archive.gpg] http://deb.debian.org/debian sid main" > /etc/apt/sources.list.d/debian-sid.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends chromium \
+    && rm -rf /var/lib/apt/lists/* /tmp/debian.asc
+
 ENV HOME=/workspace
 RUN mkdir $HOME
 WORKDIR $HOME
@@ -105,6 +136,9 @@ RUN bash -c "rv ruby install 4.0.0"
 RUN bash -c "ruby --yjit --version"
 RUN bash -c "bundle --version"
 
+# Install puppeteer-core (uses system Chromium instead of bundling its own)
+RUN bash -c "npm install -g puppeteer-core"
+
 # Crystal
 RUN curl --location https://packagecloud.io/84codes/crystal/gpgkey | gpg --dearmor > /etc/apt/trusted.gpg.d/84codes_crystal.gpg
 COPY <<-EOT /etc/apt/sources.list.d/84codes_crystal.list
@@ -132,8 +166,12 @@ COPY --from=cloudamqp/amqpcat /amqpcat /usr/bin/amqpcat
 RUN systemctl disable postgresql lavinmq
 
 # convenience script to start services
-COPY ./start.sh /start.sh
-RUN chmod +x /start.sh
+COPY ./tools/start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
+
+# convenience script to take browser screenshots
+COPY ./tools/screenshot.sh /usr/local/bin/screenshot.sh
+RUN chmod +x /usr/local/bin/start.sh
 
 #
 # systemd

@@ -8,9 +8,11 @@ export HISTFILE=/commandhistory/.bash_history
 export PROMPT_COMMAND="history -a"
 # allows claude to start with --dangerously-skip-permissions as root
 export IS_SANDBOX=1
+# our own tools
+export PATH=$PATH:/usr/local/bin
 
 alias b=bundle
-alias s=/start.sh
+alias s=/usr/local/bin/start.sh
 
 link_dotfiles () {
   local dir=/settings/dotfiles
