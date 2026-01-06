@@ -58,13 +58,23 @@ RUN rm _brew.sh \
 COPY <<-EOT /etc/bash.bashrc
   export HOME=/workspace
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
   eval "$($HOME/.local/bin/mise activate bash)"
   eval "$($HOME/.cargo/bin/rv shell init bash)"
   eval "$($HOME/.cargo/bin/rv shell env bash)"
   eval "$($HOME/.cargo/bin/rv shell completions bash)"
 
   test -f /etc/profile.bashrc && source /etc/profile.bashrc
+EOT
+
+COPY <<-EOT /etc/zsh/zshrc
+  export HOME=/workspace
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+  eval "$($HOME/.local/bin/mise activate zsh)"
+  eval "$($HOME/.cargo/bin/rv shell init zsh)"
+  eval "$($HOME/.cargo/bin/rv shell env zsh)"
+  eval "$($HOME/.cargo/bin/rv shell completions zsh)"
+
+  test -f /etc/profile.zshrc && source /etc/profile.zshrc
 EOT
 
 # --login needed for rv to be found (?)
