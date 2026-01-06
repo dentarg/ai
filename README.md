@@ -12,7 +12,7 @@ Create `$HOME/ai/settings` with `.claude.tmpl.json`:
 
 or `.claude.json` or `.claude.<profile>.json` (and optionally `.credentials.<profile>.json` with oauth tokens)
 
-Add `CLAUDE.md` to `$HOME/ai/settings` if you want.
+Add `AGENTS.md` to `$HOME/ai/settings` if you want. It will populate `CLAUDE.md` for Claude Code and `GEMINI.md` for Gemini CLI.
 
 ```shell
 # start podman and share the current working directory
@@ -29,6 +29,9 @@ cool_claude <profile>
 
 # launch gemini
 g
+
+# launch openai codex
+oc
 ```
 
 ## Prerequisites

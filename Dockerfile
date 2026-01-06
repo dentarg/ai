@@ -130,6 +130,7 @@ RUN bash -c "rustc --version"
 RUN bash -c "npm install -g @anthropic-ai/claude-code"
 RUN bash -c "npm install -g @github/copilot"
 RUN bash -c "npm install -g @google/gemini-cli"
+RUN bash -c "npm install -g @openai/codex"
 
 RUN bash -c "rv ruby install $RUBY_VERSION"
 RUN bash -c "rv ruby install 4.0.0"

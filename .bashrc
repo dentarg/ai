@@ -24,6 +24,29 @@ link_dotfiles () {
   done
 }
 
+oc () {
+  if [[ ! -d /settings/codex ]]; then
+    echo "/settings/codex not found!"
+    echo ""
+    echo "  First time? You want to create /settings/codex/auth.json with OPENAI_API_KEY"
+    echo ""
+    return 1
+  fi
+
+  local settings_home="/history/codex_$(date +%Y-%m-%d_%H%M%S)"
+
+  rm -f $HOME/.codex # should be a symlink
+  mkdir -p $settings_home
+  ln -s $settings_home $HOME/.codex
+
+  cp /settings/codex/auth.json $HOME/.codex
+  cp /settings/AGENTS.md       $HOME/.codex
+
+  codex \
+    --dangerously-bypass-approvals-and-sandbox \
+    --search
+}
+
 g () {
   if [[ ! -d /settings/gemini ]]; then
     echo "/settings/gemini not found!"
@@ -45,7 +68,7 @@ g () {
   cp /settings/gemini/oauth_creds.json     $HOME/.gemini
   cp /settings/gemini/settings.json        $HOME/.gemini
   cp /settings/gemini/state.json           $HOME/.gemini
-  cp /settings/GEMINI.md                   $HOME/.gemini
+  cp /settings/AGENTS.md                   $HOME/.gemini/GEMINI.md
 
   gemini --yolo
 }
@@ -84,7 +107,7 @@ cool_claude () {
 
   cp -f $settings_claude_json $settings_claude_home/.claude.json # keep a copy
   ln -s $settings_claude_home/.claude.json $HOME/.claude.json    # link it
-  [[ -f /settings/CLAUDE.md ]] && cp -f /settings/CLAUDE.md $HOME/.claude
+  [[ -f /settings/AGENTS.md ]] && cp -f /settings/AGENTS.md $HOME/.claude/CLAUDE.md
 
   claude \
     --dangerously-skip-permissions \
