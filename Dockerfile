@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      libzstd-dev \
      man-db \
      netcat-openbsd \
+     openjdk-21-jre-headless \
      openssh-client \
      pandoc \
      postgresql \
