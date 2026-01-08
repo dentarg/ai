@@ -56,6 +56,11 @@ podman machine inspect
 
 # when we can't build because we're out of space
 podman system prune--all
+
+# to combat this error related to "Linux Kernel Keyring quota"
+# Error: preparing container ... for attach: crun: join keyctl `...`: Disk quota exceeded: OCI runtime error
+podman machine ssh sudo sysctl -w kernel.keys.maxkeys=20000
+podman machine ssh sudo sysctl -w kernel.keys.maxbytes=200000
 ```
 
 ## Stuff
