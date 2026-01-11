@@ -139,8 +139,12 @@ RUN bash -c "rv ruby install 4.0.0"
 RUN bash -c "ruby --yjit --version"
 RUN bash -c "bundle --version"
 
-# JRuby via mise (rv doesn't support JRuby)
-RUN bash -c "mise use --global ruby@jruby-10.0.2.0"
+# Install chruby per https://gist.github.com/dentarg/79aae28811c290b7a6a96ab4fafd4197
+RUN bash -c "git clone --branch do-no-set-gem-home https://github.com/eregon/chruby.git"
+
+# JRuby via ruby-build
+RUN bash -c "git clone https://github.com/rbenv/ruby-build.git"
+RUN bash -c "ruby-build/bin/ruby-build jruby-10.0.2.0 ~/.data/rv/rubies/jruby-10.0.2.0"
 
 # Install puppeteer-core (uses system Chromium instead of bundling its own)
 RUN bash -c "npm install -g puppeteer-core"
