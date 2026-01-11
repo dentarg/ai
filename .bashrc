@@ -56,8 +56,16 @@ oc () {
 }
 
 g () {
-  if [[ ! -d /settings/gemini ]]; then
-    echo "/settings/gemini not found!"
+  local profile=${1:-}
+
+  if [[ -n "$profile" ]]; then
+    settings_gemini=/settings/gemini_${profile}
+  else
+    settings_gemini=/settings/gemini
+  fi
+
+  if [[ ! -d $settings_gemini ]]; then
+    echo "$settings_gemini not found!"
     echo ""
     echo "  First time? Start gemini and authenticate."
     echo "  Inspect ~/.gemini and copy needed files (see /etc/profile.bashrc) to /settings/gemini"
@@ -71,11 +79,11 @@ g () {
   mkdir -p $settings_home
   ln -s $settings_home $HOME/.gemini
 
-  cp /settings/gemini/google_accounts.json $HOME/.gemini
-  cp /settings/gemini/installation_id      $HOME/.gemini
-  cp /settings/gemini/oauth_creds.json     $HOME/.gemini
-  cp /settings/gemini/settings.json        $HOME/.gemini
-  cp /settings/gemini/state.json           $HOME/.gemini
+  cp $settings_gemini/google_accounts.json $HOME/.gemini
+  cp $settings_gemini/installation_id      $HOME/.gemini
+  cp $settings_gemini/oauth_creds.json     $HOME/.gemini
+  cp $settings_gemini/settings.json        $HOME/.gemini
+  cp $settings_gemini/state.json           $HOME/.gemini
   cp /settings/AGENTS.md                   $HOME/.gemini/GEMINI.md
 
   gemini --yolo
