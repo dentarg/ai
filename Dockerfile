@@ -139,6 +139,9 @@ RUN bash -c "rv ruby install 4.0.0"
 RUN bash -c "ruby --yjit --version"
 RUN bash -c "bundle --version"
 
+# JRuby via mise (rv doesn't support JRuby)
+RUN bash -c "mise use --global ruby@jruby-10.0.2.0"
+
 # Install puppeteer-core (uses system Chromium instead of bundling its own)
 RUN bash -c "npm install -g puppeteer-core"
 
