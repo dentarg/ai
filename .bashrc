@@ -15,14 +15,16 @@ export PATH=$PATH:/usr/local/bin
 chruby_dir="${HOME}/chruby/share/chruby"
 if [ -f $chruby_dir/chruby.sh ]; then
     . $chruby_dir/chruby.sh
-    . $chruby_dir/auto.sh
-fi
 
-# where rv installs ruby, needs to happen after chruby (as it initializes RUBIES as an empty array)
-RUBIES_DIR="${HOME}/.data/rv/rubies"
-if [[ -d $RUBIES_DIR ]]; then
-  find $RUBIES_DIR -type d -empty -delete
-  RUBIES=($RUBIES_DIR/*)
+    # Set RUBIES after chruby.sh (which initializes it as empty) but before
+    # auto.sh (which sets up a DEBUG trap that fires immediately)
+    RUBIES_DIR="${HOME}/.data/rv/rubies"
+    if [[ -d $RUBIES_DIR ]]; then
+      find $RUBIES_DIR -type d -empty -delete
+      RUBIES=($RUBIES_DIR/*)
+    fi
+
+    . $chruby_dir/auto.sh
 fi
 
 alias b=bundle
