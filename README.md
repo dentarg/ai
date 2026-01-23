@@ -48,6 +48,22 @@ podman machine init --disk-size 200 --memory 8192 --now
 
 ## Tricks
 
+`zsh` things:
+
+```zsh
+function pod() {
+    [ $# -lt 1 ] && podman ps && return 0
+
+    [ "$1" = "last" ] && podman exec -it $(podman ps | tail -1 | cut -d ' ' -f 1) ${2:-bash} && return
+
+    local container
+    container=$1
+    podman exec -it $container ${2:-bash}
+}
+```
+
+Commands
+
 ```shell
 podman run --rm -it --cap-add=NET_RAW --cap-add=NET_ADMIN --net=container:<container> nicolaka/netshoot tcpdump -i eth0
 
