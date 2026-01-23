@@ -51,6 +51,9 @@ podman machine init --disk-size 200 --memory 8192 --now
 `zsh` things:
 
 ```zsh
+# pod       # list all running containers
+# pod <id>  # launch bash shell in selected container
+# pod last  # launch bash shell in the youngest container
 function pod() {
     [ $# -lt 1 ] && podman ps && return 0
 
