@@ -158,7 +158,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends crystal
 RUN bash -c "crystal --version"
 
 # PostgreSQL
-RUN sed -i 's/scram-sha-256/trust/' /etc/postgresql/17/main/pg_hba.conf
+RUN sed -i 's/scram-sha-256/trust/' /etc/postgresql/*/main/pg_hba.conf
 RUN service postgresql start && sudo -u postgres psql --command='CREATE ROLE root WITH LOGIN SUPERUSER;'
 
 # LavinMQ
