@@ -2,7 +2,6 @@
 
 set -e
 set -u
-set -x
 
 # Docker Desktop started to crash when building the image
 # podman at least told me installing Crystal with mise ran out of memory
@@ -12,4 +11,15 @@ set -x
 # check date when it was built with
 # podman image inspect ai:latest | jq '.[].Created'
 
-podman build . --tag ai:latest
+EXTRA_ARGS=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --force)
+      EXTRA_ARGS="--no-cache --pull"
+      ;;
+  esac
+done
+
+set -x
+podman build $EXTRA_ARGS . --tag ai:latest

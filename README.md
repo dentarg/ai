@@ -43,7 +43,11 @@ Your Anthropic API key in 1Password.
 brew install podman
 # memory is in MiB, disk in GiB
 podman machine init --disk-size 200 --memory 8192 --now
+
 ./build_image
+
+# rebuild all layers and pull latest base image
+./build_image --force
 ```
 
 ## Tricks
