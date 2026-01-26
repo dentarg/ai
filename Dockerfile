@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      openssh-client \
      pandoc \
      postgresql \
+     rdap \
      ripgrep \
      rsync \
      silversearcher-ag \
@@ -38,6 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      tree \
      unminimize \
      vim \
+     whois \
      zlib1g-dev \
      zsh \
      && yes | unminimize \
