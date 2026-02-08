@@ -40,6 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      unminimize \
      vim \
      whois \
+     zip \
      zlib1g-dev \
      zsh \
      && yes | unminimize \
