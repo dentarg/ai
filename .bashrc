@@ -11,6 +11,9 @@ export IS_SANDBOX=1
 # our own tools
 export PATH=$PATH:/usr/local/bin
 
+# the default is too low
+ulimit -n 10480
+
 # chruby
 chruby_dir="${HOME}/chruby/share/chruby"
 if [ -f $chruby_dir/chruby.sh ]; then
