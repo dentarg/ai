@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      tree \
      unminimize \
      vim \
+     wget \
      whois \
      zip \
      zlib1g-dev \
