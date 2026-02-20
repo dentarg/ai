@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      openssh-client \
      pandoc \
      postgresql \
+     ragel \
      rdap \
      ripgrep \
      rsync \
@@ -148,7 +149,7 @@ RUN bash -c "git clone --branch do-no-set-gem-home https://github.com/eregon/chr
 
 # JRuby via ruby-build
 RUN bash -c "git clone https://github.com/rbenv/ruby-build.git"
-RUN bash -c "ruby-build/bin/ruby-build jruby-10.0.2.0 ~/.data/rv/rubies/jruby-10.0.2.0"
+RUN bash -c "ruby-build/bin/ruby-build jruby-10.0.3.0 ~/.data/rv/rubies/jruby-10.0.3.0"
 
 # Install puppeteer-core (uses system Chromium instead of bundling its own)
 RUN bash -c "npm install -g puppeteer-core"
