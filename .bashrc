@@ -146,7 +146,8 @@ cool_claude () {
 
   claude \
     --dangerously-skip-permissions \
-    --model opus
+    --model claude-opus-4-6 \
+    --effort high
 }
 
 __git_ps1() {
