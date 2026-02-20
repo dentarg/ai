@@ -222,6 +222,9 @@ EOT
 
 RUN systemctl enable shell.service
 
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+
 # do this late to allow tweaking without rebuilding previous layers
 COPY .bashrc /etc/profile.bashrc
 COPY .gitconfig /etc/gitconfig
