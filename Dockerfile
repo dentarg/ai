@@ -222,6 +222,10 @@ EOT
 
 RUN systemctl enable shell.service
 
+# Claude Code plugins
+# RUN bash -c "claude plugin marketplace add https://github.com/anthropics/claude-code"
+# RUN bash -c "claude plugin install ralph-wiggum@claude-code-plugins"
+
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
