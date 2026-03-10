@@ -50,6 +50,33 @@ podman machine init --disk-size 300 --memory 16384 --now
 ./build_image --force
 ```
 
+## Token Refresh Daemon
+
+OAuth tokens for Claude Code expire periodically. Run `bin/refresh-tokens` in a dedicated container to keep `/settings/.credentials*.json` files fresh so new containers always start with valid tokens.
+
+```shell
+# run as a background container (detached)
+podman run -d --name token-refresh \
+  --volume ${HOME}/ai/settings:/settings \
+  ai:latest /usr/local/bin/refresh-tokens
+
+# check logs
+podman logs -f token-refresh
+
+# one-shot refresh (e.g. before launching a session)
+podman run --rm \
+  --volume ${HOME}/ai/settings:/settings \
+  ai:latest /usr/local/bin/refresh-tokens --once
+```
+
+Environment variables:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `CREDENTIALS_DIR` | `/settings` | Directory containing `.credentials*.json` files |
+| `CHECK_INTERVAL` | `300` | Seconds between checks |
+| `REFRESH_BEFORE` | `3600` | Seconds before expiry to trigger refresh |
+
 ## Tricks
 
 `zsh` things:

@@ -233,5 +233,7 @@ ENV LC_ALL C.UTF-8
 # do this late to allow tweaking without rebuilding previous layers
 COPY .bashrc /etc/profile.bashrc
 COPY .gitconfig /etc/gitconfig
+COPY bin/refresh-tokens /usr/local/bin/refresh-tokens
+RUN chmod +x /usr/local/bin/refresh-tokens
 
 CMD ["/sbin/init"]
