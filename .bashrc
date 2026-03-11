@@ -142,7 +142,10 @@ cool_claude () {
 
   cp -f $settings_claude_json $settings_claude_home/.claude.json # keep a copy
   ln -s $settings_claude_home/.claude.json $HOME/.claude.json    # link it
-  [[ -f /settings/AGENTS.md ]] && cp -f /settings/AGENTS.md $HOME/.claude/CLAUDE.md
+  [[ -f /settings/AGENTS.md ]]      && cp -f /settings/AGENTS.md      $HOME/.claude/CLAUDE.md
+  [[ -f /settings/settings.json ]]  && cp -f /settings/settings.json  $HOME/.claude/settings.json
+
+  echo "${profile:-default}" > $HOME/.claude/.profile
 
   claude \
     --dangerously-skip-permissions \

@@ -207,6 +207,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
+PassEnvironment=HOST_DIR
 ExecStart=/bin/bash
 WorkingDirectory=/app
 StandardInput=tty
