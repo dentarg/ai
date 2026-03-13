@@ -237,4 +237,8 @@ COPY .gitconfig /etc/gitconfig
 COPY bin/refresh-tokens /usr/local/bin/refresh-tokens
 RUN chmod +x /usr/local/bin/refresh-tokens
 
+# Hide systemd shutdown messages on container exit
+RUN mkdir -p /etc/systemd/system.conf.d && \
+    printf '[Manager]\nShowStatus=no\n' > /etc/systemd/system.conf.d/hide-status.conf
+
 CMD ["/sbin/init"]
