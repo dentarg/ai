@@ -93,66 +93,54 @@ RUN rm _brew.sh \
 
 # Homebrew does not let you pick HOMEBREW_PREFIX on Linux, always /home/linuxbrew/.linuxbrew
 # $HOME must be set to run brew
-COPY <<-EOT /etc/bash.bashrc
-  export HOME=/workspace
-  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-  eval "$($HOME/.local/bin/mise activate bash)"
-  eval "$($HOME/.cargo/bin/rv shell init bash)"
-  eval "$($HOME/.cargo/bin/rv shell env bash)"
-  eval "$($HOME/.cargo/bin/rv shell completions bash)"
+# /etc/zsh/zshenv is sourced for non login shells
+COPY <<-EOT /etc/zsh/zshenv
+export HOME=/workspace
+export PATH="$PATH:$HOME/.cargo/bin"
 
-  test -f /etc/profile.bashrc && source /etc/profile.bashrc
+autoload -Uz compinit && compinit
+
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+eval "$($HOME/.local/bin/mise activate zsh)"
+eval "$($HOME/.cargo/bin/rv shell init zsh)"
+eval "$($HOME/.cargo/bin/rv shell env zsh)"
+eval "$($HOME/.cargo/bin/rv shell completions zsh)"
 EOT
 
-COPY <<-EOT /etc/zsh/zshrc
-  export HOME=/workspace
-  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-  eval "$($HOME/.local/bin/mise activate zsh)"
-  eval "$($HOME/.cargo/bin/rv shell init zsh)"
-  eval "$($HOME/.cargo/bin/rv shell env zsh)"
-  eval "$($HOME/.cargo/bin/rv shell completions zsh)"
+RUN zsh -c "brew --version"
+RUN zsh -c "mise --version"
+RUN zsh -c "rv --version"
 
-  test -f /etc/profile.zshrc && source /etc/profile.zshrc
-EOT
+RUN zsh -c "mise use --global bun"
+RUN zsh -c "mise use --global go"
+RUN zsh -c "mise use --global node"
+RUN zsh -c "mise use --global python"
+RUN zsh -c "mise use --global rust"
 
-# --login needed for rv to be found (?)
-# BASH_ENV makes non-interactively shells source this file
-ENV BASH_ENV="/etc/bash.bashrc"
+RUN zsh -c "go version"
+RUN zsh -c "node --version"
+RUN zsh -c "python --version"
+RUN zsh -c "rustc --version"
 
-RUN bash -c "brew --version"
-RUN bash -c "mise --version"
-RUN bash --login -c "rv --version"
+RUN zsh -c "npm install -g @anthropic-ai/claude-code"
+RUN zsh -c "npm install -g @github/copilot"
+RUN zsh -c "npm install -g @google/gemini-cli"
+RUN zsh -c "npm install -g @openai/codex"
 
-RUN bash -c "mise use --global bun"
-RUN bash -c "mise use --global go"
-RUN bash -c "mise use --global node"
-RUN bash -c "mise use --global python"
-RUN bash -c "mise use --global rust"
-
-RUN bash -c "go version"
-RUN bash -c "node --version"
-RUN bash -c "python --version"
-RUN bash -c "rustc --version"
-
-RUN bash -c "npm install -g @anthropic-ai/claude-code"
-RUN bash -c "npm install -g @github/copilot"
-RUN bash -c "npm install -g @google/gemini-cli"
-RUN bash -c "npm install -g @openai/codex"
-
-RUN bash -c "rv ruby install $RUBY_VERSION"
-RUN bash -c "rv ruby install 4.0.1"
-RUN bash -c "ruby --yjit --version"
-RUN bash -c "bundle --version"
+RUN zsh -c "rv ruby install $RUBY_VERSION"
+RUN zsh -c "rv ruby install 4.0.1"
+RUN zsh -c "ruby --yjit --version"
+RUN zsh -c "bundle --version"
 
 # Install chruby per https://gist.github.com/dentarg/79aae28811c290b7a6a96ab4fafd4197
-RUN bash -c "git clone --branch do-no-set-gem-home https://github.com/eregon/chruby.git"
+RUN zsh -c "git clone --branch do-no-set-gem-home https://github.com/eregon/chruby.git"
 
 # JRuby via ruby-build
-RUN bash -c "git clone https://github.com/rbenv/ruby-build.git"
-RUN bash -c "ruby-build/bin/ruby-build jruby-10.0.3.0 ~/.data/rv/rubies/jruby-10.0.3.0"
+RUN zsh -c "git clone https://github.com/rbenv/ruby-build.git"
+RUN zsh -c "ruby-build/bin/ruby-build jruby-10.0.3.0 ~/.data/rv/rubies/jruby-10.0.3.0"
 
 # Install puppeteer-core (uses system Chromium instead of bundling its own)
-RUN bash -c "npm install -g puppeteer-core"
+RUN zsh -c "npm install -g puppeteer-core"
 
 # Crystal
 RUN curl --location https://packagecloud.io/84codes/crystal/gpgkey | gpg --dearmor > /etc/apt/trusted.gpg.d/84codes_crystal.gpg
@@ -160,7 +148,7 @@ COPY <<-EOT /etc/apt/sources.list.d/84codes_crystal.list
 deb https://packagecloud.io/84codes/crystal/ubuntu noble main
 EOT
 RUN apt-get update && apt-get install -y --no-install-recommends crystal
-RUN bash -c "crystal --version"
+RUN zsh -c "crystal --version"
 
 # PostgreSQL
 RUN sed -i 's/scram-sha-256/trust/' /etc/postgresql/*/main/pg_hba.conf
@@ -207,7 +195,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash
+ExecStart=/bin/zsh
 WorkingDirectory=/app
 StandardInput=tty
 StandardOutput=tty
@@ -231,7 +219,7 @@ ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
 # do this late to allow tweaking without rebuilding previous layers
-COPY .bashrc /etc/profile.bashrc
+COPY .zshrc /etc/zsh/zshrc
 COPY .gitconfig /etc/gitconfig
 
 CMD ["/sbin/init"]
