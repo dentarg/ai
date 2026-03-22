@@ -23,7 +23,7 @@ has_local 2>/dev/null || alias local=typeset
 set -u
 
 APP_NAME="rv"
-APP_VERSION="0.2.0"
+APP_VERSION="0.5.3"
 # Look for GitHub Enterprise-style base URL first
 if [ -n "${RV_INSTALLER_GHE_BASE_URL:-}" ]; then
     INSTALLER_BASE_URL="$RV_INSTALLER_GHE_BASE_URL"
@@ -35,7 +35,7 @@ if [ -n "${RV_DOWNLOAD_URL:-}" ]; then
 elif [ -n "${INSTALLER_DOWNLOAD_URL:-}" ]; then
     ARTIFACT_DOWNLOAD_URL="$INSTALLER_DOWNLOAD_URL"
 else
-    ARTIFACT_DOWNLOAD_URL="${INSTALLER_BASE_URL}/spinel-coop/rv/releases/download/v0.2.0"
+    ARTIFACT_DOWNLOAD_URL="${INSTALLER_BASE_URL}/spinel-coop/rv/releases/download/v0.5.3"
 fi
 if [ -n "${RV_PRINT_VERBOSE:-}" ]; then
     PRINT_VERBOSE="$RV_PRINT_VERBOSE"
@@ -65,7 +65,7 @@ fi
 AUTH_TOKEN="${RV_GITHUB_TOKEN:-}"
 
 read -r RECEIPT <<EORECEIPT
-{"binaries":["CARGO_DIST_BINS"],"binary_aliases":{},"cdylibs":["CARGO_DIST_DYLIBS"],"cstaticlibs":["CARGO_DIST_STATICLIBS"],"install_layout":"unspecified","install_prefix":"AXO_INSTALL_PREFIX","modify_path":true,"provider":{"source":"cargo-dist","version":"0.30.0"},"source":{"app_name":"rv","name":"rv","owner":"spinel-coop","release_type":"github"},"version":"0.2.0"}
+{"binaries":["CARGO_DIST_BINS"],"binary_aliases":{},"cdylibs":["CARGO_DIST_DYLIBS"],"cstaticlibs":["CARGO_DIST_STATICLIBS"],"install_layout":"unspecified","install_prefix":"AXO_INSTALL_PREFIX","modify_path":true,"provider":{"source":"cargo-dist","version":"0.30.3"},"source":{"app_name":"rv","name":"rv","owner":"spinel-coop","release_type":"github"},"version":"0.5.3"}
 EORECEIPT
 
 # Some Linux distributions don't set HOME
@@ -100,10 +100,10 @@ usage() {
     cat <<EOF
 rv-installer.sh
 
-The installer for rv 0.2.0
+The installer for rv 0.5.3
 
 This script detects what platform you're on and fetches an appropriate archive from
-https://github.com/spinel-coop/rv/releases/download/v0.2.0
+https://github.com/spinel-coop/rv/releases/download/v0.5.3
 then unpacks the binaries and installs them to
 
     \$CARGO_HOME/bin (or \$HOME/.cargo/bin)
@@ -206,9 +206,23 @@ download_binary_and_run_installer() {
             _arch="aarch64-apple-darwin"
             _zip_ext=".tar.xz"
             _checksum_style="sha256"
-            _checksum_value="006d7fba3862cfa5a2cdb3ca230e5df85f29479070c92bd817c1779736747311"
-            _bins="rv"
-            _bins_js_array='"rv"'
+            _checksum_value="6c790115817d79d67da8e79810ececb6b0ae700d14060dd7f23c49809e27fbe5"
+            _bins="rv rvx"
+            _bins_js_array='"rv","rvx"'
+            _libs=""
+            _libs_js_array=""
+            _staticlibs=""
+            _staticlibs_js_array=""
+            _updater_name=""
+            _updater_bin=""
+            ;;
+        "rv-aarch64-pc-windows-msvc.zip")
+            _arch="aarch64-pc-windows-msvc"
+            _zip_ext=".zip"
+            _checksum_style="sha256"
+            _checksum_value="812d44818cf00437fa6bb3035b59592bd3de4114710e3fecb859160dc94033c7"
+            _bins="rv.exe rvx.exe rvw.exe"
+            _bins_js_array='"rv.exe","rvx.exe","rvw.exe"'
             _libs=""
             _libs_js_array=""
             _staticlibs=""
@@ -220,9 +234,23 @@ download_binary_and_run_installer() {
             _arch="aarch64-unknown-linux-gnu"
             _zip_ext=".tar.xz"
             _checksum_style="sha256"
-            _checksum_value="5cb06958bfd3e41085469000209e03e293333ea8ddb1b593458c7564551d864e"
-            _bins="rv"
-            _bins_js_array='"rv"'
+            _checksum_value="083a1bc797a55d3f6bd95214294b63d068733509790840959968dccc52990d57"
+            _bins="rv rvx"
+            _bins_js_array='"rv","rvx"'
+            _libs=""
+            _libs_js_array=""
+            _staticlibs=""
+            _staticlibs_js_array=""
+            _updater_name=""
+            _updater_bin=""
+            ;;
+        "rv-aarch64-unknown-linux-musl.tar.xz")
+            _arch="aarch64-unknown-linux-musl-static"
+            _zip_ext=".tar.xz"
+            _checksum_style="sha256"
+            _checksum_value="b7e3229fe84799fb6b6803b23a9c61e6d18467d5fdb26eb7a7083ffb9fe246b6"
+            _bins="rv rvx"
+            _bins_js_array='"rv","rvx"'
             _libs=""
             _libs_js_array=""
             _staticlibs=""
@@ -234,9 +262,23 @@ download_binary_and_run_installer() {
             _arch="x86_64-apple-darwin"
             _zip_ext=".tar.xz"
             _checksum_style="sha256"
-            _checksum_value="7520b330b9c556b82a363ea53e6c1dd90d749c36b3f4700320e498d5a4bd1195"
-            _bins="rv"
-            _bins_js_array='"rv"'
+            _checksum_value="0136b666d8dc2a679e593e00ead87b3ae20e649b7d07ff2f1ec977917c44bd0f"
+            _bins="rv rvx"
+            _bins_js_array='"rv","rvx"'
+            _libs=""
+            _libs_js_array=""
+            _staticlibs=""
+            _staticlibs_js_array=""
+            _updater_name=""
+            _updater_bin=""
+            ;;
+        "rv-x86_64-pc-windows-msvc.zip")
+            _arch="x86_64-pc-windows-msvc"
+            _zip_ext=".zip"
+            _checksum_style="sha256"
+            _checksum_value="5a899c8c7491caa02b13ee116a00eded7aaea9c65e09d458b7e181c96e1fbb00"
+            _bins="rv.exe rvx.exe rvw.exe"
+            _bins_js_array='"rv.exe","rvx.exe","rvw.exe"'
             _libs=""
             _libs_js_array=""
             _staticlibs=""
@@ -248,9 +290,23 @@ download_binary_and_run_installer() {
             _arch="x86_64-unknown-linux-gnu"
             _zip_ext=".tar.xz"
             _checksum_style="sha256"
-            _checksum_value="aa9dc496cdd61690cc3a34e0c795d9480745d27e808ae57ab5e40a8cd187fbf1"
-            _bins="rv"
-            _bins_js_array='"rv"'
+            _checksum_value="ed978cc411f6156c0ac8a33d0b9bf1efaa27c9644dc82598e56de9727ae5da8c"
+            _bins="rv rvx"
+            _bins_js_array='"rv","rvx"'
+            _libs=""
+            _libs_js_array=""
+            _staticlibs=""
+            _staticlibs_js_array=""
+            _updater_name=""
+            _updater_bin=""
+            ;;
+        "rv-x86_64-unknown-linux-musl.tar.xz")
+            _arch="x86_64-unknown-linux-musl-static"
+            _zip_ext=".tar.xz"
+            _checksum_style="sha256"
+            _checksum_value="307f94ecf955464974376c547bdd999ff081163524ec1a051433b014eaac4bbd"
+            _bins="rv rvx"
+            _bins_js_array='"rv","rvx"'
             _libs=""
             _libs_js_array=""
             _staticlibs=""
@@ -321,7 +377,7 @@ download_binary_and_run_installer() {
             ;;
 
         ".tar."*)
-            ensure tar xf "$_file" --strip-components 1 -C "$_dir"
+            ensure tar xf "$_file" --no-same-owner --strip-components 1 -C "$_dir"
             ;;
         *)
             err "unknown archive format: $_zip_ext"
@@ -371,13 +427,31 @@ json_binary_aliases() {
     "aarch64-apple-darwin")
         echo '{}'
         ;;
+    "aarch64-pc-windows-gnu")
+        echo '{}'
+        ;;
     "aarch64-unknown-linux-gnu")
+        echo '{}'
+        ;;
+    "aarch64-unknown-linux-musl-dynamic")
+        echo '{}'
+        ;;
+    "aarch64-unknown-linux-musl-static")
         echo '{}'
         ;;
     "x86_64-apple-darwin")
         echo '{}'
         ;;
+    "x86_64-pc-windows-gnu")
+        echo '{}'
+        ;;
     "x86_64-unknown-linux-gnu")
+        echo '{}'
+        ;;
+    "x86_64-unknown-linux-musl-dynamic")
+        echo '{}'
+        ;;
+    "x86_64-unknown-linux-musl-static")
         echo '{}'
         ;;
     *)
@@ -398,7 +472,28 @@ aliases_for_binary() {
             ;;
         esac
         ;;
+    "aarch64-pc-windows-gnu")
+        case "$_bin" in
+        *)
+            echo ""
+            ;;
+        esac
+        ;;
     "aarch64-unknown-linux-gnu")
+        case "$_bin" in
+        *)
+            echo ""
+            ;;
+        esac
+        ;;
+    "aarch64-unknown-linux-musl-dynamic")
+        case "$_bin" in
+        *)
+            echo ""
+            ;;
+        esac
+        ;;
+    "aarch64-unknown-linux-musl-static")
         case "$_bin" in
         *)
             echo ""
@@ -412,7 +507,28 @@ aliases_for_binary() {
             ;;
         esac
         ;;
+    "x86_64-pc-windows-gnu")
+        case "$_bin" in
+        *)
+            echo ""
+            ;;
+        esac
+        ;;
     "x86_64-unknown-linux-gnu")
+        case "$_bin" in
+        *)
+            echo ""
+            ;;
+        esac
+        ;;
+    "x86_64-unknown-linux-musl-dynamic")
+        case "$_bin" in
+        *)
+            echo ""
+            ;;
+        esac
+        ;;
+    "x86_64-unknown-linux-musl-static")
         case "$_bin" in
         *)
             echo ""
@@ -444,11 +560,49 @@ select_archive_for_arch() {
                 return 0
             fi
             ;;
+        "aarch64-pc-windows-gnu")
+            _archive="rv-aarch64-pc-windows-msvc.zip"
+            if [ -n "$_archive" ]; then
+                echo "$_archive"
+                return 0
+            fi
+            ;;
+        "aarch64-pc-windows-msvc")
+            _archive="rv-aarch64-pc-windows-msvc.zip"
+            if [ -n "$_archive" ]; then
+                echo "$_archive"
+                return 0
+            fi
+            _archive="rv-x86_64-pc-windows-msvc.zip"
+            if [ -n "$_archive" ]; then
+                echo "$_archive"
+                return 0
+            fi
+            ;;
         "aarch64-unknown-linux-gnu")
             _archive="rv-aarch64-unknown-linux-gnu.tar.xz"
             if ! check_glibc "2" "39"; then
                 _archive=""
             fi
+            if [ -n "$_archive" ]; then
+                echo "$_archive"
+                return 0
+            fi
+            _archive="rv-aarch64-unknown-linux-musl.tar.xz"
+            if [ -n "$_archive" ]; then
+                echo "$_archive"
+                return 0
+            fi
+            ;;
+        "aarch64-unknown-linux-musl-dynamic")
+            _archive="rv-aarch64-unknown-linux-musl.tar.xz"
+            if [ -n "$_archive" ]; then
+                echo "$_archive"
+                return 0
+            fi
+            ;;
+        "aarch64-unknown-linux-musl-static")
+            _archive="rv-aarch64-unknown-linux-musl.tar.xz"
             if [ -n "$_archive" ]; then
                 echo "$_archive"
                 return 0
@@ -461,11 +615,44 @@ select_archive_for_arch() {
                 return 0
             fi
             ;;
+        "x86_64-pc-windows-gnu")
+            _archive="rv-x86_64-pc-windows-msvc.zip"
+            if [ -n "$_archive" ]; then
+                echo "$_archive"
+                return 0
+            fi
+            ;;
+        "x86_64-pc-windows-msvc")
+            _archive="rv-x86_64-pc-windows-msvc.zip"
+            if [ -n "$_archive" ]; then
+                echo "$_archive"
+                return 0
+            fi
+            ;;
         "x86_64-unknown-linux-gnu")
             _archive="rv-x86_64-unknown-linux-gnu.tar.xz"
             if ! check_glibc "2" "39"; then
                 _archive=""
             fi
+            if [ -n "$_archive" ]; then
+                echo "$_archive"
+                return 0
+            fi
+            _archive="rv-x86_64-unknown-linux-musl.tar.xz"
+            if [ -n "$_archive" ]; then
+                echo "$_archive"
+                return 0
+            fi
+            ;;
+        "x86_64-unknown-linux-musl-dynamic")
+            _archive="rv-x86_64-unknown-linux-musl.tar.xz"
+            if [ -n "$_archive" ]; then
+                echo "$_archive"
+                return 0
+            fi
+            ;;
+        "x86_64-unknown-linux-musl-static")
+            _archive="rv-x86_64-unknown-linux-musl.tar.xz"
             if [ -n "$_archive" ]; then
                 echo "$_archive"
                 return 0

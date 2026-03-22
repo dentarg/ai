@@ -12,4 +12,4 @@ function download() {
 
 download brew https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
 download mise https://mise.run
-download rv https://github.com/spinel-coop/rv/releases/download/v0.4.1/rv-installer.sh
+download rv https://github.com/spinel-coop/rv/releases/download/v0.5.3/rv-installer.sh
