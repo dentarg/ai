@@ -140,7 +140,8 @@ RUN bash -c "npm install -g @google/gemini-cli"
 RUN bash -c "npm install -g @openai/codex"
 
 RUN bash -c "rv ruby install $RUBY_VERSION"
-RUN bash -c "rv ruby install 4.0.1"
+RUN bash -c "rv ruby install 3.4.9"
+RUN bash -c "rv ruby install 4.0.2"
 RUN bash -c "ruby --yjit --version"
 RUN bash -c "bundle --version"
 
@@ -149,7 +150,7 @@ RUN bash -c "git clone --branch do-no-set-gem-home https://github.com/eregon/chr
 
 # JRuby via ruby-build
 RUN bash -c "git clone https://github.com/rbenv/ruby-build.git"
-RUN bash -c "ruby-build/bin/ruby-build jruby-10.0.3.0 ~/.data/rv/rubies/jruby-10.0.3.0"
+RUN bash -c "ruby-build/bin/ruby-build jruby-10.0.4.0 ~/.data/rv/rubies/jruby-10.0.4.0"
 
 # Install puppeteer-core (uses system Chromium instead of bundling its own)
 RUN bash -c "npm install -g puppeteer-core"
