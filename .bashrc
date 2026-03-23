@@ -1,3 +1,5 @@
+source /workspace/.bash_profile
+
 # due to https://github.com/ruby/rubygems/issues/9124
 export BUNDLE_DEFAULT_CLI_COMMAND=install
 export BUNDLE_IGNORE_FUNDING_REQUESTS=1 # no post install messages will be printed
@@ -21,15 +23,21 @@ if [ -f $chruby_dir/chruby.sh ]; then
 
     # Set RUBIES after chruby.sh (which initializes it as empty) but before
     # auto.sh (which sets up a DEBUG trap that fires immediately)
-    RUBIES_DIR="${HOME}/.data/rv/rubies"
+    RUBIES_DIR="${HOME}/.local/share/rv/rubies"
     if [[ -d $RUBIES_DIR ]]; then
       find $RUBIES_DIR -type d -empty -delete
       RUBIES=($RUBIES_DIR/*)
     fi
 
-    . $chruby_dir/auto.sh
+    # auto.sh sets a DEBUG trap for auto-switching ruby versions on cd.
+    # Only useful in interactive shells; in scripts it breaks set -u (nounset)
+    # because chruby_auto uses uninitialized variables.
+    if [[ $- == *i* ]]; then
+      . $chruby_dir/auto.sh
+    fi
 fi
 
+alias lsa="ls -ahl"
 alias b=bundle
 alias s=/usr/local/bin/start.sh
 

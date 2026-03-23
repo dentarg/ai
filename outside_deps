@@ -11,5 +11,7 @@ function download() {
 }
 
 download brew https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+download claude https://claude.ai/install.sh
 download mise https://mise.run
+download nvm https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh
 download rv https://github.com/spinel-coop/rv/releases/download/v0.5.3/rv-installer.sh

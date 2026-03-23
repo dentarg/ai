@@ -80,61 +80,58 @@ RUN curl -fsSL "https://ftp-master.debian.org/keys/archive-key-12.asc" -o /tmp/d
     && rm -rf /var/lib/apt/lists/* /tmp/debian.asc
 
 ENV HOME=/workspace
+ENV RUBIES_DIR="${HOME}/.local/share/rv/rubies"
 RUN mkdir $HOME
 WORKDIR $HOME
 
 COPY inside_deps/ ./
+
 RUN bash _brew.sh
+RUN bash _claude.sh
+RUN bash _nvm.sh
 RUN sh _mise.sh
 RUN sh _rv.sh
 RUN rm _brew.sh \
+       _claude.sh \
        _mise.sh \
+       _nvm.sh \
        _rv.sh
 
 # Homebrew does not let you pick HOMEBREW_PREFIX on Linux, always /home/linuxbrew/.linuxbrew
 # $HOME must be set to run brew
-COPY <<-EOT /etc/bash.bashrc
-  export HOME=/workspace
-  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-  eval "$($HOME/.local/bin/mise activate bash)"
-  eval "$($HOME/.cargo/bin/rv shell init bash)"
-  eval "$($HOME/.cargo/bin/rv shell env bash)"
-  eval "$($HOME/.cargo/bin/rv shell completions bash)"
+COPY <<-EOT /workspace/.bash_profile
+export HOME=/workspace
+export PATH=$PATH:/workspace/.cargo/bin
 
-  test -f /etc/profile.bashrc && source /etc/profile.bashrc
+eval "$($HOME/.cargo/bin/rv shell init bash)"
+eval "$($HOME/.cargo/bin/rv shell completions bash)"
+
+eval "$($HOME/.local/bin/mise activate bash)"
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
+source /workspace/.nvm/nvm.sh
 EOT
 
-COPY <<-EOT /etc/zsh/zshrc
-  export HOME=/workspace
-  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-  eval "$($HOME/.local/bin/mise activate zsh)"
-  eval "$($HOME/.cargo/bin/rv shell init zsh)"
-  eval "$($HOME/.cargo/bin/rv shell env zsh)"
-  eval "$($HOME/.cargo/bin/rv shell completions zsh)"
-
-  test -f /etc/profile.zshrc && source /etc/profile.zshrc
-EOT
-
-# --login needed for rv to be found (?)
 # BASH_ENV makes non-interactively shells source this file
-ENV BASH_ENV="/etc/bash.bashrc"
+ENV BASH_ENV="/workspace/.bash_profile"
 
 RUN bash -c "brew --version"
 RUN bash -c "mise --version"
-RUN bash --login -c "rv --version"
+RUN bash -c "rv --version"
 
 RUN bash -c "mise use --global bun"
 RUN bash -c "mise use --global go"
-RUN bash -c "mise use --global node"
 RUN bash -c "mise use --global python"
 RUN bash -c "mise use --global rust"
 
 RUN bash -c "go version"
-RUN bash -c "node --version"
 RUN bash -c "python --version"
 RUN bash -c "rustc --version"
 
-RUN bash -c "npm install -g @anthropic-ai/claude-code"
+RUN bash -c "nvm install 22"
+RUN bash -c "node -v"
+RUN bash -c "npm -v"
+
 RUN bash -c "npm install -g @github/copilot"
 RUN bash -c "npm install -g @google/gemini-cli"
 RUN bash -c "npm install -g @openai/codex"
@@ -142,15 +139,15 @@ RUN bash -c "npm install -g @openai/codex"
 RUN bash -c "rv ruby install $RUBY_VERSION"
 RUN bash -c "rv ruby install 3.4.9"
 RUN bash -c "rv ruby install 4.0.2"
-RUN bash -c "ruby --yjit --version"
-RUN bash -c "bundle --version"
+RUN bash -c "rv run ruby --yjit --version"
+RUN bash -c "rv run bundle --version"
 
 # Install chruby per https://gist.github.com/dentarg/79aae28811c290b7a6a96ab4fafd4197
 RUN bash -c "git clone --branch do-no-set-gem-home https://github.com/eregon/chruby.git"
 
 # JRuby via ruby-build
 RUN bash -c "git clone https://github.com/rbenv/ruby-build.git"
-RUN bash -c "ruby-build/bin/ruby-build jruby-10.0.4.0 ~/.data/rv/rubies/jruby-10.0.4.0"
+RUN bash -c "ruby-build/bin/ruby-build jruby-10.0.4.0 $RUBIES_DIR/jruby-10.0.4.0"
 
 # Install puppeteer-core (uses system Chromium instead of bundling its own)
 RUN bash -c "npm install -g puppeteer-core"
@@ -208,6 +205,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
+Environment=HOME=$HOME
 PassEnvironment=HOST_DIR
 ExecStart=/bin/bash
 WorkingDirectory=/app
@@ -229,11 +227,14 @@ RUN systemctl enable shell.service
 # RUN bash -c "claude plugin marketplace add https://github.com/anthropics/claude-code"
 # RUN bash -c "claude plugin install ralph-wiggum@claude-code-plugins"
 
+# created by claude native installer
+RUN rm -rf $HOME/.claude
+
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
 # do this late to allow tweaking without rebuilding previous layers
-COPY .bashrc /etc/profile.bashrc
+COPY .bashrc $HOME/.bashrc
 COPY .gitconfig /etc/gitconfig
 COPY bin/refresh-tokens /usr/local/bin/refresh-tokens
 RUN chmod +x /usr/local/bin/refresh-tokens
