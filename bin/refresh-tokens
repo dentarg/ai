@@ -1,13 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env -S BASH_ENV= bash
 
 set -euo pipefail
 
-CREDENTIALS_DIR="${CREDENTIALS_DIR:-/settings}"
+CREDENTIALS_DIR="${CREDENTIALS_DIR:-${HOME:?HOME must be set}/.claude}"
 CHECK_INTERVAL="${CHECK_INTERVAL:-300}"
 REFRESH_BEFORE="${REFRESH_BEFORE:-3600}"
 
 CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 TOKEN_URL="https://platform.claude.com/v1/oauth/token"
+AUTHORIZE_URL="https://claude.ai/oauth/authorize"
+REDIRECT_URI="https://platform.claude.com/oauth/code/callback"
+SCOPES="org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
+USER_AGENT="axios/1.13.6"
 
 log() {
   local level="$1"; shift
@@ -16,6 +20,17 @@ log() {
 
 now_ms() {
   echo "$(( $(date +%s) * 1000 ))"
+}
+
+format_expiry() {
+  local ms=$1
+  local secs=$((ms / 1000))
+  date -u -r "$secs" +"%Y-%m-%d %H:%M:%S UTC" 2>/dev/null \
+    || date -u -d "@$secs" +"%Y-%m-%d %H:%M:%S UTC"
+}
+
+urlencode() {
+  jq -rn --arg v "$1" '$v | @uri'
 }
 
 refresh_file() {
@@ -41,26 +56,46 @@ refresh_file() {
   local threshold_ms=$(( REFRESH_BEFORE * 1000 ))
   local remaining_ms=$(( expires_at - now ))
   local remaining_secs=$(( remaining_ms / 1000 ))
+  local expires_human
+  expires_human=$(format_expiry "$expires_at")
 
   if (( remaining_ms > threshold_ms )); then
-    log info "msg=\"token valid\" file=$(basename "$file") remaining_secs=$remaining_secs"
+    log info "msg=\"token valid\" file=$(basename "$file") remaining_secs=$remaining_secs expires=\"$expires_human\""
     return 0
   fi
 
-  log info "msg=\"refreshing\" file=$(basename "$file") remaining_secs=$remaining_secs"
+  log info "msg=\"refreshing\" file=$(basename "$file") remaining_secs=$remaining_secs expires=\"$expires_human\""
 
   local scopes
   scopes=$(jq -r ".[\"${oauth_key}\"].scopes | join(\" \")" "$file" 2>/dev/null || echo "")
 
+  local body
+  body=$(jq -n \
+    --arg rt "$refresh_tok" \
+    --arg scope "$scopes" \
+    '{grant_type: "refresh_token", refresh_token: $rt, client_id: "'"$CLIENT_ID"'", scope: $scope}')
+
   local response
-  if ! response=$(curl -sf -X POST "$TOKEN_URL" \
-    -H "Content-Type: application/x-www-form-urlencoded" \
-    -H "Accept: application/json" \
-    -d "grant_type=refresh_token" \
-    -d "refresh_token=${refresh_tok}" \
-    -d "client_id=${CLIENT_ID}" \
-    ${scopes:+-d "scope=${scopes}"}); then
-    log error "msg=\"refresh request failed\" file=$(basename "$file")"
+  response=$(curl -s --compressed -X POST "$TOKEN_URL" \
+    -H "Accept: application/json, text/plain, */*" \
+    -H "Content-Type: application/json" \
+    -H "User-Agent: $USER_AGENT" \
+    -d "$body") || true
+
+  if [[ -z "$response" ]]; then
+    log error "msg=\"refresh request failed (no response)\" file=$(basename "$file")"
+    return 1
+  fi
+
+  if [[ "$response" == *"rate_limit_error"* ]]; then
+    log warn "msg=\"rate limited, will retry next cycle\" file=$(basename "$file")"
+    return 1
+  fi
+
+  if [[ "$response" != *"access_token"* ]]; then
+    local err
+    err=$(echo "$response" | jq -r '.error.message // .message // .error // empty' 2>/dev/null) || true
+    log error "msg=\"refresh failed\" file=$(basename "$file") error=\"${err:-unknown}\""
     return 1
   fi
 
@@ -76,6 +111,8 @@ refresh_file() {
 
   local new_expires_at
   new_expires_at=$(( $(now_ms) + new_expires_in * 1000 ))
+  local new_expires_human
+  new_expires_human=$(format_expiry "$new_expires_at")
 
   local tmp="${file}.tmp"
   jq --arg at "$new_access" \
@@ -86,10 +123,15 @@ refresh_file() {
   chmod 600 "$tmp"
   mv "$tmp" "$file"
 
-  log info "msg=\"refreshed\" file=$(basename "$file") expires_at=$new_expires_at"
+  log info "msg=\"refreshed\" file=$(basename "$file") expires=\"$new_expires_human\""
 }
 
 run() {
+  if [[ ! -d "$CREDENTIALS_DIR" ]]; then
+    log info "msg=\"credentials dir not found, skipping\" dir=$CREDENTIALS_DIR"
+    return 0
+  fi
+
   local found=0
   for file in "${CREDENTIALS_DIR}"/.credentials*.json; do
     [[ -f "$file" ]] || continue
@@ -97,42 +139,187 @@ run() {
     refresh_file "$file" || true
   done
   if [[ "$found" -eq 0 ]]; then
-    log warn "msg=\"no credential files found\" dir=$CREDENTIALS_DIR"
+    log info "msg=\"no credential files found\" dir=$CREDENTIALS_DIR"
   fi
 }
 
+login() {
+  local profile="${1:-}"
+  local cred_file
+
+  if [[ -n "$profile" ]]; then
+    cred_file="${CREDENTIALS_DIR}/.credentials.${profile}.json"
+  else
+    cred_file="${CREDENTIALS_DIR}/.credentials.json"
+  fi
+
+  local code_verifier code_challenge state
+  code_verifier=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')
+  code_challenge=$(printf '%s' "$code_verifier" | openssl dgst -sha256 -binary | openssl base64 | tr '+/' '-_' | tr -d '=')
+  state=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')
+
+  # Match Claude Code's URLSearchParams encoding exactly
+  local scope_plus="${SCOPES// /+}"
+  scope_plus="${scope_plus//:/%3A}"
+  local auth_url="${AUTHORIZE_URL}"
+  auth_url+="?code=true"
+  auth_url+="&client_id=${CLIENT_ID}"
+  auth_url+="&response_type=code"
+  auth_url+="&redirect_uri=$(urlencode "$REDIRECT_URI")"
+  auth_url+="&scope=${scope_plus}"
+  auth_url+="&code_challenge=${code_challenge}"
+  auth_url+="&code_challenge_method=S256"
+  auth_url+="&state=${state}"
+
+  echo ""
+  echo "Open this URL in your browser to sign in:"
+  echo ""
+  echo "  ${auth_url}"
+  echo ""
+  echo "After authorizing, paste the code or the full callback URL:"
+  echo ""
+
+  local input
+  read -r -p "Code: " input
+
+  local code
+  if [[ "$input" =~ code=([^&#]+) ]]; then
+    code="${BASH_REMATCH[1]}"
+  else
+    code="$input"
+  fi
+
+  # Strip URL fragment (#state) if present
+  code="${code%%#*}"
+
+  if [[ -z "$code" ]]; then
+    echo "Error: no code provided"
+    return 1
+  fi
+
+  local response="" attempt
+  local max_attempts=5 wait_secs=60
+  local exchanged=false
+
+  for attempt in $(seq 1 $max_attempts); do
+    local body
+    body=$(jq -n \
+      --arg code "$code" \
+      --arg verifier "$code_verifier" \
+      --arg state "$state" \
+      '{grant_type: "authorization_code", code: $code, redirect_uri: "'"$REDIRECT_URI"'", client_id: "'"$CLIENT_ID"'", code_verifier: $verifier, state: $state}')
+
+    response=$(curl -s --compressed -X POST "$TOKEN_URL" \
+      -H "Accept: application/json, text/plain, */*" \
+      -H "Content-Type: application/json" \
+      -H "User-Agent: $USER_AGENT" \
+      -d "$body") || true
+
+    if [[ -z "$response" ]]; then
+      echo "Error: token exchange request failed (no response)"
+      return 1
+    fi
+
+    if [[ "$response" == *"rate_limit_error"* ]]; then
+      echo "Rate limited, retrying in ${wait_secs}s... (attempt $attempt/$max_attempts)"
+      sleep "$wait_secs"
+      wait_secs=$(( wait_secs * 2 ))
+      continue
+    fi
+
+    exchanged=true
+    break
+  done
+
+  if [[ "$exchanged" != "true" ]]; then
+    echo "Error: still rate limited after $max_attempts attempts"
+    return 1
+  fi
+
+  if [[ "$response" != *"access_token"* ]]; then
+    local msg
+    msg=$(echo "$response" | jq -r '.error.message // .message // .error_description // empty' 2>/dev/null) || true
+    echo "Error: ${msg:-$response}"
+    return 1
+  fi
+
+  local access_token refresh_token expires_in
+  access_token=$(echo "$response" | jq -r '.access_token')
+  refresh_token=$(echo "$response" | jq -r '.refresh_token')
+  expires_in=$(echo "$response" | jq -r '.expires_in')
+
+  if [[ -z "$access_token" || "$access_token" == "null" ]]; then
+    echo "Error: no access token in response"
+    echo "$response" | jq . 2>/dev/null || echo "$response"
+    return 1
+  fi
+
+  local expires_at
+  expires_at=$(( $(now_ms) + expires_in * 1000 ))
+
+  local scope_response scopes_json
+  scope_response=$(echo "$response" | jq -r '.scope // empty')
+  if [[ -n "$scope_response" ]]; then
+    scopes_json=$(echo "$scope_response" | tr ' ' '\n' | jq -R . | jq -s .)
+  else
+    scopes_json=$(echo "$SCOPES" | tr ' ' '\n' | jq -R . | jq -s .)
+  fi
+
+  jq -n \
+    --arg at "$access_token" \
+    --arg rt "$refresh_token" \
+    --argjson ea "$expires_at" \
+    --argjson sc "$scopes_json" \
+    '{"claudeAiOauth": {"accessToken": $at, "refreshToken": $rt, "expiresAt": $ea, "scopes": $sc}}' \
+    > "$cred_file"
+  chmod 600 "$cred_file"
+
+  local expires_human
+  expires_human=$(format_expiry "$expires_at")
+  echo ""
+  echo "Login successful! Credentials saved to $(basename "$cred_file")"
+  echo "Token expires at ${expires_human}"
+}
+
 usage() {
-  echo "Usage: $(basename "$0") [--once]"
+  echo "Usage: $(basename "$0") <command> [options]"
   echo ""
   echo "Keeps Claude Code OAuth tokens fresh by refreshing before expiry."
   echo ""
-  echo "Options:"
-  echo "  --once    Refresh once and exit (no daemon loop)"
+  echo "Commands:"
+  echo "  --login [profile]   Sign in with OAuth and save credentials"
+  echo "  --once              Refresh all tokens once and exit"
+  echo "  --daemon            Run as a daemon, refreshing tokens periodically"
+  echo "  --help, -h          Show this help"
   echo ""
   echo "Environment:"
-  echo "  CREDENTIALS_DIR   Directory with .credentials*.json files (default: /settings)"
-  echo "  CHECK_INTERVAL    Seconds between checks (default: 300)"
+  echo "  CREDENTIALS_DIR   Directory with .credentials*.json files (default: ~/.claude)"
+  echo "  CHECK_INTERVAL    Seconds between checks in daemon mode (default: 300)"
   echo "  REFRESH_BEFORE    Seconds before expiry to refresh (default: 3600)"
 }
 
 main() {
   case "${1:-}" in
+    --login)
+      login "${2:-}"
+      ;;
     --once)
       run
-      return
+      ;;
+    --daemon)
+      log info "msg=\"starting\" dir=$CREDENTIALS_DIR interval=${CHECK_INTERVAL}s threshold=${REFRESH_BEFORE}s"
+      while true; do
+        run
+        sleep "$CHECK_INTERVAL"
+      done
       ;;
     --help|-h)
       usage
-      return
+      ;;
+    *)
+      usage
       ;;
   esac
-
-  log info "msg=\"starting\" dir=$CREDENTIALS_DIR interval=${CHECK_INTERVAL}s threshold=${REFRESH_BEFORE}s"
-
-  while true; do
-    run
-    sleep "$CHECK_INTERVAL"
-  done
 }
 
 main "$@"

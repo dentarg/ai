@@ -223,6 +223,25 @@ EOT
 
 RUN systemctl enable shell.service
 
+# Token refresh service
+COPY <<-EOT /etc/systemd/system/refresh-tokens.service
+[Unit]
+Description=Claude OAuth Token Refresh
+After=network.target
+
+[Service]
+Type=simple
+Environment=HOME=$HOME
+ExecStart=/usr/local/bin/refresh-tokens --daemon
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOT
+
+RUN systemctl enable refresh-tokens.service
+
 # Claude Code plugins
 # RUN bash -c "claude plugin marketplace add https://github.com/anthropics/claude-code"
 # RUN bash -c "claude plugin install ralph-wiggum@claude-code-plugins"

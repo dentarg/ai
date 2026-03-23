@@ -1,0 +1,19 @@
+#!/bin/sh
+
+set -eu
+
+AI_DIR=${AI_DIR:-"${HOME}/ai"}
+SETTINGS_DIR=${AI_DIR}/settings
+
+if podman ps --format '{{.Names}}' | grep -q '^token-refresh$'; then
+  echo "token-refresh container is already running"
+else
+  podman rm --force token-refresh 2>/dev/null || true
+  podman run --detach --name token-refresh \
+    --env CREDENTIALS_DIR=/settings \
+    --volume "${SETTINGS_DIR}:/settings" \
+    ai:latest /usr/local/bin/refresh-tokens --daemon
+  echo "token-refresh container started"
+fi
+
+podman logs --tail 5 --follow token-refresh

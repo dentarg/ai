@@ -50,30 +50,50 @@ podman machine init --disk-size 300 --memory 16384 --now
 ./build_image --force
 ```
 
-## Token Refresh Daemon
+## OAuth Login
 
-OAuth tokens for Claude Code expire periodically. Run `bin/refresh-tokens` in a dedicated container to keep `/settings/.credentials*.json` files fresh so new containers always start with valid tokens.
+First-time setup to get OAuth credentials:
 
 ```shell
-# run as a background container (detached)
-podman run -d --name token-refresh \
-  --volume ${HOME}/ai/settings:/settings \
-  ai:latest /usr/local/bin/refresh-tokens
+# inside the container, or via podman run
+refresh-tokens --login
+refresh-tokens --login <profile>
+```
 
-# check logs
-podman logs -f token-refresh
+This generates an OAuth authorization URL. Open it in your browser, sign in, and paste the code back into the terminal. Credentials are saved to `~/.claude/.credentials.json` (or `.credentials.<profile>.json`).
+
+## Token Refresh Service
+
+OAuth tokens expire periodically. A systemd service (`refresh-tokens.service`) runs in every container, keeping `~/.claude/.credentials*.json` files fresh automatically.
+
+```shell
+# check service status
+systemctl status refresh-tokens
+
+# view logs
+journalctl -u refresh-tokens
+
+# follow logs
+journalctl -u refresh-tokens -f
 
 # one-shot refresh (e.g. before launching a session)
-podman run --rm \
+refresh-tokens --once
+```
+
+The service can also run as a standalone container to refresh `/settings` credentials:
+
+```shell
+podman run -d --name token-refresh \
+  --env CREDENTIALS_DIR=/settings \
   --volume ${HOME}/ai/settings:/settings \
-  ai:latest /usr/local/bin/refresh-tokens --once
+  ai:latest /usr/local/bin/refresh-tokens --daemon
 ```
 
 Environment variables:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `CREDENTIALS_DIR` | `/settings` | Directory containing `.credentials*.json` files |
+| `CREDENTIALS_DIR` | `~/.claude` | Directory containing `.credentials*.json` files |
 | `CHECK_INTERVAL` | `300` | Seconds between checks |
 | `REFRESH_BEFORE` | `3600` | Seconds before expiry to trigger refresh |
 
