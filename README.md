@@ -116,11 +116,44 @@ function pod() {
 }
 ```
 
-Commands
+### `mitmproxy`
+
+Start it capturing everything:
+
+```bash
+./mitmdump --mode regular --listen-port 8080 --ssl-insecure --set flow_detail=3 -w claude.flow
+```
+
+mitmproxy generates its CA at `~/.mitmproxy/mitmproxy-ca-cert.pem` on first run.
+
+```bash
+export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
+export HTTPS_PROXY=http://127.0.0.1:8080
+```
+
+Start the agent
+
+```bash
+claude
+```
+
+Output the (partially) binary dump as text (`--mode` picking another port is important if proxy already running)
+
+```bash
+./mitmdump --mode regular@8082 --set flow_detail=3 -r claude.flow --set export_format=curl
+```
+
+### Commands
+
+`tcpdump`
 
 ```shell
 podman run --rm -it --cap-add=NET_RAW --cap-add=NET_ADMIN --net=container:<container> nicolaka/netshoot tcpdump -i eth0
+```
 
+`podman`
+
+```shell
 # to see current settings
 podman machine inspect
 

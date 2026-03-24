@@ -175,6 +175,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends lavinmq
 # amqpcat - AMQP CLI tool
 COPY --from=cloudamqp/amqpcat /amqpcat /usr/bin/amqpcat
 
+# mitmproxy
+RUN bash -c "pip install mitmproxy"
+
 # we don't want to wait when starting the container
 RUN systemctl disable postgresql lavinmq
 
