@@ -50,9 +50,13 @@ link_dotfiles () {
   local dir=/settings/dotfiles
 
   for file in ${dir}/* ${dir}/.*; do
-    [[ "$(basename $file)" == "*" ]] && continue
-    [[ "$(basename $file)" == ".*" ]] && continue
-    ln -sf $file $HOME
+    local base
+    base=$(basename "$file")
+    [[ "$base" == "*" ]] && continue
+    [[ "$base" == ".*" ]] && continue
+    [[ "$base" == ".bashrc" ]] && continue
+    [[ "$base" == ".bash_profile" ]] && continue
+    ln -sf "$file" "$HOME"
   done
 }
 
@@ -80,3 +84,6 @@ __git_ps1() {
 PS1='\[\e[1;32m\]\h\[\e[0m\]:\[\e[1;34m\]\w\[\e[1;33m\]$(__git_ps1)\[\e[0m\]\$ '
 
 link_dotfiles
+
+# source user's bashrc from dotfiles if present (after container setup)
+[[ -f /settings/dotfiles/.bashrc ]] && source /settings/dotfiles/.bashrc
