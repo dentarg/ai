@@ -182,13 +182,19 @@ RUN bash -c "pip install mitmproxy"
 # we don't want to wait when starting the container
 RUN systemctl disable postgresql lavinmq
 
-# convenience script to start services
+# convenience scripts
 COPY ./tools/start.sh /usr/local/bin/start.sh
-RUN chmod +x /usr/local/bin/start.sh
-
-# convenience script to take browser screenshots
 COPY ./tools/screenshot.sh /usr/local/bin/screenshot.sh
-RUN chmod +x /usr/local/bin/start.sh
+COPY ./tools/claude.sh /usr/local/bin/c
+COPY ./tools/gemini.sh /usr/local/bin/g
+COPY ./tools/codex.sh /usr/local/bin/cx
+COPY ./tools/exit.sh /usr/local/bin/x
+RUN chmod +x /usr/local/bin/start.sh \
+             /usr/local/bin/screenshot.sh \
+             /usr/local/bin/c \
+             /usr/local/bin/g \
+             /usr/local/bin/cx \
+             /usr/local/bin/x
 
 #
 # systemd

@@ -3,6 +3,9 @@
 set -e
 set -u
 
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+REPO_DIR=$(dirname "$SCRIPT_DIR")
+
 AI_DIR=${AI_DIR:-"${HOME}/ai"}
 COMMAND_HISTORY_DIR=${AI_DIR}/commandhistory
 HISTORY_DIR=${AI_DIR}/history
@@ -33,6 +36,7 @@ podman run --rm --interactive --tty \
   --volume ${HISTORY_DIR}:/history \
   --volume ${REPOS_DIR}:/repos \
   --volume ${SETTINGS_DIR}:/settings \
+  --volume ${REPO_DIR}/claude:/claude:ro \
   --volume $(pwd):/app \
   --workdir /app \
   --publish ${PORT} \

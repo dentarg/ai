@@ -1,0 +1,9 @@
+{
+  "hasCompletedOnboarding": true,
+  "projects": {
+    "/app": {
+      "hasTrustDialogAccepted": true,
+      "hasTrustDialogHooksAccepted": true
+    }
+  }
+}

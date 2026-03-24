@@ -1,0 +1,34 @@
+{
+  "skipDangerousModePermissionPrompt": true,
+  "spinnerTipsEnabled": false,
+  "env": {
+    "CLAUDE_CODE_DISABLE_TERMINAL_TITLE": "1"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "PROFILE=$(cat $HOME/.claude/.profile 2>/dev/null || echo default); HOST=$(hostname); jq -r --arg profile \"$PROFILE\" --arg host \"$HOST\" '\"[\" + env.HOST_DIR + \"] \" + $profile + \" | \" + $host + \" | \" + .model.display_name + \" | \" + ((.context_window.used_percentage // 0) | tostring) + \"% context\"'"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '\\033]0;%s\\007' \"${HOST_DIR:-$PWD}\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "prompt=$(jq -r .prompt); if [ \"$prompt\" = \"x\" ]; then (sleep 0.1; pkill -INT claude 2>/dev/null) & echo 'Exiting...' >&2; exit 2; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

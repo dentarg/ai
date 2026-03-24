@@ -13,6 +13,11 @@ export IS_SANDBOX=1
 # our own tools
 export PATH=$PATH:/usr/local/bin
 
+# Claude Code
+#
+# Dynamic flavor text (AI-generated filler)
+export DISABLE_NON_ESSENTIAL_MODEL_CALLS=1
+
 # the default is too low
 ulimit -n 10480
 
@@ -49,116 +54,6 @@ link_dotfiles () {
     [[ "$(basename $file)" == ".*" ]] && continue
     ln -sf $file $HOME
   done
-}
-
-history_dir () {
-  local tool=$1
-  local year=$(date +%Y)
-  local month=$(date +%m_%b)
-  local day_time=$(date +%d_%a_%H-%M)
-  echo "/history/${year}/${month}/${day_time}_${tool}"
-}
-
-oc () {
-  if [[ ! -d /settings/codex ]]; then
-    echo "/settings/codex not found!"
-    echo ""
-    echo "  First time? You want to create /settings/codex/auth.json with OPENAI_API_KEY"
-    echo ""
-    return 1
-  fi
-
-  local settings_home=$(history_dir codex)
-
-  rm -f $HOME/.codex # should be a symlink
-  mkdir -p $settings_home
-  ln -s $settings_home $HOME/.codex
-
-  cp /settings/codex/auth.json $HOME/.codex
-  cp /settings/AGENTS.md       $HOME/.codex
-
-  codex \
-    --dangerously-bypass-approvals-and-sandbox \
-    --search
-}
-
-g () {
-  local profile=${1:-}
-
-  if [[ -n "$profile" ]]; then
-    settings_gemini=/settings/gemini_${profile}
-  else
-    settings_gemini=/settings/gemini
-  fi
-
-  if [[ ! -d $settings_gemini ]]; then
-    echo "$settings_gemini not found!"
-    echo ""
-    echo "  First time? Start gemini and authenticate."
-    echo "  Inspect ~/.gemini and copy needed files (see /etc/profile.bashrc) to /settings/gemini"
-    echo ""
-    return 1
-  fi
-
-  local settings_home=$(history_dir gemini)
-
-  rm -f $HOME/.gemini # should be a symlink
-  mkdir -p $settings_home
-  ln -s $settings_home $HOME/.gemini
-
-  cp $settings_gemini/google_accounts.json $HOME/.gemini
-  cp $settings_gemini/installation_id      $HOME/.gemini
-  cp $settings_gemini/oauth_creds.json     $HOME/.gemini
-  cp $settings_gemini/settings.json        $HOME/.gemini
-  cp $settings_gemini/state.json           $HOME/.gemini
-  cp /settings/AGENTS.md                   $HOME/.gemini/GEMINI.md
-
-  gemini --yolo
-}
-
-cool_claude () {
-  local profile=${1:-}
-  local settings_claude_json
-  local settings_claude_home=$(history_dir claude)
-
-  rm -f $HOME/.claude/.credentials.json
-  rm -f $HOME/.claude # should be a symlink
-  rm -f $HOME/.claude.json
-  rm -f $HOME/.claude.json.backup
-
-  if [[ -n "$profile" ]]; then
-    settings_claude_json=/settings/.claude.${profile}.json
-
-    # oauth accounts uses separate file with access token and refresh token
-    if [[ -f $settings_claude_json ]] && grep -q "oauthAccount" "$settings_claude_json"; then
-      mkdir -p $settings_claude_home
-      ln -s $settings_claude_home $HOME/.claude
-
-      local settings_credentials=/settings/.credentials.${profile}.json
-      test -f $settings_credentials && cp -f $settings_credentials $HOME/.claude/.credentials.json
-    fi
-  else
-    settings_claude_json=/settings/.claude.json
-  fi
-
-  if [[ ! -f $settings_claude_json ]]; then
-    echo "$settings_claude_json not found!"
-    return 1
-  fi
-
-  [[ ! -L $HOME/.claude ]] && mkdir -p $settings_claude_home && ln -s $settings_claude_home $HOME/.claude
-
-  cp -f $settings_claude_json $settings_claude_home/.claude.json # keep a copy
-  ln -s $settings_claude_home/.claude.json $HOME/.claude.json    # link it
-  [[ -f /settings/AGENTS.md ]]      && cp -f /settings/AGENTS.md      $HOME/.claude/CLAUDE.md
-  [[ -f /settings/settings.json ]]  && cp -f /settings/settings.json  $HOME/.claude/settings.json
-
-  echo "${profile:-default}" > $HOME/.claude/.profile
-
-  claude \
-    --dangerously-skip-permissions \
-    --model claude-opus-4-6 \
-    --effort high
 }
 
 __git_ps1() {
