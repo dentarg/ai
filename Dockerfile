@@ -139,6 +139,7 @@ RUN bash -c "npm install -g @google/gemini-cli"
 RUN bash -c "npm install -g @openai/codex"
 
 RUN bash -c "rv ruby install $RUBY_VERSION"
+RUN bash -c "rv ruby install 3.4.7"
 RUN bash -c "rv ruby install 3.4.9"
 RUN bash -c "rv ruby install 4.0.2"
 RUN bash -c "rv run ruby --yjit --version"
