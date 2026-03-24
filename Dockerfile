@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      iputils-tracepath \
      jq \
      less \
+     libcurl4-openssl-dev \
      liblz4-dev \
      libpq-dev \
      libyaml-dev \
