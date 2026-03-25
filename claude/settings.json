@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "prompt=$(jq -r .prompt); if [ \"$prompt\" = \"x\" ]; then (sleep 0.1; pkill -INT claude 2>/dev/null) & echo 'Exiting...' >&2; exit 2; fi"
+            "command": "/app/tools/claude-hook.sh"
           }
         ]
       }
