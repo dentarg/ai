@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/app/tools/claude-hook.sh"
+            "command": "claude-hook"
           }
         ]
       }

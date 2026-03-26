@@ -44,6 +44,7 @@ fi
 
 alias lsa="ls -ahl"
 alias b=bundle
+alias l=/usr/local/bin/claude-login
 alias s=/usr/local/bin/start.sh
 
 link_dotfiles () {

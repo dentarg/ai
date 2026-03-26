@@ -14,7 +14,7 @@ case "$prompt" in
     ;;
   l)
     profile=$(cat "$HOME/.claude/.profile" 2>/dev/null)
-    /app/tools/claude-login.sh "$profile" >&2
+    claude-login "$profile" >&2
     exit 2
     ;;
 esac
