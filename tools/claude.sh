@@ -82,5 +82,5 @@ fi
 
 exec claude \
   --dangerously-skip-permissions \
-  --model claude-opus-4-6 \
+  --model claude-opus-4-7 \
   --effort high
