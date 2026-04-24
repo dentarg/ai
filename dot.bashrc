@@ -17,6 +17,8 @@ export PATH=$PATH:/usr/local/bin
 #
 # Dynamic flavor text (AI-generated filler)
 export DISABLE_NON_ESSENTIAL_MODEL_CALLS=1
+# No "here's what happened while you were away" recap
+export CLAUDE_CODE_ENABLE_AWAY_SUMMARY=0
 
 # the default is too low
 ulimit -n 10480
