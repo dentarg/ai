@@ -1,5 +1,19 @@
 # `ai` image
 
+A containerized sandbox for running coding agents (Claude Code, Gemini CLI, OpenAI Codex, GitHub Copilot) with `--dangerously-skip-permissions` / `--dangerously-bypass-approvals-and-sandbox` enabled by default.
+
+## Why
+
+Agents work best when they can freely run shell commands, edit files, install packages, and poke at databases — but you don't want them doing that against your host. This image gives each session its own throwaway Linux environment with:
+
+- The project you're working on mounted at `/app`.
+- Language runtimes, databases (PostgreSQL, LavinMQ), and common tools preinstalled, so agents don't spend turns bootstrapping.
+- OAuth credentials and API keys mounted from `~/ai/settings`, with multi-profile support and automatic token refresh.
+- Shell history, agent session history, and cloned repos persisted on the host across container restarts.
+- `mitmproxy` available for inspecting what the agent actually sends over the wire.
+
+## Setup
+
 Create `$HOME/ai/settings` with `.claude.tmpl.json`:
 
 ```json
@@ -19,20 +33,23 @@ Add `AGENTS.md` to `$HOME/ai/settings` if you want. It will populate `CLAUDE.md`
 bin/ai
 bin/ai --1p # if you want to use claude.tmpl.json with op:// reference
 
-# start services (and run "bundle install" if Gemfile.lock exist)
+# start services (and run "bundle install" if Gemfile.lock exists)
 s
 
 # launch claude
-cool_claude
+c
 
-# launch claude with a specific config
-cool_claude <profile>
+# launch claude with a specific profile
+c <profile>
 
 # launch gemini
 g
 
 # launch openai codex
-oc
+cx
+
+# exit the container
+x
 ```
 
 ## Prerequisites
