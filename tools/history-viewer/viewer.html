@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Claude Code history viewer</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1f2430;
+    --border: #2a2f3d;
+    --text: #e6e8ee;
+    --muted: #8b92a7;
+    --accent: #7aa2f7;
+    --user: #2b3a55;
+    --assistant: #2a2f3d;
+    --tool: #1d2a1d;
+    --warn: #553322;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  a { color: var(--accent); }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  pre { background: #0b0d12; padding: 8px 10px; border-radius: 4px; overflow-x: auto;
+    border: 1px solid var(--border); margin: 6px 0; }
+  code { background: #0b0d12; padding: 1px 4px; border-radius: 3px; }
+  pre code { background: none; padding: 0; }
+  button, select, input { font: inherit; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  details > summary { cursor: pointer; color: var(--muted); user-select: none; }
+  details[open] > summary { color: var(--text); }
+
+  #app { display: grid; grid-template-columns: 380px 1fr; height: 100vh; }
+  #sidebar { border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    background: var(--panel); overflow: hidden; }
+  #tabs { display: flex; border-bottom: 1px solid var(--border); }
+  #tabs button { border: 0; border-radius: 0; border-bottom: 2px solid transparent;
+    background: transparent; padding: 10px 14px; color: var(--muted); }
+  #tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  #filters { padding: 8px; border-bottom: 1px solid var(--border);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  #filters input, #filters select { width: 100%; }
+  #filters .full { grid-column: 1 / -1; }
+
+  #session-list { overflow-y: auto; flex: 1; }
+  .session { padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .session:hover { background: var(--panel-2); }
+  .session.active { background: var(--panel-2); border-left: 3px solid var(--accent); padding-left: 9px; }
+  .session .row1 { display: flex; justify-content: space-between; gap: 8px; }
+  .session .time { color: var(--muted); font-size: 12px; }
+  .session .repo { font-weight: 600; }
+  .session .branch { color: var(--muted); font-size: 12px; }
+  .session .prompt { color: var(--muted); font-size: 12.5px; margin-top: 4px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .session .meta { color: var(--muted); font-size: 11.5px; margin-top: 4px; display: flex; gap: 10px; }
+  .session .match { color: var(--accent); font-size: 11.5px; margin-top: 4px; }
+
+  #main { display: flex; flex-direction: column; overflow: hidden; }
+  #main-header { padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--panel);
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+  #main-header .stat { color: var(--muted); font-size: 12.5px; }
+  #main-header .stat b { color: var(--text); font-weight: 600; }
+  #main-header .sid { display: inline-flex; align-items: center; gap: 6px; }
+  #main-header .sid code { color: var(--text); }
+  #main-header .copy { padding: 2px 8px; font-size: 11.5px; }
+  #main-header .spacer { flex: 1; }
+  #transcript { overflow-y: auto; flex: 1; padding: 16px; max-width: 100%; }
+  .evt { margin-bottom: 14px; max-width: 980px; }
+  .evt.user { }
+  .evt.assistant { }
+  .bubble { border-radius: 6px; padding: 10px 14px; border: 1px solid var(--border); }
+  .evt.user .bubble { background: var(--user); }
+  .evt.assistant .bubble { background: var(--assistant); }
+  .evt .who { color: var(--muted); font-size: 11.5px; margin-bottom: 4px; display: flex; gap: 10px; }
+  .evt .who b { color: var(--text); font-weight: 600; }
+  .evt .who .ts { font-variant-numeric: tabular-nums; }
+  .tool-use, .tool-result, .thinking { margin: 8px 0; border: 1px solid var(--border); border-radius: 4px;
+    background: var(--tool); padding: 8px 10px; }
+  .tool-result { background: #1a2030; }
+  .thinking { background: #1a1f2a; }
+  .tool-use .name, .tool-result .name { color: var(--accent); font-weight: 600; }
+  .tool-result.error { background: var(--warn); }
+  .internal { color: var(--muted); font-size: 12px; padding: 2px 0; }
+  .internal .kind { color: var(--accent); }
+
+  .markdown p { margin: 6px 0; }
+  .markdown ul, .markdown ol { margin: 6px 0; padding-left: 22px; }
+  .markdown h1, .markdown h2, .markdown h3 { margin: 10px 0 6px; }
+  .markdown h1 { font-size: 18px; }
+  .markdown h2 { font-size: 16px; }
+  .markdown h3 { font-size: 14.5px; }
+  .markdown blockquote { border-left: 3px solid var(--border); padding-left: 10px; color: var(--muted); margin: 6px 0; }
+
+  #empty { color: var(--muted); padding: 40px; text-align: center; }
+
+  #stats { padding: 16px; overflow-y: auto; flex: 1; }
+  #stats h2 { margin-top: 0; }
+  #stats table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  #stats th, #stats td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums; }
+  #stats th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+  #stats td.num, #stats th.num { text-align: right; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div id="tabs">
+      <button data-tab="sessions" class="active">Sessions</button>
+      <button data-tab="stats">Stats</button>
+    </div>
+    <div id="filters">
+      <input id="search" class="full" placeholder="Search transcripts (min 2 chars)…">
+      <input id="f-from" type="date" title="from">
+      <input id="f-to" type="date" title="to">
+      <select id="f-repo"><option value="">All repos</option></select>
+      <select id="f-branch"><option value="">All branches</option></select>
+      <select id="f-tool"><option value="">All tools</option></select>
+      <select id="f-model"><option value="">All models</option></select>
+      <input id="f-minTokens" class="full" type="number" min="0" placeholder="min total tokens">
+    </div>
+    <div id="session-list"></div>
+  </div>
+  <div id="main">
+    <div id="main-header"><div class="stat">Select a session</div></div>
+    <div id="transcript"><div id="empty">Pick a session on the left.</div></div>
+    <div id="stats" class="hidden"></div>
+  </div>
+</div>
+
+<script>
+// ---------- tiny markdown renderer ----------
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function renderMarkdown(src) {
+  if (!src) return "";
+  const lines = String(src).split(/\r?\n/);
+  let out = [], i = 0;
+  const flushPara = (buf) => {
+    if (!buf.length) return;
+    const text = buf.join(" ");
+    out.push("<p>" + inline(text) + "</p>");
+  };
+  const inline = (t) => {
+    t = esc(t);
+    t = t.replace(/`([^`]+)`/g, (_, c) => "<code>" + c + "</code>");
+    t = t.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+    t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<i>$2</i>");
+    t = t.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    return t;
+  };
+  let para = [];
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^```/.test(line)) {
+      flushPara(para); para = [];
+      const lang = line.slice(3).trim();
+      const body = [];
+      i++;
+      while (i < lines.length && !/^```/.test(lines[i])) { body.push(lines[i]); i++; }
+      i++;
+      out.push('<pre><code' + (lang ? ' class="lang-' + esc(lang) + '"' : '') + ">" + esc(body.join("\n")) + "</code></pre>");
+      continue;
+    }
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      flushPara(para); para = [];
+      const lvl = h[1].length;
+      out.push(`<h${lvl}>${inline(h[2])}</h${lvl}>`);
+      i++; continue;
+    }
+    const li = line.match(/^\s*[-*]\s+(.*)$/);
+    if (li) {
+      flushPara(para); para = [];
+      const items = [];
+      while (i < lines.length) {
+        const m = lines[i].match(/^\s*[-*]\s+(.*)$/);
+        if (!m) break;
+        items.push("<li>" + inline(m[1]) + "</li>");
+        i++;
+      }
+      out.push("<ul>" + items.join("") + "</ul>");
+      continue;
+    }
+    const ol = line.match(/^\s*\d+\.\s+(.*)$/);
+    if (ol) {
+      flushPara(para); para = [];
+      const items = [];
+      while (i < lines.length) {
+        const m = lines[i].match(/^\s*\d+\.\s+(.*)$/);
+        if (!m) break;
+        items.push("<li>" + inline(m[1]) + "</li>");
+        i++;
+      }
+      out.push("<ol>" + items.join("") + "</ol>");
+      continue;
+    }
+    if (line.trim() === "") {
+      flushPara(para); para = [];
+      i++; continue;
+    }
+    para.push(line);
+    i++;
+  }
+  flushPara(para);
+  return out.join("\n");
+}
+
+// ---------- state ----------
+const state = {
+  sessions: [],
+  filtered: [],
+  activePath: null,
+  searchResults: null,
+  showInternals: false,
+};
+
+const $ = (sel) => document.querySelector(sel);
+const sessionListEl = $("#session-list");
+const transcriptEl = $("#transcript");
+const headerEl = $("#main-header");
+const statsEl = $("#stats");
+
+function fmtBytes(n) { return n.toLocaleString(); }
+function fmtTokens(t) {
+  if (!t) return "0";
+  if (t >= 1e6) return (t/1e6).toFixed(2) + "M";
+  if (t >= 1e3) return (t/1e3).toFixed(1) + "k";
+  return String(t);
+}
+function fmtCost(c) { return c ? "$" + c.toFixed(3) : "$0"; }
+function pad2(n) { return String(n).padStart(2, "0"); }
+function fmtTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function fmtTimeOfDay(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return iso.slice(0, 10);
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+function totalTokens(t) {
+  if (!t) return 0;
+  return (t.input_tokens||0) + (t.output_tokens||0) + (t.cache_read_tokens||0) + (t.cache_creation_tokens||0);
+}
+
+// ---------- loading ----------
+async function loadSessions() {
+  const r = await fetch("/api/sessions");
+  state.sessions = await r.json();
+  populateFilterOptions();
+  applyFilters();
+}
+
+function populateFilterOptions() {
+  const repos = new Set(), branches = new Set(), tools = new Set(), models = new Set();
+  for (const s of state.sessions) {
+    if (s.repo) repos.add(s.repo);
+    if (s.gitBranch) branches.add(s.gitBranch);
+    if (s.tool) tools.add(s.tool);
+    for (const m of s.models || []) models.add(m);
+  }
+  fillSelect("#f-repo", "All repos", repos);
+  fillSelect("#f-branch", "All branches", branches);
+  fillSelect("#f-tool", "All tools", tools);
+  fillSelect("#f-model", "All models", models);
+}
+function fillSelect(sel, allLabel, values) {
+  const el = $(sel);
+  const current = el.value;
+  el.innerHTML = `<option value="">${allLabel}</option>` +
+    [...values].sort().map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+  if ([...values].includes(current)) el.value = current;
+}
+
+function applyFilters() {
+  const from = $("#f-from").value;
+  const to = $("#f-to").value;
+  const repo = $("#f-repo").value;
+  const branch = $("#f-branch").value;
+  const tool = $("#f-tool").value;
+  const model = $("#f-model").value;
+  const minTokens = parseInt($("#f-minTokens").value || "0", 10);
+
+  const matches = state.searchResults
+    ? new Map(state.searchResults.map(r => [r.path, r]))
+    : null;
+
+  state.filtered = state.sessions.filter(s => {
+    if (matches && !matches.has(s.path)) return false;
+    const day = (s.startedAt || s.runStartedAt || "").slice(0, 10);
+    if (from && day < from) return false;
+    if (to && day > to) return false;
+    if (repo && s.repo !== repo) return false;
+    if (branch && s.gitBranch !== branch) return false;
+    if (tool && s.tool !== tool) return false;
+    if (model && !(s.models || []).includes(model)) return false;
+    if (minTokens && totalTokens(s.tokens) < minTokens) return false;
+    return true;
+  });
+
+  renderSessionList();
+}
+
+function renderSessionList() {
+  const matches = state.searchResults
+    ? new Map(state.searchResults.map(r => [r.path, r]))
+    : null;
+  sessionListEl.innerHTML = state.filtered.map(s => {
+    const match = matches && matches.get(s.path);
+    return `<div class="session ${s.path === state.activePath ? "active" : ""}" data-path="${esc(s.path)}">
+      <div class="row1">
+        <div class="repo">${esc(s.repo || "(no cwd)")}</div>
+        <div class="time">${fmtTime(s.startedAt || s.runStartedAt)}</div>
+      </div>
+      <div class="branch">${esc(s.gitBranch || "")} · ${esc(s.tool || "")}</div>
+      <div class="prompt">${esc(s.firstPrompt || "(no prompt)")}</div>
+      <div class="meta">
+        <span>${s.messages} msgs</span>
+        <span>${fmtTokens(totalTokens(s.tokens))} tok</span>
+        <span>${fmtCost(s.cost)}</span>
+      </div>
+      ${match ? `<div class="match">${match.matchCount} match${match.matchCount===1?"":"es"}</div>` : ""}
+    </div>`;
+  }).join("") || `<div style="padding:20px;color:var(--muted)">No sessions match.</div>`;
+}
+
+sessionListEl.addEventListener("click", (e) => {
+  const row = e.target.closest(".session");
+  if (!row) return;
+  loadSession(row.dataset.path, { push: true });
+});
+
+window.addEventListener("popstate", () => {
+  const path = new URLSearchParams(location.search).get("s");
+  if (path && path !== state.activePath) loadSession(path, { push: false });
+});
+
+// ---------- transcript ----------
+async function loadSession(path, { push = true } = {}) {
+  state.activePath = path;
+  renderSessionList();
+  if (push) {
+    const url = "?s=" + encodeURIComponent(path);
+    if (location.search !== "?s=" + encodeURIComponent(path)) {
+      history.pushState({ path }, "", url);
+    }
+  }
+  transcriptEl.innerHTML = `<div id="empty">Loading…</div>`;
+  const r = await fetch("/api/session?path=" + encodeURIComponent(path));
+  if (!r.ok) {
+    transcriptEl.innerHTML = `<div id="empty">Failed to load session.</div>`;
+    return;
+  }
+  const data = await r.json();
+  renderHeader(path);
+  renderTranscript(data.events);
+}
+
+function renderHeader(path) {
+  const s = state.sessions.find(x => x.path === path);
+  if (!s) { headerEl.innerHTML = ""; return; }
+  const total = totalTokens(s.tokens);
+  headerEl.innerHTML = `
+    <div class="stat"><b>${esc(s.repo || "")}</b> · ${esc(s.gitBranch || "")}</div>
+    <div class="stat sid">id <code>${esc(s.sessionId || "")}</code><button class="copy" data-copy="${esc(s.sessionId || "")}" title="Copy session id">copy</button></div>
+    <div class="stat">${fmtTime(s.startedAt)} → ${fmtTime(s.endedAt)}</div>
+    <div class="stat"><b>${s.messages}</b> msgs</div>
+    <div class="stat"><b>${fmtTokens(total)}</b> tokens (in ${fmtTokens(s.tokens.input_tokens)} · out ${fmtTokens(s.tokens.output_tokens)} · cache r ${fmtTokens(s.tokens.cache_read_tokens)} · w ${fmtTokens(s.tokens.cache_creation_tokens)})</div>
+    <div class="stat"><b>${fmtCost(s.cost)}</b></div>
+    <div class="stat">${(s.models||[]).map(esc).join(", ")}</div>
+    <div class="spacer"></div>
+    <label class="stat"><input type="checkbox" id="toggle-internals" ${state.showInternals?"checked":""}> show internals</label>
+  `;
+  $("#toggle-internals").addEventListener("change", (e) => {
+    state.showInternals = e.target.checked;
+    renderTranscript(state.currentEvents || []);
+  });
+  headerEl.querySelectorAll("button.copy").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const value = btn.dataset.copy;
+      if (!value) return;
+      try {
+        await navigator.clipboard.writeText(value);
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = value; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } finally { ta.remove(); }
+      }
+      const prev = btn.textContent;
+      btn.textContent = "copied";
+      setTimeout(() => { btn.textContent = prev; }, 1000);
+    });
+  });
+}
+
+const INTERNAL_TYPES = new Set([
+  "system", "summary", "permission-mode", "skill_listing", "deferred_tools_delta",
+  "task_reminder", "last-prompt", "file-history-snapshot", "edited_text_file",
+  "attachment", "__parse_error",
+]);
+
+function renderTranscript(events) {
+  state.currentEvents = events;
+  const parts = [];
+  let pendingInternals = [];
+  const flushInternals = () => {
+    if (!pendingInternals.length) return;
+    if (state.showInternals) {
+      parts.push(`<details class="evt"><summary>${pendingInternals.length} internal event${pendingInternals.length===1?"":"s"}</summary>` +
+        pendingInternals.map(e => `<div class="internal"><span class="kind">${esc(e.type||"?")}</span> ${esc(describeInternal(e))}</div>`).join("") +
+        `</details>`);
+    }
+    pendingInternals = [];
+  };
+  for (const e of events) {
+    const t = e.type;
+    if (t === "user") {
+      flushInternals();
+      parts.push(renderUser(e));
+    } else if (t === "assistant") {
+      flushInternals();
+      parts.push(renderAssistant(e));
+    } else if (INTERNAL_TYPES.has(t)) {
+      pendingInternals.push(e);
+    } else {
+      pendingInternals.push(e);
+    }
+  }
+  flushInternals();
+  transcriptEl.innerHTML = parts.join("\n") || `<div id="empty">Empty session.</div>`;
+}
+
+function describeInternal(e) {
+  if (e.type === "attachment") return e.attachment?.hookName || e.attachment?.type || "";
+  if (e.type === "summary") return (e.summary || "").slice(0, 200);
+  if (e.type === "permission-mode") return e.permissionMode || "";
+  if (e.type === "edited_text_file") return e.filePath || "";
+  if (e.type === "__parse_error") return "parse error";
+  return "";
+}
+
+function renderUser(e) {
+  const ts = e.timestamp ? fmtTimeOfDay(e.timestamp) : "";
+  const content = e.message?.content;
+  const blocks = [];
+  if (typeof content === "string") {
+    blocks.push(`<div class="markdown">${renderMarkdown(content)}</div>`);
+  } else if (Array.isArray(content)) {
+    for (const b of content) {
+      if (b.type === "text") {
+        blocks.push(`<div class="markdown">${renderMarkdown(b.text || "")}</div>`);
+      } else if (b.type === "tool_result") {
+        blocks.push(renderToolResult(b, e.toolUseResult));
+      } else {
+        blocks.push(`<div class="internal">[${esc(b.type)}]</div>`);
+      }
+    }
+  }
+  return `<div class="evt user"><div class="who"><b>User</b><span class="ts">${esc(ts)}</span></div>
+    <div class="bubble">${blocks.join("")}</div></div>`;
+}
+
+function renderAssistant(e) {
+  const ts = e.timestamp ? fmtTimeOfDay(e.timestamp) : "";
+  const msg = e.message || {};
+  const model = msg.model || "";
+  const blocks = [];
+  for (const b of msg.content || []) {
+    if (b.type === "text") {
+      blocks.push(`<div class="markdown">${renderMarkdown(b.text || "")}</div>`);
+    } else if (b.type === "thinking") {
+      const text = (b.thinking || "").trim();
+      if (text) blocks.push(`<details class="thinking"><summary>thinking</summary><div class="markdown">${renderMarkdown(text)}</div></details>`);
+    } else if (b.type === "tool_use") {
+      blocks.push(renderToolUse(b));
+    }
+  }
+  return `<div class="evt assistant"><div class="who"><b>Assistant</b><span>${esc(model)}</span><span class="ts">${esc(ts)}</span></div>
+    <div class="bubble">${blocks.join("")}</div></div>`;
+}
+
+function renderToolUse(b) {
+  const input = JSON.stringify(b.input || {}, null, 2);
+  return `<details class="tool-use"><summary><span class="name">${esc(b.name)}</span></summary><pre><code>${esc(input)}</code></pre></details>`;
+}
+
+function renderToolResult(b, extra) {
+  let text = "";
+  if (typeof b.content === "string") text = b.content;
+  else if (Array.isArray(b.content)) text = b.content.map(x => x.text || "").join("\n");
+  const truncated = text.length > 10000;
+  const shown = truncated ? text.slice(0, 10000) : text;
+  const cls = b.is_error ? "tool-result error" : "tool-result";
+  return `<details class="${cls}"><summary><span class="name">tool_result</span>${b.is_error?" (error)":""}${truncated?` (truncated from ${text.length} chars)`:""}</summary><pre><code>${esc(shown)}</code></pre></details>`;
+}
+
+// ---------- search ----------
+let searchTimer = null;
+$("#search").addEventListener("input", (e) => {
+  const q = e.target.value.trim();
+  clearTimeout(searchTimer);
+  if (q.length < 2) {
+    state.searchResults = null;
+    applyFilters();
+    return;
+  }
+  searchTimer = setTimeout(async () => {
+    const r = await fetch("/api/search?q=" + encodeURIComponent(q) + "&limit=200");
+    const data = await r.json();
+    state.searchResults = data.results;
+    applyFilters();
+  }, 250);
+});
+
+// ---------- filter wiring ----------
+for (const id of ["f-from","f-to","f-repo","f-branch","f-tool","f-model","f-minTokens"]) {
+  $("#"+id).addEventListener("change", applyFilters);
+  $("#"+id).addEventListener("input", applyFilters);
+}
+
+// ---------- tabs ----------
+document.querySelectorAll("#tabs button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b === btn));
+    const tab = btn.dataset.tab;
+    if (tab === "stats") {
+      renderStats();
+      $("#transcript").classList.add("hidden");
+      $("#stats").classList.remove("hidden");
+    } else {
+      $("#transcript").classList.remove("hidden");
+      $("#stats").classList.add("hidden");
+    }
+  });
+});
+
+function renderStats() {
+  const ss = state.sessions;
+  let totals = { sessions: 0, events: 0, tokens: 0, cost: 0 };
+  const byDay = {}, byRepo = {}, byModel = {};
+  for (const s of ss) {
+    if (s.tool !== "claude") continue;
+    totals.sessions += 1;
+    totals.events += s.events || 0;
+    const t = totalTokens(s.tokens);
+    totals.tokens += t;
+    totals.cost += s.cost || 0;
+    const day = (s.startedAt || s.runStartedAt || "").slice(0,10);
+    byDay[day] = byDay[day] || { day, sessions: 0, tokens: 0, cost: 0 };
+    byDay[day].sessions += 1; byDay[day].tokens += t; byDay[day].cost += s.cost || 0;
+    const repo = s.repo || "(none)";
+    byRepo[repo] = byRepo[repo] || { repo, sessions: 0, tokens: 0, cost: 0 };
+    byRepo[repo].sessions += 1; byRepo[repo].tokens += t; byRepo[repo].cost += s.cost || 0;
+    for (const m of s.models || []) {
+      byModel[m] = byModel[m] || { model: m, sessions: 0, tokens: 0, cost: 0 };
+      byModel[m].sessions += 1; byModel[m].tokens += t; byModel[m].cost += s.cost || 0;
+    }
+  }
+  const table = (title, rows, cols) => `
+    <h2>${title}</h2>
+    <table><thead><tr>${cols.map(c => `<th class="${c.num?"num":""}">${c.label}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map(r => `<tr>${cols.map(c => `<td class="${c.num?"num":""}">${c.fmt ? c.fmt(r[c.key]) : esc(r[c.key] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  const byDayRows = Object.values(byDay).sort((a,b) => b.day.localeCompare(a.day));
+  const byRepoRows = Object.values(byRepo).sort((a,b) => b.tokens - a.tokens);
+  const byModelRows = Object.values(byModel).sort((a,b) => b.tokens - a.tokens);
+  statsEl.innerHTML = `
+    <h2>Totals (claude only)</h2>
+    <p><b>${totals.sessions}</b> sessions · <b>${fmtBytes(totals.events)}</b> events · <b>${fmtTokens(totals.tokens)}</b> tokens · <b>${fmtCost(totals.cost)}</b></p>
+    ${table("By day", byDayRows, [
+      { key: "day", label: "Day" },
+      { key: "sessions", label: "Sessions", num: true, fmt: fmtBytes },
+      { key: "tokens", label: "Tokens", num: true, fmt: fmtTokens },
+      { key: "cost", label: "Cost", num: true, fmt: fmtCost },
+    ])}
+    ${table("By repo", byRepoRows, [
+      { key: "repo", label: "Repo" },
+      { key: "sessions", label: "Sessions", num: true, fmt: fmtBytes },
+      { key: "tokens", label: "Tokens", num: true, fmt: fmtTokens },
+      { key: "cost", label: "Cost", num: true, fmt: fmtCost },
+    ])}
+    ${table("By model", byModelRows, [
+      { key: "model", label: "Model" },
+      { key: "sessions", label: "Sessions", num: true, fmt: fmtBytes },
+      { key: "tokens", label: "Tokens", num: true, fmt: fmtTokens },
+      { key: "cost", label: "Cost", num: true, fmt: fmtCost },
+    ])}
+  `;
+}
+
+// ---------- go ----------
+loadSessions().then(() => {
+  const path = new URLSearchParams(location.search).get("s");
+  if (path) loadSession(path, { push: false });
+}).catch(err => {
+  transcriptEl.innerHTML = `<div id="empty">Failed to load: ${esc(err.message)}</div>`;
+});
+</script>
+</body>
+</html>

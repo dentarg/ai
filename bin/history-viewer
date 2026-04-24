@@ -1,0 +1,26 @@
+#!/bin/sh
+
+set -e
+set -u
+
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+REPO_DIR=$(dirname "$SCRIPT_DIR")
+
+AI_DIR=${AI_DIR:-"${HOME}/ai"}
+HISTORY_DIR=${AI_DIR}/history
+
+PORT=${PORT:-8765}
+
+if [ ! -d "$HISTORY_DIR" ]; then
+  echo "at=error msg=\"history dir not found\" path=${HISTORY_DIR}" >&2
+  exit 1
+fi
+
+echo "at=info msg=\"history viewer listening\" url=http://127.0.0.1:${PORT}/"
+
+podman run --rm --interactive --tty \
+  --volume ${HISTORY_DIR}:/history:ro \
+  --volume ${REPO_DIR}/tools/history-viewer:/viewer:ro \
+  --publish 127.0.0.1:${PORT}:8765 \
+  ai:latest \
+  bash -lc "python3 /viewer/viewer.py --history /history --host 0.0.0.0 --port 8765"
