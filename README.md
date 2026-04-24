@@ -14,33 +14,26 @@ Agents work best when they can freely run shell commands, edit files, install pa
 
 ## Setup
 
-Create `$HOME/ai/settings` with `.claude.tmpl.json`:
+Drop per-profile OAuth credentials in `$HOME/ai/settings` as
+`.credentials.<profile>.json`. They get mounted into the container and copied
+into `~/.claude/` when you launch claude with a matching profile. See the
+[OAuth Login](#oauth-login) section for how to generate these.
 
-```json
-{
-  "bypassPermissionsModeAccepted": true,
-  "hasCompletedOnboarding": true,
-  "primaryApiKey": "op://vault-name/long-id/password",
-}
-```
-
-or `.claude.json` or `.claude.<profile>.json` (and optionally `.credentials.<profile>.json` with oauth tokens)
-
-Add `AGENTS.md` to `$HOME/ai/settings` if you want. It will populate `CLAUDE.md` for Claude Code and `GEMINI.md` for Gemini CLI.
+Optionally, add `AGENTS.md` to `$HOME/ai/settings` — it becomes `CLAUDE.md`
+for Claude Code and `GEMINI.md` for Gemini CLI.
 
 ```shell
 # start podman and share the current working directory
 bin/ai
-bin/ai --1p # if you want to use claude.tmpl.json with op:// reference
 
 # start services (and run "bundle install" if Gemfile exists)
 s
 
-# launch claude
-c
-
-# launch claude with a specific profile
+# launch claude with a specific oauth profile
 c <profile>
+
+# or launch claude with an Anthropic API key
+c --apikey sk-ant-...
 
 # launch gemini
 g
