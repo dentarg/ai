@@ -33,7 +33,7 @@ Add `AGENTS.md` to `$HOME/ai/settings` if you want. It will populate `CLAUDE.md`
 bin/ai
 bin/ai --1p # if you want to use claude.tmpl.json with op:// reference
 
-# start services (and run "bundle install" if Gemfile.lock exists)
+# start services (and run "bundle install" if Gemfile exists)
 s
 
 # launch claude
