@@ -355,6 +355,7 @@ window.addEventListener("popstate", () => {
 // ---------- transcript ----------
 async function loadSession(path, { push = true } = {}) {
   state.activePath = path;
+  selectTab("sessions");
   renderSessionList();
   if (push) {
     const url = "?s=" + encodeURIComponent(path);
@@ -536,19 +537,19 @@ for (const id of ["f-from","f-to","f-repo","f-branch","f-tool","f-model","f-minT
 }
 
 // ---------- tabs ----------
+function selectTab(tab) {
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  if (tab === "stats") {
+    renderStats();
+    $("#transcript").classList.add("hidden");
+    $("#stats").classList.remove("hidden");
+  } else {
+    $("#transcript").classList.remove("hidden");
+    $("#stats").classList.add("hidden");
+  }
+}
 document.querySelectorAll("#tabs button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b === btn));
-    const tab = btn.dataset.tab;
-    if (tab === "stats") {
-      renderStats();
-      $("#transcript").classList.add("hidden");
-      $("#stats").classList.remove("hidden");
-    } else {
-      $("#transcript").classList.remove("hidden");
-      $("#stats").classList.add("hidden");
-    }
-  });
+  btn.addEventListener("click", () => selectTab(btn.dataset.tab));
 });
 
 function renderStats() {
