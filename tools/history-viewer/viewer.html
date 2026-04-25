@@ -424,7 +424,7 @@ function renderTranscript(events) {
   const flushInternals = () => {
     if (!pendingInternals.length) return;
     if (state.showInternals) {
-      parts.push(`<details class="evt"><summary>${pendingInternals.length} internal event${pendingInternals.length===1?"":"s"}</summary>` +
+      parts.push(`<details class="evt" open><summary>${pendingInternals.length} internal event${pendingInternals.length===1?"":"s"}</summary>` +
         pendingInternals.map(e => `<div class="internal"><span class="kind">${esc(e.type||"?")}</span> ${esc(describeInternal(e))}</div>`).join("") +
         `</details>`);
     }
@@ -552,56 +552,71 @@ document.querySelectorAll("#tabs button").forEach(btn => {
   btn.addEventListener("click", () => selectTab(btn.dataset.tab));
 });
 
+function localDayKey(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return iso.slice(0,10);
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+function localMonthKey(iso) {
+  return localDayKey(iso).slice(0, 7);
+}
+function localWeekKey(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  // ISO 8601 week: Monday-based; the week containing a year's first Thursday is week 1.
+  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = tmp.getUTCDay() || 7;
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((tmp - yearStart) / 86400000 + 1) / 7);
+  return `${tmp.getUTCFullYear()}-W${pad2(weekNo)}`;
+}
+
 function renderStats() {
   const ss = state.sessions;
   let totals = { sessions: 0, events: 0, tokens: 0, cost: 0 };
-  const byDay = {}, byRepo = {}, byModel = {};
+  const byDay = {}, byWeek = {}, byMonth = {}, byRepo = {}, byModel = {};
+  const bump = (bucket, key, label, t, cost) => {
+    bucket[key] = bucket[key] || { [label]: key, sessions: 0, tokens: 0, cost: 0 };
+    bucket[key].sessions += 1; bucket[key].tokens += t; bucket[key].cost += cost;
+  };
   for (const s of ss) {
     if (s.tool !== "claude") continue;
     totals.sessions += 1;
     totals.events += s.events || 0;
     const t = totalTokens(s.tokens);
     totals.tokens += t;
-    totals.cost += s.cost || 0;
-    const day = (s.startedAt || s.runStartedAt || "").slice(0,10);
-    byDay[day] = byDay[day] || { day, sessions: 0, tokens: 0, cost: 0 };
-    byDay[day].sessions += 1; byDay[day].tokens += t; byDay[day].cost += s.cost || 0;
-    const repo = s.repo || "(none)";
-    byRepo[repo] = byRepo[repo] || { repo, sessions: 0, tokens: 0, cost: 0 };
-    byRepo[repo].sessions += 1; byRepo[repo].tokens += t; byRepo[repo].cost += s.cost || 0;
-    for (const m of s.models || []) {
-      byModel[m] = byModel[m] || { model: m, sessions: 0, tokens: 0, cost: 0 };
-      byModel[m].sessions += 1; byModel[m].tokens += t; byModel[m].cost += s.cost || 0;
-    }
+    const cost = s.cost || 0;
+    totals.cost += cost;
+    const iso = s.startedAt || s.runStartedAt;
+    bump(byDay,   localDayKey(iso),   "day",   t, cost);
+    bump(byWeek,  localWeekKey(iso),  "week",  t, cost);
+    bump(byMonth, localMonthKey(iso), "month", t, cost);
+    bump(byRepo,  s.repo || "(none)", "repo",  t, cost);
+    for (const m of s.models || []) bump(byModel, m, "model", t, cost);
   }
   const table = (title, rows, cols) => `
     <h2>${title}</h2>
     <table><thead><tr>${cols.map(c => `<th class="${c.num?"num":""}">${c.label}</th>`).join("")}</tr></thead>
     <tbody>${rows.map(r => `<tr>${cols.map(c => `<td class="${c.num?"num":""}">${c.fmt ? c.fmt(r[c.key]) : esc(r[c.key] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  const byDayRows = Object.values(byDay).sort((a,b) => b.day.localeCompare(a.day));
-  const byRepoRows = Object.values(byRepo).sort((a,b) => b.tokens - a.tokens);
-  const byModelRows = Object.values(byModel).sort((a,b) => b.tokens - a.tokens);
+  const sortDesc = (key) => (a, b) => String(b[key] ?? "").localeCompare(String(a[key] ?? ""));
+  const sortByTokens = (a, b) => b.tokens - a.tokens;
+  const numCols = (keyLabel) => [
+    { key: keyLabel, label: keyLabel[0].toUpperCase() + keyLabel.slice(1) },
+    { key: "sessions", label: "Sessions", num: true, fmt: fmtBytes },
+    { key: "tokens", label: "Tokens", num: true, fmt: fmtTokens },
+    { key: "cost", label: "Cost", num: true, fmt: fmtCost },
+  ];
   statsEl.innerHTML = `
     <h2>Totals (claude only)</h2>
     <p><b>${totals.sessions}</b> sessions · <b>${fmtBytes(totals.events)}</b> events · <b>${fmtTokens(totals.tokens)}</b> tokens · <b>${fmtCost(totals.cost)}</b></p>
-    ${table("By day", byDayRows, [
-      { key: "day", label: "Day" },
-      { key: "sessions", label: "Sessions", num: true, fmt: fmtBytes },
-      { key: "tokens", label: "Tokens", num: true, fmt: fmtTokens },
-      { key: "cost", label: "Cost", num: true, fmt: fmtCost },
-    ])}
-    ${table("By repo", byRepoRows, [
-      { key: "repo", label: "Repo" },
-      { key: "sessions", label: "Sessions", num: true, fmt: fmtBytes },
-      { key: "tokens", label: "Tokens", num: true, fmt: fmtTokens },
-      { key: "cost", label: "Cost", num: true, fmt: fmtCost },
-    ])}
-    ${table("By model", byModelRows, [
-      { key: "model", label: "Model" },
-      { key: "sessions", label: "Sessions", num: true, fmt: fmtBytes },
-      { key: "tokens", label: "Tokens", num: true, fmt: fmtTokens },
-      { key: "cost", label: "Cost", num: true, fmt: fmtCost },
-    ])}
+    ${table("By month", Object.values(byMonth).sort(sortDesc("month")), numCols("month"))}
+    ${table("By week",  Object.values(byWeek).sort(sortDesc("week")),   numCols("week"))}
+    ${table("By day",   Object.values(byDay).sort(sortDesc("day")),     numCols("day"))}
+    ${table("By repo",  Object.values(byRepo).sort(sortByTokens),       numCols("repo"))}
+    ${table("By model", Object.values(byModel).sort(sortByTokens),      numCols("model"))}
   `;
 }
 
