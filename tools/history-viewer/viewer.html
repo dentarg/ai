@@ -61,9 +61,18 @@
   main { max-width: 920px; margin: 0 auto; padding: 28px 24px 80px; }
 
   /* index */
-  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
   .filters input, .filters select { min-width: 130px; }
-  .filters .search { flex: 1; min-width: 280px; }
+  .search-wrap { position: relative; flex: 1; min-width: 280px; display: flex; }
+  .search-wrap input { width: 100%; padding-right: 32px; }
+  .search-wrap .clear-search {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: none; border: 0; padding: 4px 8px; color: var(--muted-2);
+    font-size: 16px; line-height: 1; border-radius: 4px;
+  }
+  .search-wrap .clear-search:hover { background: var(--surface-2); color: var(--text); }
+  .filters .reset-all { color: var(--muted); font-size: 13px; padding: 0 4px; cursor: pointer; }
+  .filters .reset-all:hover { color: var(--accent); }
 
   .index-layout { display: grid; grid-template-columns: 1fr 160px; gap: 36px; align-items: start; }
   @media (max-width: 800px) { .index-layout { grid-template-columns: 1fr; } .month-jump { display: none; } }
@@ -74,10 +83,10 @@
   .month-jump a { display: block; color: var(--muted); padding: 3px 0; font-size: 13.5px; }
   .month-jump a:hover { color: var(--accent); text-decoration: none; }
 
-  .month-section { margin-bottom: 28px; scroll-margin-top: 80px; }
-  .month-section h2 { font-size: 12.5px; color: var(--muted); margin: 28px 0 10px;
+  .day-section { margin-bottom: 22px; scroll-margin-top: 80px; }
+  .day-section h2 { font-size: 12.5px; color: var(--muted); margin: 22px 0 8px;
     text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
-  .month-section:first-of-type h2 { margin-top: 0; }
+  .day-section:first-of-type h2 { margin-top: 0; }
   .session-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
     padding: 14px 16px; margin-bottom: 8px; display: block; color: inherit;
@@ -86,8 +95,9 @@
   .session-card:hover { border-color: var(--accent-line); text-decoration: none; }
   .session-card:active { transform: translateY(1px); }
   .session-card .row1 { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; }
-  .session-card .repo { font-weight: 600; }
+  .session-card .name { font-weight: 600; }
   .session-card .branch { color: var(--muted); font-size: 13px; margin-left: 8px; font-weight: normal; }
+  .session-card .repo { color: var(--muted-2); font-size: 12.5px; margin-left: 6px; font-weight: normal; }
   .session-card .time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums;
     flex-shrink: 0; }
   .session-card .prompt { color: var(--muted); margin-top: 6px; font-size: 14px; line-height: 1.45;
@@ -167,10 +177,15 @@
   .internal-block .kind { color: var(--accent); font-weight: 500; margin-right: 4px; }
 
   /* stats */
-  .stats-totals { font-size: 16px; color: var(--muted); margin-bottom: 24px; }
+  .stats-totals { font-size: 16px; color: var(--muted); margin-bottom: 14px; }
   .stats-totals b { color: var(--text); font-weight: 600; }
+  .stats-nav { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; margin-bottom: 26px;
+    color: var(--muted); }
+  .stats-nav a { color: var(--muted); }
+  .stats-nav a:hover { color: var(--accent); text-decoration: none; }
   .stats h2 { font-size: 13px; color: var(--muted); margin: 28px 0 10px;
-    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500;
+    scroll-margin-top: 80px; }
   .stats h2:first-of-type { margin-top: 0; }
   table.stats-table { width: 100%; border-collapse: collapse; margin-bottom: 12px;
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
@@ -303,7 +318,7 @@ function renderMarkdown(src) {
 const state = {
   sessions: [],
   searchResults: null,   // null = no active search
-  filters: { search: "", from: "", to: "", repo: "", branch: "", model: "", minTokens: 0 },
+  filters: { search: "", repo: "", branch: "", model: "" },
   showInternals: false,
 };
 
@@ -352,13 +367,9 @@ function applyFilters(sessions) {
   const matches = state.searchResults ? new Map(state.searchResults.map(r => [r.path, r])) : null;
   return sessions.filter(s => {
     if (matches && !matches.has(s.path)) return false;
-    const day = localDayKey(s.startedAt || s.runStartedAt);
-    if (f.from && day < f.from) return false;
-    if (f.to && day > f.to) return false;
     if (f.repo && s.repo !== f.repo) return false;
     if (f.branch && s.gitBranch !== f.branch) return false;
     if (f.model && !(s.models || []).includes(f.model)) return false;
-    if (f.minTokens && totalTokens(s.tokens) < f.minTokens) return false;
     if (s.tool !== "claude") return false;
     return true;
   });
@@ -378,13 +389,15 @@ function renderIndexPage() {
 
   contentEl.innerHTML = `
     <div class="filters">
-      <input class="search" id="f-search" placeholder="Search transcripts…" value="${esc(f.search)}">
-      <input id="f-from" type="date" value="${esc(f.from)}" title="from">
-      <input id="f-to" type="date" value="${esc(f.to)}" title="to">
+      <div class="search-wrap">
+        <input id="f-search" placeholder="Search transcripts…" value="${esc(f.search)}">
+        <button class="clear-search" id="f-search-clear" type="button" title="Clear search"
+          style="${f.search ? "" : "display:none"}">×</button>
+      </div>
       <select id="f-repo">${opt(repos, f.repo, "All repos")}</select>
       <select id="f-branch">${opt(branches, f.branch, "All branches")}</select>
       <select id="f-model">${opt(models, f.model, "All models")}</select>
-      <input id="f-minTokens" type="number" min="0" placeholder="min tokens" value="${f.minTokens||""}">
+      <a class="reset-all" id="f-reset" href="#">Reset filters</a>
     </div>
     <div class="index-layout">
       <div id="sessions-area"></div>
@@ -393,27 +406,37 @@ function renderIndexPage() {
   `;
 
   const search = document.getElementById("f-search");
+  const clearBtn = document.getElementById("f-search-clear");
   let timer = null;
-  search.addEventListener("input", (e) => {
-    state.filters.search = e.target.value;
+  const onSearchInput = () => {
+    state.filters.search = search.value;
+    clearBtn.style.display = search.value ? "" : "none";
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      runSearchAndRedraw();
-    }, 250);
+    timer = setTimeout(runSearchAndRedraw, 250);
+  };
+  search.addEventListener("input", onSearchInput);
+  clearBtn.addEventListener("click", () => {
+    search.value = "";
+    onSearchInput();
+    search.focus();
   });
 
-  const wireFilter = (id, key, parser) => {
+  const wireFilter = (id, key) => {
     document.getElementById(id).addEventListener("change", (e) => {
-      state.filters[key] = parser ? parser(e.target.value) : e.target.value;
+      state.filters[key] = e.target.value;
       drawSessions();
     });
   };
-  wireFilter("f-from", "from");
-  wireFilter("f-to", "to");
   wireFilter("f-repo", "repo");
   wireFilter("f-branch", "branch");
   wireFilter("f-model", "model");
-  wireFilter("f-minTokens", "minTokens", v => parseInt(v||"0", 10));
+
+  document.getElementById("f-reset").addEventListener("click", (e) => {
+    e.preventDefault();
+    state.filters = { search: "", repo: "", branch: "", model: "" };
+    state.searchResults = null;
+    renderIndexPage();
+  });
 
   drawSessions();
 }
@@ -442,23 +465,28 @@ function drawSessions() {
     return;
   }
   const matches = state.searchResults ? new Map(state.searchResults.map(r => [r.path, r])) : null;
-  const groups = new Map();
+  const dayGroups = new Map();
   for (const s of sessions) {
-    const key = localMonthKey(s.startedAt || s.runStartedAt);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(s);
+    const key = localDayKey(s.startedAt || s.runStartedAt);
+    if (!dayGroups.has(key)) dayGroups.set(key, []);
+    dayGroups.get(key).push(s);
   }
-  const monthKeys = [...groups.keys()].sort().reverse();
-  area.innerHTML = monthKeys.map(key => {
-    const rows = groups.get(key).map(s => {
+  const dayKeys = [...dayGroups.keys()].sort().reverse();
+  const seenMonths = new Set();
+  area.innerHTML = dayKeys.map(day => {
+    const monthKey = day.slice(0, 7);
+    const monthAttr = seenMonths.has(monthKey) ? "" : ` data-first-of-month="${monthKey}"`;
+    seenMonths.add(monthKey);
+    const rows = dayGroups.get(day).map(s => {
       const match = matches && matches.get(s.path);
       const href = "?s=" + encodeURIComponent(s.path);
+      const title = s.name || s.firstPrompt || "(untitled)";
       return `<a class="session-card" href="${href}">
         <div class="row1">
-          <div><span class="repo">${esc(s.repo || "(no cwd)")}</span><span class="branch">${esc(s.gitBranch || "")}</span></div>
-          <div class="time">${esc(fmtTime(s.startedAt || s.runStartedAt))}</div>
+          <div><span class="name">${esc(title)}</span><span class="branch">${esc(s.gitBranch || "")}</span><span class="repo">${esc(s.repo || "")}</span></div>
+          <div class="time">${esc(fmtTimeOfDay(s.startedAt || s.runStartedAt))}</div>
         </div>
-        <div class="prompt">${esc(s.firstPrompt || "(no prompt)")}</div>
+        ${s.name && s.firstPrompt ? `<div class="prompt">${esc(s.firstPrompt)}</div>` : ""}
         <div class="meta">
           <span>${s.messages} msgs</span>
           <span>${fmtTokens(totalTokens(s.tokens))} tok</span>
@@ -467,14 +495,25 @@ function drawSessions() {
         ${match ? `<div class="match">${match.matchCount} match${match.matchCount===1?"":"es"}</div>` : ""}
       </a>`;
     }).join("");
-    return `<section class="month-section" id="month-${key}">
-      <h2>${esc(monthLabel(key))} · ${groups.get(key).length}</h2>
+    return `<section class="day-section" id="day-${day}"${monthAttr}>
+      <h2>${esc(dayLabel(day))} · ${dayGroups.get(day).length}</h2>
       ${rows}
     </section>`;
   }).join("");
-  jump.innerHTML = monthKeys.map(key =>
-    `<a href="#month-${key}">${esc(monthLabel(key))}</a>`
+  const monthsToFirstDay = new Map();
+  for (const day of dayKeys) {
+    const m = day.slice(0, 7);
+    if (!monthsToFirstDay.has(m)) monthsToFirstDay.set(m, day);
+  }
+  jump.innerHTML = [...monthsToFirstDay.entries()].map(([m, d]) =>
+    `<a href="#day-${d}">${esc(monthLabel(m))}</a>`
   ).join("");
+}
+
+function dayLabel(key) {
+  const d = new Date(key + "T00:00:00");
+  if (isNaN(d)) return key;
+  return d.toLocaleString(undefined, { weekday: "short", month: "long", day: "numeric" });
 }
 
 // ---------- session page ----------
@@ -506,8 +545,8 @@ function renderSessionHeader(s, path) {
   head.innerHTML = `
     <div class="session-header">
       <div class="title">
-        <div class="repo">${esc(s.repo || "")}</div>
-        <div class="branch">${esc(s.gitBranch || "")}</div>
+        <div class="repo">${esc(s.name || s.firstPrompt?.slice(0, 80) || "(untitled)")}</div>
+        <div class="branch">${esc(s.gitBranch || "")} · ${esc(s.repo || "")}</div>
       </div>
       <div class="sid">
         <span class="label">id</span>
@@ -713,11 +752,19 @@ function renderStatsPage() {
         <b>${totals.sessions}</b> sessions · <b>${fmtBytes(totals.events)}</b> events ·
         <b>${fmtTokens(totals.tokens)}</b> tokens · <b>${fmtCost(totals.cost)}</b>
       </div>
-      <h2>By month</h2> ${table(Object.values(byMonth).sort(sortDesc("month")), cols("month"))}
-      <h2>By week</h2>  ${table(Object.values(byWeek).sort(sortDesc("week")),   cols("week"))}
-      <h2>By day</h2>   ${table(Object.values(byDay).sort(sortDesc("day")),     cols("day"))}
-      <h2>By repo</h2>  ${table(Object.values(byRepo).sort(sortByCost),         cols("repo"))}
-      <h2>By model</h2> ${table(Object.values(byModel).sort(sortByCost),        cols("model"))}
+      <div class="stats-nav">
+        Jump to:
+        <a href="#stats-month">month</a>
+        <a href="#stats-week">week</a>
+        <a href="#stats-day">day</a>
+        <a href="#stats-repo">repo</a>
+        <a href="#stats-model">model</a>
+      </div>
+      <h2 id="stats-month">By month</h2> ${table(Object.values(byMonth).sort(sortDesc("month")), cols("month"))}
+      <h2 id="stats-week">By week</h2>   ${table(Object.values(byWeek).sort(sortDesc("week")),   cols("week"))}
+      <h2 id="stats-day">By day</h2>     ${table(Object.values(byDay).sort(sortDesc("day")),     cols("day"))}
+      <h2 id="stats-repo">By repo</h2>   ${table(Object.values(byRepo).sort(sortByCost),         cols("repo"))}
+      <h2 id="stats-model">By model</h2> ${table(Object.values(byModel).sort(sortByCost),        cols("model"))}
     </div>
   `;
 }

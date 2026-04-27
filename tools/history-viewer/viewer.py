@@ -13,6 +13,7 @@ import os
 import re
 import sys
 import threading
+import time
 import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -133,6 +134,7 @@ def summarize_session(path: Path) -> dict:
     branch = None
     version = None
     first_prompt = ""
+    name = None
     msg_count = 0
     user_msgs = 0
     assistant_msgs = 0
@@ -164,7 +166,11 @@ def summarize_session(path: Path) -> dict:
                 first_ts = first_ts or ts
                 last_ts = ts
             etype = evt.get("type")
-            if etype == "user":
+            if etype == "summary":
+                s = (evt.get("summary") or "").strip()
+                if s:
+                    name = s
+            elif etype == "user":
                 user_msgs += 1
                 msg_count += 1
                 if not first_prompt:
@@ -198,6 +204,7 @@ def summarize_session(path: Path) -> dict:
         "repo": Path(cwd).name if cwd else None,
         "gitBranch": branch,
         "version": version,
+        "name": name,
         "firstPrompt": first_prompt,
         "events": line_count,
         "messages": msg_count,
@@ -211,11 +218,18 @@ def summarize_session(path: Path) -> dict:
     }
 
 
-def build_manifest(history_root: Path) -> list[dict]:
-    """Walk <root>/<year>/<month>/<run>/projects/*/*.jsonl and summarize."""
+def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
+    """Walk <root>/<year>/<month>/<run>/projects/*/*.jsonl and summarize.
+
+    `cache` maps relative path → {"sig": (size, mtime_ns), "entry": dict}.
+    Files whose signature is unchanged reuse the cached summary; new and
+    modified files are re-summarized.
+    """
     sessions: list[dict] = []
     if not history_root.is_dir():
         return sessions
+    if cache is None:
+        cache = {}
     for year_dir in sorted(p for p in history_root.iterdir() if p.is_dir() and re.fullmatch(r"\d{4}", p.name)):
         for month_dir in sorted(p for p in year_dir.iterdir() if p.is_dir()):
             for run_dir in sorted(p for p in month_dir.iterdir() if p.is_dir()):
@@ -227,20 +241,32 @@ def build_manifest(history_root: Path) -> list[dict]:
                     continue
                 for project_dir in sorted(p for p in projects.iterdir() if p.is_dir()):
                     for jsonl in sorted(project_dir.glob("*.jsonl")):
+                        rel = jsonl.relative_to(history_root).as_posix()
+                        try:
+                            st = jsonl.stat()
+                        except OSError as e:
+                            log("warn", op="stat", path=str(jsonl), err=repr(e))
+                            continue
+                        sig = (st.st_size, st.st_mtime_ns)
+                        cached = cache.get(rel)
+                        if cached and cached["sig"] == sig:
+                            sessions.append(cached["entry"])
+                            continue
                         try:
                             summary = summarize_session(jsonl)
                         except OSError as e:
                             log("warn", op="summarize", path=str(jsonl), err=repr(e))
                             continue
-                        rel = jsonl.relative_to(history_root).as_posix()
-                        sessions.append({
+                        entry = {
                             "path": rel,
                             "runDir": run_dir.name,
                             "tool": meta["tool"],
                             "runStartedAt": meta["timestamp"],
                             "project": project_dir.name,
                             **summary,
-                        })
+                        }
+                        cache[rel] = {"sig": sig, "entry": entry}
+                        sessions.append(entry)
     sessions.sort(key=lambda s: (s.get("startedAt") or s["runStartedAt"]), reverse=True)
     return sessions
 
@@ -248,15 +274,24 @@ def build_manifest(history_root: Path) -> list[dict]:
 class ViewerState:
     def __init__(self, history_root: Path) -> None:
         self.history_root = history_root
+        self._cache: dict = {}
         self._manifest: list[dict] | None = None
         self._lock = threading.Lock()
 
     def manifest(self, refresh: bool = False) -> list[dict]:
+        """Always rescan the directory; reuse cached summaries by file signature."""
         with self._lock:
-            if refresh or self._manifest is None:
-                log("info", op="build_manifest", root=str(self.history_root))
-                self._manifest = build_manifest(self.history_root)
-                log("info", op="manifest_ready", sessions=len(self._manifest))
+            if refresh:
+                self._cache = {}
+            t0 = time.monotonic()
+            before = len(self._cache)
+            self._manifest = build_manifest(self.history_root, self._cache)
+            elapsed_ms = int((time.monotonic() - t0) * 1000)
+            log("info", op="manifest_ready",
+                sessions=len(self._manifest),
+                cached=before,
+                rebuilt=len(self._cache) - before,
+                ms=elapsed_ms)
             return self._manifest
 
     def resolve_session_path(self, rel: str) -> Path | None:
