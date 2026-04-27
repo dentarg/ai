@@ -77,11 +77,25 @@
   .index-layout { display: grid; grid-template-columns: 1fr 160px; gap: 36px; align-items: start; }
   @media (max-width: 800px) { .index-layout { grid-template-columns: 1fr; } .month-jump { display: none; } }
   .month-jump { position: sticky; top: 80px;
-    border-left: 1px solid var(--border); padding-left: 14px; }
+    border-left: 1px solid var(--border); padding-left: 14px;
+    max-height: calc(100vh - 100px); overflow-y: auto; }
   .month-jump .label { color: var(--muted-2); font-size: 11.5px; text-transform: uppercase;
     letter-spacing: 0.06em; margin-bottom: 6px; }
-  .month-jump a { display: block; color: var(--muted); padding: 3px 0; font-size: 13.5px; }
-  .month-jump a:hover { color: var(--accent); text-decoration: none; }
+  .month-jump .month { margin-bottom: 4px; }
+  .month-jump .month-toggle {
+    display: flex; align-items: center; gap: 6px; width: 100%;
+    background: none; border: 0; padding: 4px 0; cursor: pointer;
+    color: var(--muted); font-size: 13.5px; text-align: left;
+  }
+  .month-jump .month-toggle:hover { color: var(--accent); background: none; }
+  .month-jump .month-toggle .chev { display: inline-block; width: 10px; color: var(--muted-2);
+    transition: transform 0.15s; }
+  .month-jump .month.open .month-toggle .chev { transform: rotate(90deg); }
+  .month-jump .days { display: none; padding: 2px 0 6px 16px; }
+  .month-jump .month.open .days { display: block; }
+  .month-jump .days a { display: block; color: var(--muted); padding: 2px 0; font-size: 13px;
+    font-variant-numeric: tabular-nums; }
+  .month-jump .days a:hover { color: var(--accent); text-decoration: none; }
 
   .day-section { margin-bottom: 22px; scroll-margin-top: 80px; }
   .day-section h2 { font-size: 12.5px; color: var(--muted); margin: 22px 0 8px;
@@ -318,7 +332,7 @@ function renderMarkdown(src) {
 const state = {
   sessions: [],
   searchResults: null,   // null = no active search
-  filters: { search: "", repo: "", branch: "", model: "" },
+  filters: { search: "", branch: "" },
   showInternals: false,
 };
 
@@ -367,9 +381,7 @@ function applyFilters(sessions) {
   const matches = state.searchResults ? new Map(state.searchResults.map(r => [r.path, r])) : null;
   return sessions.filter(s => {
     if (matches && !matches.has(s.path)) return false;
-    if (f.repo && s.repo !== f.repo) return false;
     if (f.branch && s.gitBranch !== f.branch) return false;
-    if (f.model && !(s.models || []).includes(f.model)) return false;
     if (s.tool !== "claude") return false;
     return true;
   });
@@ -377,11 +389,9 @@ function applyFilters(sessions) {
 
 function renderIndexPage() {
   const f = state.filters;
-  const repos = new Set(), branches = new Set(), models = new Set();
+  const branches = new Set();
   for (const s of state.sessions) {
-    if (s.repo) repos.add(s.repo);
     if (s.gitBranch) branches.add(s.gitBranch);
-    for (const m of s.models || []) models.add(m);
   }
   const opt = (set, current, allLabel) =>
     `<option value="">${allLabel}</option>` +
@@ -394,9 +404,7 @@ function renderIndexPage() {
         <button class="clear-search" id="f-search-clear" type="button" title="Clear search"
           style="${f.search ? "" : "display:none"}">×</button>
       </div>
-      <select id="f-repo">${opt(repos, f.repo, "All repos")}</select>
       <select id="f-branch">${opt(branches, f.branch, "All branches")}</select>
-      <select id="f-model">${opt(models, f.model, "All models")}</select>
       <a class="reset-all" id="f-reset" href="#">Reset filters</a>
     </div>
     <div class="index-layout">
@@ -421,19 +429,14 @@ function renderIndexPage() {
     search.focus();
   });
 
-  const wireFilter = (id, key) => {
-    document.getElementById(id).addEventListener("change", (e) => {
-      state.filters[key] = e.target.value;
-      drawSessions();
-    });
-  };
-  wireFilter("f-repo", "repo");
-  wireFilter("f-branch", "branch");
-  wireFilter("f-model", "model");
+  document.getElementById("f-branch").addEventListener("change", (e) => {
+    state.filters.branch = e.target.value;
+    drawSessions();
+  });
 
   document.getElementById("f-reset").addEventListener("click", (e) => {
     e.preventDefault();
-    state.filters = { search: "", repo: "", branch: "", model: "" };
+    state.filters = { search: "", branch: "" };
     state.searchResults = null;
     renderIndexPage();
   });
@@ -500,14 +503,36 @@ function drawSessions() {
       ${rows}
     </section>`;
   }).join("");
-  const monthsToFirstDay = new Map();
+  const monthsToDays = new Map();
   for (const day of dayKeys) {
     const m = day.slice(0, 7);
-    if (!monthsToFirstDay.has(m)) monthsToFirstDay.set(m, day);
+    if (!monthsToDays.has(m)) monthsToDays.set(m, []);
+    monthsToDays.get(m).push(day);
   }
-  jump.innerHTML = [...monthsToFirstDay.entries()].map(([m, d]) =>
-    `<a href="#day-${d}">${esc(monthLabel(m))}</a>`
-  ).join("");
+  const monthEntries = [...monthsToDays.entries()];
+  const latestMonth = monthEntries[0]?.[0];
+  jump.innerHTML = monthEntries.map(([m, days]) => `
+    <div class="month${m === latestMonth ? " open" : ""}" data-month="${m}">
+      <button class="month-toggle" type="button">
+        <span class="chev">▸</span>
+        <span>${esc(monthLabel(m))}</span>
+        <span class="count" style="margin-left:auto;color:var(--muted-2);font-size:12px">${days.length}</span>
+      </button>
+      <div class="days">
+        ${days.map(d => `<a href="#day-${d}">${esc(dayJumpLabel(d))}</a>`).join("")}
+      </div>
+    </div>`).join("");
+  jump.querySelectorAll(".month-toggle").forEach(btn => {
+    btn.addEventListener("click", () => {
+      btn.parentElement.classList.toggle("open");
+    });
+  });
+}
+
+function dayJumpLabel(key) {
+  const d = new Date(key + "T00:00:00");
+  if (isNaN(d)) return key;
+  return d.toLocaleString(undefined, { weekday: "short", day: "numeric" });
 }
 
 function dayLabel(key) {
