@@ -183,6 +183,23 @@
   .markdown h3 { font-size: 15px; font-weight: 600; }
   .markdown blockquote { border-left: 3px solid var(--border); padding-left: 10px;
     color: var(--muted); margin: 8px 0; }
+  .markdown table.md-table { border-collapse: collapse; margin: 10px 0; font-size: 14px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+    display: block; max-width: 100%; overflow-x: auto; }
+  .markdown table.md-table th, .markdown table.md-table td {
+    padding: 6px 12px; border-bottom: 1px solid var(--border-soft); text-align: left;
+    vertical-align: top; }
+  .markdown table.md-table th { background: var(--surface-2); color: var(--muted);
+    font-weight: 500; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .markdown table.md-table tr:last-child td { border-bottom: 0; }
+
+  .evt { scroll-margin-top: 80px; }
+  .evt .who .anchor { color: var(--muted-2); margin-left: auto; opacity: 0; transition: opacity 0.1s;
+    font-size: 12px; padding: 0 4px; }
+  .evt:hover .who .anchor, .evt:target .who .anchor { opacity: 1; }
+  .evt .who .anchor:hover { color: var(--accent); text-decoration: none; }
+  .evt:target .body, .evt:target .who { background: var(--accent-soft); border-radius: 6px; }
+  .evt .who { width: 100%; }
 
   .internal-block { background: var(--surface); border: 1px solid var(--border-soft);
     border-radius: 8px; padding: 8px 12px; margin: 16px 0; font-size: 12.5px; color: var(--muted); }
@@ -320,6 +337,42 @@ function renderMarkdown(src) {
         if (!m) break; items.push("<li>" + inline(m[1]) + "</li>"); i++;
       }
       out.push("<ol>" + items.join("") + "</ol>"); continue;
+    }
+    // GFM table: header row, separator row of `---`/`:---:`, then data rows.
+    if (line.includes("|") && i + 1 < lines.length && /^\s*\|?\s*:?-+:?(\s*\|\s*:?-+:?)+\s*\|?\s*$/.test(lines[i+1])) {
+      const cells = (row) => {
+        let r = row.trim();
+        if (r.startsWith("|")) r = r.slice(1);
+        if (r.endsWith("|") && !r.endsWith("\\|")) r = r.slice(0, -1);
+        const out = []; let buf = "", inCode = false;
+        for (let k = 0; k < r.length; k++) {
+          const c = r[k];
+          if (c === "\\" && r[k+1] === "|") { buf += "|"; k++; continue; }
+          if (c === "`") { inCode = !inCode; buf += c; continue; }
+          if (c === "|" && !inCode) { out.push(buf.trim()); buf = ""; continue; }
+          buf += c;
+        }
+        out.push(buf.trim());
+        return out;
+      };
+      const aligns = cells(lines[i+1]).map(c => {
+        const l = c.startsWith(":"), r = c.endsWith(":");
+        return r && l ? "center" : r ? "right" : l ? "left" : "";
+      });
+      const header = cells(line);
+      const bodyRows = [];
+      i += 2;
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim() !== "") {
+        bodyRows.push(cells(lines[i])); i++;
+      }
+      flushPara();
+      const styleAttr = (j) => aligns[j] ? ` style="text-align:${aligns[j]}"` : "";
+      const ths = header.map((h, j) => `<th${styleAttr(j)}>${inline(h)}</th>`).join("");
+      const tbody = bodyRows.map(r =>
+        "<tr>" + r.map((c, j) => `<td${styleAttr(j)}>${inline(c)}</td>`).join("") + "</tr>"
+      ).join("");
+      out.push(`<table class="md-table"><thead><tr>${ths}</tr></thead><tbody>${tbody}</tbody></table>`);
+      continue;
     }
     if (line.trim() === "") { flushPara(); i++; continue; }
     para.push(line); i++;
@@ -641,6 +694,11 @@ function drawTranscript() {
   flush();
   tEl.innerHTML = parts.join("\n") || `<div class="empty">Empty session.</div>`;
   hookClampButtons(tEl);
+  // If the URL has a #evt-... hash, scroll to it now that the transcript exists.
+  if (location.hash && location.hash.startsWith("#evt-")) {
+    const target = document.getElementById(location.hash.slice(1));
+    if (target) target.scrollIntoView({ block: "start" });
+  }
 }
 
 function describeInternal(e) {
@@ -673,7 +731,9 @@ function renderUser(e) {
   const hasUserText = (typeof content === "string" && content.trim())
     || (Array.isArray(content) && content.some(b => b.type === "text" && b.text?.trim()));
   if (hasUserText) {
-    return `<div class="evt user"><div class="who"><b>You</b><span class="ts">${esc(ts)}</span></div>
+    const aid = e.uuid ? ` id="evt-${esc(e.uuid)}"` : "";
+    const anchor = e.uuid ? `<a class="anchor" href="#evt-${esc(e.uuid)}" title="Link to this message">#</a>` : "";
+    return `<div class="evt user"${aid}><div class="who"><b>You</b><span class="ts">${esc(ts)}</span>${anchor}</div>
       <div class="body">${blocks.filter((_, i) => Array.isArray(content) ? content[i]?.type !== "tool_result" : true).join("")}</div></div>`;
   }
   return `<div class="evt assistant-aux"><div class="body">${blocks.join("")}</div></div>`;
@@ -697,7 +757,9 @@ function renderAssistant(e) {
       blocks.push(renderToolUse(b));
     }
   }
-  return `<div class="evt assistant"><div class="who"><b>Claude</b><span>${esc(model)}</span><span class="ts">${esc(ts)}</span></div>
+  const aid = e.uuid ? ` id="evt-${esc(e.uuid)}"` : "";
+  const anchor = e.uuid ? `<a class="anchor" href="#evt-${esc(e.uuid)}" title="Link to this message">#</a>` : "";
+  return `<div class="evt assistant"${aid}><div class="who"><b>Claude</b><span>${esc(model)}</span><span class="ts">${esc(ts)}</span>${anchor}</div>
     <div class="body">${blocks.join("")}</div></div>`;
 }
 
