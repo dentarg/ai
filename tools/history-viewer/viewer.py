@@ -239,6 +239,13 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
                 projects = run_dir / "projects"
                 if not projects.is_dir():
                     continue
+                fallback_name = None
+                name_file = run_dir / ".session_name"
+                if name_file.is_file():
+                    try:
+                        fallback_name = name_file.read_text(encoding="utf-8", errors="replace").strip() or None
+                    except OSError as e:
+                        log("warn", op="read_name", path=str(name_file), err=repr(e))
                 for project_dir in sorted(p for p in projects.iterdir() if p.is_dir()):
                     for jsonl in sorted(project_dir.glob("*.jsonl")):
                         rel = jsonl.relative_to(history_root).as_posix()
@@ -265,6 +272,8 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
                             "project": project_dir.name,
                             **summary,
                         }
+                        if not entry.get("name") and fallback_name:
+                            entry["name"] = fallback_name
                         cache[rel] = {"sig": sig, "entry": entry}
                         sessions.append(entry)
     sessions.sort(key=lambda s: (s.get("startedAt") or s["runStartedAt"]), reverse=True)

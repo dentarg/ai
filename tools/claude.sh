@@ -66,6 +66,11 @@ if [[ -n "$resume_id" ]]; then
 else
   settings_claude_home=$(history_dir claude)
   mkdir -p "$settings_claude_home"
+  # Sidecar session name: the host directory.
+  # The viewer falls back to this when Claude hasn't generated its own summary.
+  if [[ -n "${HOST_DIR:-}" ]]; then
+    printf '%s\n' "$HOST_DIR" > "$settings_claude_home/.session_name"
+  fi
 fi
 
 if [[ -z "$profile" && -z "$apikey" ]]; then
