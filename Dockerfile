@@ -221,7 +221,7 @@ After=multi-user.target
 [Service]
 Type=simple
 Environment=HOME=$HOME
-PassEnvironment=HOST_DIR
+PassEnvironment=HOST_DIR PORT
 ExecStart=/bin/bash
 WorkingDirectory=/app
 StandardInput=tty
