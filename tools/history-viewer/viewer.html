@@ -194,10 +194,16 @@
   .markdown table.md-table tr:last-child td { border-bottom: 0; }
 
   .evt { scroll-margin-top: 80px; }
-  .evt .who .anchor { color: var(--muted-2); margin-left: auto; opacity: 0; transition: opacity 0.1s;
+  .evt .who .anchor { color: var(--muted-2); opacity: 0; transition: opacity 0.1s;
     font-size: 12px; padding: 0 4px; }
-  .evt:hover .who .anchor, .evt:target .who .anchor { opacity: 1; }
+  .evt .who .anchor.first { margin-left: auto; }
+  .evt .who .copy-md { color: var(--muted-2); opacity: 0; transition: opacity 0.1s;
+    background: none; border: 0; cursor: pointer; font-size: 11px; padding: 0 4px;
+    text-transform: uppercase; letter-spacing: 0.05em; }
+  .evt:hover .who .anchor, .evt:target .who .anchor,
+  .evt:hover .who .copy-md, .evt:target .who .copy-md { opacity: 1; }
   .evt .who .anchor:hover { color: var(--accent); text-decoration: none; }
+  .evt .who .copy-md:hover { color: var(--accent); background: none; }
   .evt:target .body, .evt:target .who { background: var(--accent-soft); border-radius: 6px; }
   .evt .who { width: 100%; }
 
@@ -694,6 +700,7 @@ function drawTranscript() {
   flush();
   tEl.innerHTML = parts.join("\n") || `<div class="empty">Empty session.</div>`;
   hookClampButtons(tEl);
+  hookCopyMarkdownButtons(tEl);
   // If the URL has a #evt-... hash, scroll to it now that the transcript exists.
   if (location.hash && location.hash.startsWith("#evt-")) {
     const target = document.getElementById(location.hash.slice(1));
@@ -732,8 +739,9 @@ function renderUser(e) {
     || (Array.isArray(content) && content.some(b => b.type === "text" && b.text?.trim()));
   if (hasUserText) {
     const aid = e.uuid ? ` id="evt-${esc(e.uuid)}"` : "";
-    const anchor = e.uuid ? `<a class="anchor" href="#evt-${esc(e.uuid)}" title="Link to this message">#</a>` : "";
-    return `<div class="evt user"${aid}><div class="who"><b>You</b><span class="ts">${esc(ts)}</span>${anchor}</div>
+    const anchor = e.uuid ? `<a class="anchor first" href="#evt-${esc(e.uuid)}" title="Link to this message">#</a>` : "";
+    const copy = e.uuid ? `<button class="copy-md" data-copy-uuid="${esc(e.uuid)}" title="Copy markdown" type="button">copy</button>` : "";
+    return `<div class="evt user"${aid}><div class="who"><b>You</b><span class="ts">${esc(ts)}</span>${anchor}${copy}</div>
       <div class="body">${blocks.filter((_, i) => Array.isArray(content) ? content[i]?.type !== "tool_result" : true).join("")}</div></div>`;
   }
   return `<div class="evt assistant-aux"><div class="body">${blocks.join("")}</div></div>`;
@@ -757,9 +765,11 @@ function renderAssistant(e) {
       blocks.push(renderToolUse(b));
     }
   }
+  const hasText = (msg.content || []).some(b => b.type === "text" && b.text?.trim());
   const aid = e.uuid ? ` id="evt-${esc(e.uuid)}"` : "";
-  const anchor = e.uuid ? `<a class="anchor" href="#evt-${esc(e.uuid)}" title="Link to this message">#</a>` : "";
-  return `<div class="evt assistant"${aid}><div class="who"><b>Claude</b><span>${esc(model)}</span><span class="ts">${esc(ts)}</span>${anchor}</div>
+  const anchor = e.uuid ? `<a class="anchor first" href="#evt-${esc(e.uuid)}" title="Link to this message">#</a>` : "";
+  const copy = e.uuid && hasText ? `<button class="copy-md" data-copy-uuid="${esc(e.uuid)}" title="Copy markdown" type="button">copy</button>` : "";
+  return `<div class="evt assistant"${aid}><div class="who"><b>Claude</b><span>${esc(model)}</span><span class="ts">${esc(ts)}</span>${anchor}${copy}</div>
     <div class="body">${blocks.join("")}</div></div>`;
 }
 
@@ -797,6 +807,39 @@ function hookClampButtons(root) {
     btn.addEventListener("click", () => {
       btn.parentElement.classList.add("expanded");
       btn.remove();
+    });
+  });
+}
+
+function eventToMarkdown(e) {
+  if (!e) return "";
+  const content = e.message?.content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  const parts = [];
+  for (const b of content) {
+    if (b.type === "text" && b.text) parts.push(b.text);
+  }
+  return parts.join("\n\n");
+}
+
+function hookCopyMarkdownButtons(root) {
+  const byUuid = new Map((state.currentEvents || []).map(e => [e.uuid, e]));
+  root.querySelectorAll("button.copy-md").forEach(btn => {
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const text = eventToMarkdown(byUuid.get(btn.dataset.copyUuid));
+      if (!text) return;
+      try { await navigator.clipboard.writeText(text); }
+      catch {
+        const ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } finally { ta.remove(); }
+      }
+      const prev = btn.textContent;
+      btn.textContent = "copied";
+      setTimeout(() => { btn.textContent = prev; }, 1000);
     });
   });
 }
