@@ -1,0 +1,30 @@
+#!/bin/sh
+
+set -eu
+
+resolve () {
+  if [ "$1" = "last" ]; then
+    podman ps | tail -1 | cut -d ' ' -f 1
+  else
+    printf '%s' "$1"
+  fi
+}
+
+if [ $# -lt 1 ]; then
+  exec podman ps
+fi
+
+case "$1" in
+  u|url)
+    shift
+    [ $# -lt 1 ] && { echo "usage: pod url <container|last>" >&2; exit 1; }
+    container=$(resolve "$1")
+    port=$(podman port "$container" | head -1 | sed 's/.*://')
+    [ -z "$port" ] && { echo "no published port for $container" >&2; exit 1; }
+    echo "http://127.0.0.1:${port}"
+    exit 0
+    ;;
+esac
+
+container=$(resolve "$1")
+exec podman exec -it "$container" "${2:-bash}"
