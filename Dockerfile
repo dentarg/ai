@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      iputils-tracepath \
      jq \
      less \
+     libbpf1 \
      libcurl4-openssl-dev \
      liblz4-dev \
      libpq-dev \
@@ -273,8 +274,9 @@ COPY .gitconfig /etc/gitconfig
 COPY bin/refresh-tokens /usr/local/bin/refresh-tokens
 RUN chmod +x /usr/local/bin/refresh-tokens
 
-# Hide systemd shutdown messages on container exit
+# Quiet systemd: hide status messages and the INFO-level boot banner
+# (systemd version, detected virtualization/architecture, "Queued start job…").
 RUN mkdir -p /etc/systemd/system.conf.d && \
-    printf '[Manager]\nShowStatus=no\n' > /etc/systemd/system.conf.d/hide-status.conf
+    printf '[Manager]\nShowStatus=no\nLogLevel=warning\n' > /etc/systemd/system.conf.d/hide-status.conf
 
 CMD ["/sbin/init"]
