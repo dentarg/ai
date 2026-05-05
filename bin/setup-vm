@@ -1,0 +1,64 @@
+#!/bin/sh
+
+# Configure the podman machine VM for our workloads:
+#
+#   - init the VM (default 300 GB disk, 8 GB RAM) if no machine exists yet
+#   - zram swap (compressed in-RAM, ram/2, zstd) so the kernel has a
+#     pressure-release valve during build spikes and doesn't OOM-kill
+#     containers when the working set briefly exceeds VM RAM
+#   - bump kernel.keys.maxkeys / kernel.keys.maxbytes to avoid the
+#     "crun: join keyctl ... Disk quota exceeded" keyring quota errors
+#
+# All persisted to survive reboots. Idempotent. Re-run after
+# `podman machine reset`.
+
+set -eu
+
+VM_DISK=${VM_DISK:-300}
+VM_MEMORY=${VM_MEMORY:-8192}
+
+step () { echo; echo "==> $*"; }
+
+if ! podman machine list --format '{{.Name}}' | grep -q .; then
+  step "no machine found, initializing (disk=${VM_DISK}G, memory=${VM_MEMORY}M)"
+  podman machine init --disk-size "$VM_DISK" --memory "$VM_MEMORY" --now
+else
+  step "machine exists, skipping init"
+fi
+
+if ! podman machine list --format '{{.Running}}' | grep -q true; then
+  step "starting machine"
+  podman machine start
+fi
+
+step "writing /etc/systemd/zram-generator.conf"
+podman machine ssh "sudo tee /etc/systemd/zram-generator.conf" <<'EOF'
+[zram0]
+zram-size = ram / 2
+compression-algorithm = zstd
+EOF
+podman machine ssh sudo systemctl daemon-reload
+
+# Live runtime activation of zram-generator config is fragile (orphan
+# devices, write-once comp_algorithm, chained .swap unit failed-states).
+# The reliable path is to let the generator run at boot, so we bounce
+# the VM if zram isn't already active.
+if podman machine ssh swapon --show=NAME --noheadings 2>/dev/null | grep -qx /dev/zram0; then
+  step "zram0 already active, config takes effect on next VM reboot"
+else
+  step "restarting VM to apply zram config (any running containers will be stopped)"
+  podman machine stop
+  podman machine start
+fi
+
+step "writing /etc/sysctl.d/90-keyring.conf"
+podman machine ssh "sudo tee /etc/sysctl.d/90-keyring.conf" <<'EOF'
+kernel.keys.maxkeys = 20000
+kernel.keys.maxbytes = 200000
+EOF
+podman machine ssh sudo sysctl --system >/dev/null
+
+step "verifying"
+set -x
+podman machine ssh swapon --show
+podman machine ssh sysctl kernel.keys.maxkeys kernel.keys.maxbytes

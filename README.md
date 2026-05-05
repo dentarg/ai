@@ -55,8 +55,9 @@ Your Anthropic API key in 1Password.
 
 ```shell
 brew install podman
-# memory is in MiB, disk in GiB
-podman machine init --disk-size 300 --memory 16384 --now
+
+# init the VM, enable zram swap, set kernel.keys quotas
+bin/setup-vm
 
 ./build_image
 
@@ -174,10 +175,11 @@ podman machine inspect
 # when we can't build because we're out of space
 podman system prune--all
 
-# to combat this error related to "Linux Kernel Keyring quota"
-# Error: preparing container ... for attach: crun: join keyctl `...`: Disk quota exceeded: OCI runtime error
-podman machine ssh sudo sysctl -w kernel.keys.maxkeys=20000
-podman machine ssh sudo sysctl -w kernel.keys.maxbytes=200000
+# initial setup, or after `podman machine reset`:
+# inits the VM (300 GB disk, 8 GB RAM), enables zram swap, and persists
+# kernel.keys.maxkeys / maxbytes so we don't hit the keyring quota
+# ("crun: join keyctl ... Disk quota exceeded")
+bin/setup-vm
 ```
 
 ## Stuff
