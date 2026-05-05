@@ -1,0 +1,68 @@
+#!/bin/sh
+
+set -eu
+
+URL=${1:?usage: title-podman URL}
+IMAGE=${TITLE_IMAGE:-ai:latest}
+
+exec podman run --rm --interactive \
+  --env URL="$URL" \
+  --entrypoint bash \
+  "$IMAGE" -c 'node -' <<'JS'
+const { execSync } = require("child_process");
+const path = require("path");
+const globalNodeModules = execSync("npm root -g", { encoding: "utf8" }).trim();
+const puppeteer = require(path.join(globalNodeModules, "puppeteer-core"));
+
+(async () => {
+  const browser = await puppeteer.launch({
+    executablePath: "/usr/bin/chromium",
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      // Chromium's NetworkChangeNotifier flaps while podman's rootless
+      // network is still settling; pinning it avoids ERR_NETWORK_CHANGED.
+      "--enable-features=NetworkServiceInProcess",
+    ],
+  });
+  try {
+    const page = await browser.newPage();
+    await page.setUserAgent(
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0",
+    );
+    let lastErr;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await page.goto(process.env.URL, { waitUntil: "domcontentloaded", timeout: 30000 });
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        if (!/ERR_NETWORK_CHANGED|ERR_NETWORK_IO_SUSPENDED/.test(err.message)) throw err;
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+    if (lastErr) throw lastErr;
+    try {
+      await page.waitForFunction(
+        () => document.title && !/just a moment|attention required|verifying/i.test(document.title),
+        { timeout: 10000 },
+      );
+    } catch {
+      // fall through with whatever title we have
+    }
+    const title = (await page.title()).replace(/\s+/g, " ").replace(/ - IMDb$/, "").trim();
+    if (!title) {
+      console.error("title-podman: empty title");
+      process.exit(1);
+    }
+    console.log(title);
+  } finally {
+    await browser.close();
+  }
+})().catch((err) => {
+  console.error(`title-podman: ${err.message}`);
+  process.exit(1);
+});
+JS
