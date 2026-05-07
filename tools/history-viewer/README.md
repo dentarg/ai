@@ -22,6 +22,8 @@ Flags: `--history PATH` (default `/history`), `--port N` (default 8765), `--host
 - Filter by date range, repo, branch, tool (claude/gemini), model, min tokens
 - Full-text search across all session transcripts
 - Transcript rendering: user/assistant bubbles, collapsed thinking + tool calls, "show internals" toggle
+- Export to markdown — **clean** (just the user/assistant prose) or **full** (thinking, tool calls, results, meta wrappers)
+- Session titles skip slash-command and `<local-command-caveat>` wrappers, picking the first real user prompt instead
 - Stats dashboard: totals, breakdown by day / repo / model (claude runs only)
 
 Pure Python stdlib + a single HTML file — no dependencies, no build step. The session endpoint resolves paths under `--history` and only serves `*.jsonl` files inside `projects/` subdirectories.
