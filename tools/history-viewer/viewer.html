@@ -235,6 +235,53 @@
   table.stats-table td.num, table.stats-table th.num { text-align: right; }
   table.stats-table tr:last-child td { border-bottom: 0; }
 
+  .stats-chart { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 22px; margin-bottom: 26px; }
+  .stats-chart-head { display: flex; align-items: baseline; justify-content: space-between;
+    gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+  .stats-chart-head h2 { margin: 0; font-size: 13px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
+  .range-tabs { display: inline-flex; gap: 6px; }
+  .range-tabs button { padding: 4px 10px; font-size: 12.5px; }
+  .range-tabs button.active { background: var(--accent-soft); border-color: var(--accent-line);
+    color: var(--text); }
+  .stats-chart svg { display: block; width: 100%; height: auto; }
+  .chart-axis { fill: var(--muted-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .chart-grid { stroke: var(--border-soft); stroke-width: 1; }
+  .chart-baseline { stroke: var(--border); stroke-width: 1; }
+  .chart-line { fill: none; stroke-width: 1.5; }
+  .chart-bar { transition: opacity 0.1s; }
+  .chart-hit { fill: transparent; cursor: crosshair; }
+  .chart-hit.active { fill: var(--accent-soft); fill-opacity: 0.35; }
+  .chart-wrap { position: relative; }
+  .chart-tooltip { position: absolute; pointer-events: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 12px; font-size: 12.5px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    min-width: 200px; max-width: 280px; z-index: 5;
+    opacity: 0; transition: opacity 0.08s; }
+  .chart-tooltip.visible { opacity: 1; }
+  .chart-tooltip .tt-date { font-weight: 600; margin-bottom: 5px; color: var(--text); }
+  .chart-tooltip .tt-row { display: flex; justify-content: space-between; gap: 12px;
+    font-variant-numeric: tabular-nums; padding: 1px 0; }
+  .chart-tooltip .tt-row .swatch { display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .chart-tooltip .tt-row .label { color: var(--text); }
+  .chart-tooltip .tt-row .val { color: var(--muted); }
+  .chart-tooltip .tt-total { margin-top: 5px; padding-top: 5px;
+    border-top: 1px solid var(--border-soft); display: flex; justify-content: space-between;
+    font-variant-numeric: tabular-nums; color: var(--text); }
+  .chart-tooltip .tt-empty { color: var(--muted-2); font-style: italic; }
+  .legend-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px 22px; margin-top: 16px; font-size: 13px; }
+  .legend-item { display: flex; flex-direction: column; gap: 2px; }
+  .legend-item .head { display: flex; align-items: center; gap: 8px; color: var(--text);
+    font-weight: 500; }
+  .legend-item .swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+    flex-shrink: 0; }
+  .legend-item .pct { color: var(--muted); font-size: 12.5px; font-weight: normal; }
+  .legend-item .nums { color: var(--muted); font-size: 12.5px;
+    font-variant-numeric: tabular-nums; padding-left: 18px; }
+
   .empty { color: var(--muted); padding: 60px 20px; text-align: center; }
   .hidden { display: none !important; }
 </style>
@@ -395,6 +442,7 @@ const state = {
   searchResults: null,   // null = no active search
   filters: { search: "", branch: "" },
   showInternals: false,
+  statsRange: "all",     // "all" | "30d" | "7d"
 };
 
 // ---------- routing ----------
@@ -1011,6 +1059,314 @@ function exportSession(s, events, mode) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ---------- stats chart ----------
+const CHART_PALETTE = [
+  "#4e73c4", // blue
+  "#2e8b57", // green
+  "#b58a2e", // gold
+  "#c96442", // accent coral
+  "#7e549f", // purple
+  "#2c8089", // teal
+  "#b54b75", // rose
+  "#8a6e3a", // brown
+];
+
+function fmtTokensAxis(t) {
+  if (!t) return "0";
+  const trim = (n) => {
+    const s = n.toFixed(1);
+    return s.endsWith(".0") ? s.slice(0, -2) : s;
+  };
+  if (t >= 1e9) return trim(t/1e9) + "B";
+  if (t >= 1e6) return trim(t/1e6) + "M";
+  if (t >= 1e3) return trim(t/1e3) + "k";
+  return String(Math.round(t));
+}
+
+function modelLabel(m) {
+  if (!m) return "(unknown)";
+  if (m === "<synthetic>") return "synthetic";
+  // claude-opus-4-7-20251101 → "Opus 4.7"; claude-haiku-3-5 → "Haiku 3.5"
+  const match = m.match(/claude-(opus|sonnet|haiku)-(\d+)(?:-(\d+))?/i);
+  if (match) {
+    const family = match[1][0].toUpperCase() + match[1].slice(1);
+    const ver = match[3] ? `${match[2]}.${match[3]}` : match[2];
+    return `${family} ${ver}`;
+  }
+  return m;
+}
+
+function pad2DateKey(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+
+function buildTokenChartData(sessions, range) {
+  // Filter to claude sessions and gather valid timestamps.
+  const claude = sessions.filter(s => s.tool === "claude" && (s.startedAt || s.runStartedAt));
+  if (!claude.length) return null;
+
+  // Range start/end (inclusive day keys).
+  let startKey, endKey;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (range === "7d" || range === "30d") {
+    const span = range === "7d" ? 6 : 29;
+    const startDate = new Date(today); startDate.setDate(today.getDate() - span);
+    startKey = pad2DateKey(startDate);
+    endKey = pad2DateKey(today);
+  } else {
+    const allKeys = claude.map(s => localDayKey(s.startedAt || s.runStartedAt)).filter(Boolean).sort();
+    startKey = allKeys[0];
+    endKey = allKeys[allKeys.length - 1];
+  }
+  if (!startKey || !endKey) return null;
+
+  // Build the day axis between startKey and endKey, inclusive.
+  const days = [];
+  const cursor = new Date(startKey + "T00:00:00");
+  const stop = new Date(endKey + "T00:00:00");
+  while (cursor <= stop) { days.push(pad2DateKey(cursor)); cursor.setDate(cursor.getDate() + 1); }
+
+  // Walk sessions in range, sum per-model tokens per day, and compute totals.
+  const dayIndex = new Map(days.map((d, i) => [d, i]));
+  const perModelSeries = new Map();   // model → [tokens per day]
+  const perModelTotals = new Map();   // model → { in, out, cacheRead, cacheCreate, total, cost }
+  let grandTotalTokens = 0;
+  for (const s of claude) {
+    const key = localDayKey(s.startedAt || s.runStartedAt);
+    const idx = dayIndex.get(key);
+    if (idx === undefined) continue;
+    const tbm = s.tokensByModel || {};
+    const cbm = s.costByModel || {};
+    for (const [m, tok] of Object.entries(tbm)) {
+      const n = (tok.input_tokens||0) + (tok.output_tokens||0)
+              + (tok.cache_read_tokens||0) + (tok.cache_creation_tokens||0);
+      if (!perModelSeries.has(m)) perModelSeries.set(m, new Array(days.length).fill(0));
+      perModelSeries.get(m)[idx] += n;
+      const t = perModelTotals.get(m) || { in: 0, out: 0, cacheRead: 0, cacheCreate: 0, total: 0, cost: 0 };
+      t.in += tok.input_tokens || 0;
+      t.out += tok.output_tokens || 0;
+      t.cacheRead += tok.cache_read_tokens || 0;
+      t.cacheCreate += tok.cache_creation_tokens || 0;
+      t.total += n;
+      t.cost += cbm[m] || 0;
+      perModelTotals.set(m, t);
+      grandTotalTokens += n;
+    }
+  }
+  if (!perModelSeries.size) return null;
+
+  // Sort models by total tokens desc — drives both line color order and legend order.
+  const models = [...perModelSeries.keys()].sort((a, b) =>
+    (perModelTotals.get(b)?.total || 0) - (perModelTotals.get(a)?.total || 0));
+
+  return { days, models, perModelSeries, perModelTotals, grandTotalTokens, range };
+}
+
+function renderTokenChart(data) {
+  if (!data) return `<div class="empty" style="padding:30px">No token data in this range.</div>`;
+  const { days, models, perModelSeries } = data;
+
+  const W = 880, H = 280;
+  const padL = 56, padR = 16, padT = 12, padB = 28;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+
+  // Y scale — round the max up to a nice tick.
+  let maxY = 0;
+  for (let i = 0; i < days.length; i++) {
+    let stack = 0;
+    for (const m of models) stack += perModelSeries.get(m)[i] || 0;
+    if (stack > maxY) maxY = stack;
+  }
+  if (maxY <= 0) maxY = 1;
+  const niceMax = (() => {
+    const exp = Math.floor(Math.log10(maxY));
+    const base = Math.pow(10, exp);
+    const norm = maxY / base;
+    const step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+    return step * base;
+  })();
+  const yTicks = 5;
+  const yVals = [];
+  for (let i = 0; i <= yTicks; i++) yVals.push(niceMax * i / yTicks);
+
+  const slotW = innerW / days.length;
+  const barW = Math.max(1.2, slotW * 0.78);
+  const xAt = (i) => padL + (i + 0.5) * slotW;
+  const yAt = (v) => padT + (1 - v / niceMax) * innerH;
+
+  // Y grid + labels.
+  let svg = "";
+  for (const v of yVals) {
+    const y = yAt(v);
+    svg += `<line class="chart-grid" x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}"/>`;
+    svg += `<text class="chart-axis" x="${padL - 6}" y="${y + 3}" text-anchor="end">${esc(fmtTokensAxis(v))}</text>`;
+  }
+  // Baseline.
+  svg += `<line class="chart-baseline" x1="${padL}" x2="${W - padR}" y1="${yAt(0)}" y2="${yAt(0)}"/>`;
+
+  // X axis labels — pick a handful of evenly spaced ticks.
+  const targetTicks = data.range === "7d" ? days.length : Math.min(6, days.length);
+  const tickIdxs = [];
+  if (targetTicks <= 1) tickIdxs.push(0);
+  else for (let i = 0; i < targetTicks; i++) {
+    tickIdxs.push(Math.round(i * (days.length - 1) / (targetTicks - 1)));
+  }
+  for (const idx of tickIdxs) {
+    const d = new Date(days[idx] + "T00:00:00");
+    const label = data.range === "7d"
+      ? d.toLocaleString(undefined, { weekday: "short", day: "numeric" })
+      : d.toLocaleString(undefined, { month: "short", day: "numeric" });
+    svg += `<text class="chart-axis" x="${xAt(idx)}" y="${H - 8}" text-anchor="middle">${esc(label)}</text>`;
+  }
+
+  // Stacked bars — largest model on bottom (matches the legend order).
+  const baseline = yAt(0);
+  for (let i = 0; i < days.length; i++) {
+    let yCursor = baseline;
+    const xLeft = xAt(i) - barW / 2;
+    for (const m of models) {
+      const v = perModelSeries.get(m)[i] || 0;
+      if (v <= 0) continue;
+      const h = (v / niceMax) * innerH;
+      yCursor -= h;
+      const color = CHART_PALETTE[models.indexOf(m) % CHART_PALETTE.length];
+      svg += `<rect class="chart-bar" x="${xLeft.toFixed(2)}" y="${yCursor.toFixed(2)}" width="${barW.toFixed(2)}" height="${h.toFixed(2)}" fill="${color}"/>`;
+    }
+  }
+  // Transparent hit areas — full-height columns spanning the slot, drawn last so they
+  // sit above the bars and capture pointer events anywhere in the column.
+  for (let i = 0; i < days.length; i++) {
+    const x = padL + i * slotW;
+    svg += `<rect class="chart-hit" data-day="${i}" x="${x.toFixed(2)}" y="${padT}" width="${slotW.toFixed(2)}" height="${innerH}"/>`;
+  }
+
+  return `<div class="chart-wrap">
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Tokens per day per model">${svg}</svg>
+    <div class="chart-tooltip" id="chart-tooltip" aria-hidden="true"></div>
+  </div>`;
+}
+
+function buildTooltipHTML(data, idx) {
+  const day = data.days[idx];
+  const d = new Date(day + "T00:00:00");
+  const date = d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  const rows = [];
+  let total = 0;
+  for (const m of data.models) {
+    const v = data.perModelSeries.get(m)[idx] || 0;
+    if (v <= 0) continue;
+    total += v;
+    const color = CHART_PALETTE[data.models.indexOf(m) % CHART_PALETTE.length];
+    rows.push(`<div class="tt-row">
+      <span class="label"><span class="swatch" style="background:${color}"></span>${esc(modelLabel(m))}</span>
+      <span class="val">${esc(fmtTokens(v))}</span>
+    </div>`);
+  }
+  if (!rows.length) {
+    return `<div class="tt-date">${esc(date)}</div><div class="tt-empty">no activity</div>`;
+  }
+  return `<div class="tt-date">${esc(date)}</div>${rows.join("")}
+    <div class="tt-total"><b>Total</b><b>${esc(fmtTokens(total))}</b></div>`;
+}
+
+function hookChartHover(root, data) {
+  const wrap = root.querySelector(".chart-wrap");
+  if (!wrap || !data) return;
+  const tooltip = wrap.querySelector(".chart-tooltip");
+  const hits = wrap.querySelectorAll(".chart-hit");
+  let activeHit = null;
+  const place = (clientX, clientY) => {
+    const r = wrap.getBoundingClientRect();
+    const x = clientX - r.left;
+    const y = clientY - r.top;
+    const tw = tooltip.offsetWidth;
+    const th = tooltip.offsetHeight;
+    const offset = 12;
+    const left = (x + offset + tw > r.width) ? Math.max(0, x - tw - offset) : x + offset;
+    const top = Math.max(0, Math.min(r.height - th, y - th / 2));
+    tooltip.style.left = left + "px";
+    tooltip.style.top = top + "px";
+  };
+  hits.forEach(hit => {
+    hit.addEventListener("mouseenter", (e) => {
+      if (activeHit) activeHit.classList.remove("active");
+      activeHit = hit;
+      hit.classList.add("active");
+      tooltip.innerHTML = buildTooltipHTML(data, parseInt(hit.dataset.day, 10));
+      tooltip.classList.add("visible");
+      place(e.clientX, e.clientY);
+    });
+    hit.addEventListener("mousemove", (e) => place(e.clientX, e.clientY));
+  });
+  wrap.addEventListener("mouseleave", () => {
+    if (activeHit) activeHit.classList.remove("active");
+    activeHit = null;
+    tooltip.classList.remove("visible");
+  });
+}
+
+function renderModelLegend(data, limit = 8) {
+  if (!data) return "";
+  const total = data.grandTotalTokens || 1;
+  const items = data.models.slice(0, limit).map(m => {
+    const t = data.perModelTotals.get(m);
+    const color = CHART_PALETTE[data.models.indexOf(m) % CHART_PALETTE.length];
+    const pct = (100 * t.total / total).toFixed(1);
+    return `<div class="legend-item">
+      <div class="head"><span class="swatch" style="background:${color}"></span>
+        <span>${esc(modelLabel(m))}</span>
+        <span class="pct">${pct}%</span></div>
+      <div class="nums">In: ${esc(fmtTokens(t.in))} · Out: ${esc(fmtTokens(t.out))}
+        · Cache: ${esc(fmtTokens(t.cacheRead + t.cacheCreate))} · ${esc(fmtCost(t.cost))}</div>
+    </div>`;
+  }).join("");
+  const extra = data.models.length > limit
+    ? `<div class="legend-item" style="color:var(--muted-2);font-size:12px;align-self:center">+${data.models.length - limit} more model${data.models.length - limit === 1 ? "" : "s"}</div>`
+    : "";
+  return `<div class="legend-row">${items}${extra}</div>`;
+}
+
+function renderTokenChartBlock() {
+  const range = state.statsRange;
+  const data = buildTokenChartData(state.sessions, range);
+  const tab = (key, label) =>
+    `<button data-range="${key}" class="${range===key?"active":""}">${label}</button>`;
+  return {
+    html: `<div class="stats-chart" id="stats-chart">
+      <div class="stats-chart-head">
+        <h2>Tokens per day</h2>
+        <div class="range-tabs">
+          ${tab("all","All time")}
+          ${tab("30d","Last 30 days")}
+          ${tab("7d","Last 7 days")}
+        </div>
+      </div>
+      ${renderTokenChart(data)}
+      ${renderModelLegend(data)}
+    </div>`,
+    data,
+  };
+}
+
+function hookRangeTabs(root) {
+  root.querySelectorAll(".range-tabs button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.statsRange = btn.dataset.range;
+      const target = document.getElementById("stats-chart");
+      if (!target) return;
+      const block = renderTokenChartBlock();
+      const tmp = document.createElement("div");
+      tmp.innerHTML = block.html;
+      const fresh = tmp.firstElementChild;
+      target.replaceWith(fresh);
+      hookRangeTabs(fresh.parentElement);
+      hookChartHover(fresh, block.data);
+    });
+  });
+}
+
 // ---------- stats page ----------
 function renderStatsPage() {
   const ss = state.sessions;
@@ -1043,12 +1399,14 @@ function renderStatsPage() {
     { key: "tokens", label: "Tokens", num: true, fmt: fmtTokens },
     { key: "cost", label: "Cost", num: true, fmt: fmtCost },
   ];
+  const chartBlock = renderTokenChartBlock();
   contentEl.innerHTML = `
     <div class="stats">
       <div class="stats-totals">
         <b>${totals.sessions}</b> sessions · <b>${fmtBytes(totals.events)}</b> events ·
         <b>${fmtTokens(totals.tokens)}</b> tokens · <b>${fmtCost(totals.cost)}</b>
       </div>
+      ${chartBlock.html}
       <div class="stats-nav">
         Jump to:
         <a href="#stats-month">month</a>
@@ -1064,6 +1422,8 @@ function renderStatsPage() {
       <h2 id="stats-model">By model</h2> ${table(Object.values(byModel).sort(sortByCost),        cols("model"))}
     </div>
   `;
+  hookRangeTabs(contentEl);
+  hookChartHover(contentEl, chartBlock.data);
 }
 
 // ---------- bootstrap ----------

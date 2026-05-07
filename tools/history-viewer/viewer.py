@@ -169,7 +169,9 @@ def summarize_session(path: Path) -> dict:
     totals = {"input_tokens": 0, "output_tokens": 0,
               "cache_read_tokens": 0, "cache_creation_tokens": 0,
               "cache_5m_tokens": 0, "cache_1h_tokens": 0}
+    by_model: dict[str, dict[str, int]] = {}
     cost = 0.0
+    cost_by_model: dict[str, float] = {}
     first_ts = None
     last_ts = None
     line_count = 0
@@ -213,19 +215,33 @@ def summarize_session(path: Path) -> dict:
                 if model:
                     models.add(model)
                 usage = msg.get("usage") or {}
-                totals["input_tokens"] += usage.get("input_tokens", 0) or 0
-                totals["output_tokens"] += usage.get("output_tokens", 0) or 0
-                totals["cache_read_tokens"] += usage.get("cache_read_input_tokens", 0) or 0
+                in_tok = usage.get("input_tokens", 0) or 0
+                out_tok = usage.get("output_tokens", 0) or 0
+                cr_tok = usage.get("cache_read_input_tokens", 0) or 0
                 cc_total = usage.get("cache_creation_input_tokens", 0) or 0
-                totals["cache_creation_tokens"] += cc_total
                 breakdown = usage.get("cache_creation") or {}
                 cc_5m = breakdown.get("ephemeral_5m_input_tokens", 0) or 0
                 cc_1h = breakdown.get("ephemeral_1h_input_tokens", 0) or 0
                 if not (cc_5m or cc_1h):
                     cc_5m = cc_total
+                totals["input_tokens"] += in_tok
+                totals["output_tokens"] += out_tok
+                totals["cache_read_tokens"] += cr_tok
+                totals["cache_creation_tokens"] += cc_total
                 totals["cache_5m_tokens"] += cc_5m
                 totals["cache_1h_tokens"] += cc_1h
-                cost += event_cost(model, usage)
+                evt_cost = event_cost(model, usage)
+                cost += evt_cost
+                if model:
+                    bucket = by_model.setdefault(model, {
+                        "input_tokens": 0, "output_tokens": 0,
+                        "cache_read_tokens": 0, "cache_creation_tokens": 0,
+                    })
+                    bucket["input_tokens"] += in_tok
+                    bucket["output_tokens"] += out_tok
+                    bucket["cache_read_tokens"] += cr_tok
+                    bucket["cache_creation_tokens"] += cc_total
+                    cost_by_model[model] = cost_by_model.get(model, 0.0) + evt_cost
 
     return {
         "sessionId": sid,
@@ -241,7 +257,9 @@ def summarize_session(path: Path) -> dict:
         "assistantMessages": assistant_msgs,
         "models": sorted(models),
         "tokens": totals,
+        "tokensByModel": by_model,
         "cost": round(cost, 4),
+        "costByModel": {m: round(c, 4) for m, c in cost_by_model.items()},
         "startedAt": first_ts,
         "endedAt": last_ts,
     }
