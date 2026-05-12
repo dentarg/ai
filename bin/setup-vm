@@ -11,54 +11,102 @@
 #
 # All persisted to survive reboots. Idempotent. Re-run after
 # `podman machine reset`.
+#
+# --gpu sets up a libkrun-backed machine with Vulkan GPU passthrough
+# (Apple Silicon). Defaults to a separate machine named "gpu" so it
+# coexists with the standard applehv default. Requires krunkit on PATH:
+#
+#   brew tap slp/krun && brew install krunkit
 
 set -eu
 
+GPU=0
 VM_DISK=${VM_DISK:-300}
 VM_MEMORY=${VM_MEMORY:-8192}
 
-step () { echo; echo "==> $*"; }
+usage () {
+  cat <<EOF
+usage: $0 [--gpu] [-h|--help]
 
-if ! podman machine list --format '{{.Name}}' | grep -q .; then
-  step "no machine found, initializing (disk=${VM_DISK}G, memory=${VM_MEMORY}M)"
-  podman machine init --disk-size "$VM_DISK" --memory "$VM_MEMORY" --now
+  --gpu    set up a libkrun machine with Vulkan GPU passthrough
+
+env:
+  VM_NAME    machine name (default: podman-machine-default, or "gpu" with --gpu)
+  VM_DISK    disk size in GB (default: $VM_DISK)
+  VM_MEMORY  memory in MB (default: $VM_MEMORY)
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --gpu) GPU=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "error: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+if [ "$GPU" = "1" ]; then
+  VM_NAME=${VM_NAME:-gpu}
+  export CONTAINERS_MACHINE_PROVIDER=libkrun
+  if ! command -v krunkit >/dev/null 2>&1; then
+    echo "error: --gpu requires krunkit on PATH" >&2
+    echo "  brew tap slp/krun && brew install krunkit" >&2
+    exit 1
+  fi
 else
-  step "machine exists, skipping init"
+  VM_NAME=${VM_NAME:-podman-machine-default}
 fi
 
-if ! podman machine list --format '{{.Running}}' | grep -q true; then
-  step "starting machine"
-  podman machine start
+step () { echo; echo "==> $*"; }
+
+if ! podman machine list --format '{{.Name}}' | sed 's/\*$//' | grep -qx "$VM_NAME"; then
+  step "machine '$VM_NAME' not found, initializing (disk=${VM_DISK}G, memory=${VM_MEMORY}M, gpu=$GPU)"
+  if [ "$GPU" = "1" ]; then
+    podman machine init "$VM_NAME" --disk-size "$VM_DISK" --memory "$VM_MEMORY" --gpus all --now
+  else
+    podman machine init "$VM_NAME" --disk-size "$VM_DISK" --memory "$VM_MEMORY" --now
+  fi
+else
+  step "machine '$VM_NAME' exists, skipping init"
+fi
+
+if ! podman machine list --format '{{.Name}} {{.Running}}' | sed 's/\*//' | grep -qx "$VM_NAME true"; then
+  step "starting machine '$VM_NAME'"
+  podman machine start "$VM_NAME"
 fi
 
 step "writing /etc/systemd/zram-generator.conf"
-podman machine ssh "sudo tee /etc/systemd/zram-generator.conf" <<'EOF'
+podman machine ssh "$VM_NAME" "sudo tee /etc/systemd/zram-generator.conf" <<'EOF'
 [zram0]
 zram-size = ram / 2
 compression-algorithm = zstd
 EOF
-podman machine ssh sudo systemctl daemon-reload
+podman machine ssh "$VM_NAME" sudo systemctl daemon-reload
 
 # Live runtime activation of zram-generator config is fragile (orphan
 # devices, write-once comp_algorithm, chained .swap unit failed-states).
 # The reliable path is to let the generator run at boot, so we bounce
 # the VM if zram isn't already active.
-if podman machine ssh swapon --show=NAME --noheadings 2>/dev/null | grep -qx /dev/zram0; then
+if podman machine ssh "$VM_NAME" swapon --show=NAME --noheadings 2>/dev/null | grep -qx /dev/zram0; then
   step "zram0 already active, config takes effect on next VM reboot"
 else
   step "restarting VM to apply zram config (any running containers will be stopped)"
-  podman machine stop
-  podman machine start
+  podman machine stop "$VM_NAME"
+  podman machine start "$VM_NAME"
 fi
 
 step "writing /etc/sysctl.d/90-keyring.conf"
-podman machine ssh "sudo tee /etc/sysctl.d/90-keyring.conf" <<'EOF'
+podman machine ssh "$VM_NAME" "sudo tee /etc/sysctl.d/90-keyring.conf" <<'EOF'
 kernel.keys.maxkeys = 20000
 kernel.keys.maxbytes = 200000
 EOF
-podman machine ssh sudo sysctl --system >/dev/null
+podman machine ssh "$VM_NAME" sudo sysctl --system >/dev/null
 
 step "verifying"
 set -x
-podman machine ssh swapon --show
-podman machine ssh sysctl kernel.keys.maxkeys kernel.keys.maxbytes
+podman machine ssh "$VM_NAME" swapon --show
+podman machine ssh "$VM_NAME" sysctl kernel.keys.maxkeys kernel.keys.maxbytes
+if [ "$GPU" = "1" ]; then
+  podman machine ssh "$VM_NAME" ls /dev/dri
+fi

@@ -537,6 +537,11 @@ podman system prune--all
 # kernel.keys.maxkeys / maxbytes so we don't hit the keyring quota
 # ("crun: join keyctl ... Disk quota exceeded")
 bin/setup-vm
+
+# set up a second, libkrun-backed machine named "gpu" with Vulkan
+# GPU passthrough (Apple Silicon). Requires krunkit:
+#   brew tap slp/krun && brew install krunkit
+bin/setup-vm --gpu
 ```
 
 ## Stuff
