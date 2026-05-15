@@ -104,6 +104,27 @@ if [[ -f /claude/claude.json ]]; then
   ln -sf "$settings_claude_home/claude.json" $HOME/.claude.json
 fi
 
+# /settings/sentry.token -> enable Sentry MCP via local stdio server.
+# The hosted mcp.sentry.dev uses an OAuth callback to localhost which can't
+# work from inside a container, so we run @sentry/mcp-server locally instead.
+# Optional companion file: /settings/sentry.host (e.g. sentry.io or self-hosted).
+if [[ -f /settings/sentry.token && -f "$settings_claude_home/claude.json" ]]; then
+  sentry_token=$(tr -d '[:space:]' < /settings/sentry.token)
+  sentry_host=""
+  [[ -f /settings/sentry.host ]] && sentry_host=$(tr -d '[:space:]' < /settings/sentry.host)
+  tmp=$(mktemp)
+  jq --arg token "$sentry_token" --arg host "$sentry_host" '.mcpServers.sentry = {
+    "type": "stdio",
+    "command": "npx",
+    "args": (
+      ["-y", "@sentry/mcp-server@latest"]
+      + (if $host != "" then ["--host=" + $host] else [] end)
+    ),
+    "env": {"SENTRY_ACCESS_TOKEN": $token}
+  }' "$settings_claude_home/claude.json" > "$tmp"
+  mv "$tmp" "$settings_claude_home/claude.json"
+fi
+
 # claude/settings.json -> ~/.claude/settings.json (via ~/.claude symlink)
 if [[ -f /claude/settings.json ]]; then
   cp -f /claude/settings.json "$settings_claude_home/settings.json"

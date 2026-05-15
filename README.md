@@ -22,6 +22,10 @@ into `~/.claude/` when you launch claude with a matching profile. See the
 Optionally, add `AGENTS.md` to `$HOME/ai/settings` — it becomes `CLAUDE.md`
 for Claude Code and `GEMINI.md` for Gemini CLI.
 
+Optionally, add `sentry.token` to `$HOME/ai/settings` to enable the
+[Sentry MCP](https://mcp.sentry.dev/) server in Claude Code. See
+[MCP Servers](#mcp-servers).
+
 ```shell
 # start podman and share the current working directory
 bin/ai
@@ -111,6 +115,28 @@ Environment variables:
 | `CREDENTIALS_DIR` | `~/.claude` | Directory containing `.credentials*.json` files |
 | `CHECK_INTERVAL` | `300` | Seconds between checks |
 | `REFRESH_BEFORE` | `3600` | Seconds before expiry to trigger refresh |
+
+## MCP Servers
+
+### Sentry
+
+To enable Sentry's MCP server so the agent can fetch issues, events, and
+stack traces directly, drop your Sentry
+[user auth token](https://sentry.io/settings/account/api/auth-tokens/) in
+`$HOME/ai/settings/sentry.token` (just the token, no quotes or whitespace).
+
+When you launch `c <profile>`, an `mcpServers.sentry` entry is injected into
+the session's `~/.claude.json` that runs
+[`@sentry/mcp-server`](https://github.com/getsentry/sentry-mcp) locally over
+stdio with `SENTRY_ACCESS_TOKEN` set. We don't use the hosted
+`mcp.sentry.dev` because its OAuth flow expects a callback on
+`localhost:62880` inside the browser host — unreachable from this container.
+
+For self-hosted Sentry, additionally drop the hostname in
+`$HOME/ai/settings/sentry.host` (e.g. `sentry.example.com`) — it's passed
+through as `--host=...`.
+
+No `sentry.token` → no MCP server registered.
 
 ## Tricks
 
