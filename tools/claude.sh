@@ -11,19 +11,22 @@ history_dir () {
 }
 
 usage () {
-  echo "Usage: $(basename "$0") <profile> [--resume <id>] | --apikey <key> [--resume <id>] | --resume <id>"
+  echo "Usage: $(basename "$0") <profile> [--resume <id>] [--debug[=filter]] | --apikey <key> [...] | --resume <id> [...]"
   echo
   echo "  <profile>            Use oauth credentials from /settings for the given profile"
   echo "  --apikey <key>       Use the provided Anthropic API key"
   echo "  -r, --resume <id>    Resume a prior session; profile is auto-detected if omitted."
   echo "                       <id> may be a prefix — the matching .jsonl under /history is located"
   echo "                       and ~/.claude is symlinked to its original home."
+  echo "  -d, --debug          Pass --debug to claude."
+  echo "      --debug=<filter> Pass --debug <filter> to claude (e.g. --debug=api,hooks)."
   exit 1
 }
 
 profile=""
 apikey=""
 resume_id=""
+debug_flag=()
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -34,6 +37,14 @@ while [[ $# -gt 0 ]]; do
     -r|--resume)
       resume_id="${2:?--resume requires a session id}"
       shift 2
+      ;;
+    -d|--debug)
+      debug_flag=(--debug)
+      shift
+      ;;
+    --debug=*)
+      debug_flag=(--debug "${1#--debug=}")
+      shift
       ;;
     -h|--help)
       usage
@@ -143,4 +154,5 @@ exec claude \
   --dangerously-skip-permissions \
   --model claude-opus-4-7 \
   --effort high \
-  "${resume_flag[@]}"
+  "${resume_flag[@]}" \
+  "${debug_flag[@]}"
