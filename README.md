@@ -224,3 +224,4 @@ bin/setup-vm
 - [x] PostgreSQL
 - [x] LavinMQ
 - [x] [amqpcat](https://github.com/cloudamqp/amqpcat)
+- [x] [rusage](https://justine.lol/rusage/) — better `time(1)`, prints full `getrusage(2)` stats

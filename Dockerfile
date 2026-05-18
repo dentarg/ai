@@ -188,6 +188,14 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
+# rusage - detailed getrusage(2) stats wrapper, drop-in replacement for time(1).
+# Single-binary Cosmopolitan APE that runs on x86_64 + arm64 (and any OS).
+# sha256 from https://justine.lol/rusage/
+RUN curl -fsSL https://justine.lol/rusage/rusage.com -o /usr/local/bin/rusage \
+    && echo "9d6c8b52d352d071ed78c9c79571eb62a372873298011e5f7e9693ba964bf184  /usr/local/bin/rusage" \
+       | sha256sum -c - \
+    && chmod +x /usr/local/bin/rusage
+
 # mitmproxy
 RUN bash -c "pip install mitmproxy"
 
