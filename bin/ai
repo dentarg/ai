@@ -14,6 +14,12 @@ SETTINGS_DIR=${AI_DIR}/settings
 
 PORT=${PORT:-1337}
 
+CWD_LABEL=$(pwd)
+case "$CWD_LABEL" in
+  "$HOME") CWD_LABEL="~" ;;
+  "$HOME"/*) CWD_LABEL="~/${CWD_LABEL#$HOME/}" ;;
+esac
+
 mkdir -p $COMMAND_HISTORY_DIR
 mkdir -p $HISTORY_DIR
 mkdir -p $REPOS_DIR
@@ -37,4 +43,5 @@ podman run --rm --interactive --tty \
   --volume $(pwd):/app \
   --workdir /app \
   --publish ${PORT} \
+  --label cwd="${CWD_LABEL}" \
   ai:latest

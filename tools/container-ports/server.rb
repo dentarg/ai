@@ -10,7 +10,7 @@ PORT             = (ENV["PORT"] || 4567).to_i
 BIND             = ENV["BIND"] || "127.0.0.1"
 REFRESH_SECONDS  = (ENV["REFRESH"] || 5).to_i
 
-Container = Struct.new(:id, :name, :image, :status, :ports, keyword_init: true)
+Container = Struct.new(:id, :name, :image, :status, :ports, :labels, keyword_init: true)
 
 # Podman emits Ports as an array of objects like:
 #   {"host_ip": "0.0.0.0", "container_port": 80, "host_port": 8080,
@@ -52,6 +52,7 @@ def fetch_containers
       image:  j["Image"],
       status: j["Status"] || j["State"],
       ports:  parse_ports(j["Ports"]),
+      labels: j["Labels"] || {},
     )
   end
   [:ok, containers]
@@ -69,7 +70,7 @@ def render_html
       <<~HTML
         <table>
           <thead>
-            <tr><th>Name</th><th>Image</th><th>Status</th><th>ID</th><th>Ports</th></tr>
+            <tr><th>Name</th><th>Image</th><th>Status</th><th>ID</th><th>Cwd</th><th>Ports</th></tr>
           </thead>
           <tbody>
             #{rows}
@@ -137,6 +138,12 @@ def render_html
   HTML
 end
 
+def render_cwd(labels)
+  cwd = labels && labels["cwd"]
+  return "<span class=\"no-ports\">—</span>" if cwd.nil? || cwd.empty?
+  "<code>#{CGI.escapeHTML(cwd)}</code>"
+end
+
 def render_row(c)
   ports_html =
     if c.ports.empty?
@@ -154,6 +161,7 @@ def render_row(c)
       <td>#{CGI.escapeHTML(c.image)}</td>
       <td>#{CGI.escapeHTML(c.status)}</td>
       <td><code>#{CGI.escapeHTML(c.id)}</code></td>
+      <td>#{render_cwd(c.labels)}</td>
       <td>#{ports_html}</td>
     </tr>
   ROW
