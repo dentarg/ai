@@ -75,27 +75,30 @@ refresh_file() {
     --arg scope "$scopes" \
     '{grant_type: "refresh_token", refresh_token: $rt, client_id: "'"$CLIENT_ID"'", scope: $scope}')
 
-  local response
-  response=$(curl -s --compressed -X POST "$TOKEN_URL" \
+  local response http_status
+  response=$(curl -s --compressed -w '\n%{http_code}' -X POST "$TOKEN_URL" \
     -H "Accept: application/json, text/plain, */*" \
     -H "Content-Type: application/json" \
     -H "User-Agent: $USER_AGENT" \
     -d "$body") || true
+  http_status="${response##*$'\n'}"
+  response="${response%$'\n'*}"
 
   if [[ -z "$response" ]]; then
-    log error "msg=\"refresh request failed (no response)\" file=$(basename "$file")"
+    log error "msg=\"refresh request failed (no response)\" file=$(basename "$file") http_status=${http_status:-0}"
     return 1
   fi
 
   if [[ "$response" == *"rate_limit_error"* ]]; then
-    log warn "msg=\"rate limited, will retry next cycle\" file=$(basename "$file")"
+    log warn "msg=\"rate limited, will retry next cycle\" file=$(basename "$file") http_status=$http_status"
     return 1
   fi
 
   if [[ "$response" != *"access_token"* ]]; then
-    local err
-    err=$(echo "$response" | jq -r '.error.message // .message // .error // empty' 2>/dev/null) || true
-    log error "msg=\"refresh failed\" file=$(basename "$file") error=\"${err:-unknown}\""
+    local err body_single
+    err=$(echo "$response" | jq -r '.error.message // .message // .error_description // (.error | strings) // (.error | tojson) // empty' 2>/dev/null) || true
+    body_single=$(echo "$response" | tr -d '\n' | tr -d '\r' | cut -c1-500)
+    log error "msg=\"refresh failed\" file=$(basename "$file") http_status=$http_status error=\"${err:-unknown}\" body=\"${body_single//\"/\\\"}\""
     return 1
   fi
 
