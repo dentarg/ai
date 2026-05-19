@@ -1,0 +1,6 @@
+#!/bin/sh
+
+set -e
+set -u
+
+PORT=9999 ruby tools/container-ports/server.rb
