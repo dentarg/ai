@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      git \
      gpg \
      gpg-agent \
+     htop \
      inetutils-traceroute \
      iputils-ping \
      iputils-tracepath \
