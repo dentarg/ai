@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      libpq-dev \
      libyaml-dev \
      libzstd-dev \
+     lsof \
      man-db \
      netcat-openbsd \
      openjdk-21-jdk-headless \
