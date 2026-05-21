@@ -22,6 +22,7 @@ SCRIPT=${0##*/}
 CHUNK=1d
 PARALLEL=15m
 WORKERS=4
+RETRIES=20
 QUERY=
 SERVICE=
 RANGE=
@@ -50,6 +51,10 @@ Options:
   --chunk DUR        Outer chunk size, must be < 30d (default: $CHUNK).
   --parallel DUR     logcli --parallel-duration inside each chunk (default: $PARALLEL).
   --workers N        logcli --parallel-max-workers inside each chunk (default: $WORKERS).
+  --retries N        Retry a failing chunk N times with exponential backoff
+                     (10s, 20s, 40s, ... capped at 5m). Set to 0 to disable.
+                     Default: $RETRIES. Inner part files are preserved between
+                     attempts so retries resume rather than refetch.
   --out-dir DIR      Output directory. Default: ./loki-<service>.
                      Re-running with the same dir resumes.
   --query LOGQL      Override the default LogQL ({service_name="<service>"}).
@@ -73,6 +78,7 @@ while [ $# -gt 0 ]; do
     --chunk)     CHUNK=$2;   shift 2;;
     --parallel)  PARALLEL=$2; shift 2;;
     --workers)   WORKERS=$2; shift 2;;
+    --retries)   RETRIES=$2; shift 2;;
     --out-dir)   OUT_DIR=$2; shift 2;;
     --query)     QUERY=$2;   shift 2;;
     --stack)     STACK=$2;   shift 2;;
@@ -180,30 +186,41 @@ while [ "$cur" -lt "$TO_EPOCH" ]; do
   fi
 
   log "[$i/$total_chunks] $cur_iso → $nxt_iso  fetching"
-  if logcli query \
-        --quiet \
-        --timezone=UTC \
-        --from="$cur_iso" \
-        --to="$nxt_iso" \
-        --output=jsonl \
-        --forward \
-        --limit=0 \
-        --batch=5000 \
-        --parallel-duration="$PARALLEL" \
-        --parallel-max-workers="$WORKERS" \
-        --part-path-prefix="$OUT_DIR/parts/${tag}" \
-        --merge-parts \
-        --keep-parts \
-        "$QUERY" \
-        > "${out_file}.tmp" 2>>"$LOG"; then
-    mv "${out_file}.tmp" "$out_file"
-    lines=$(wc -l <"$out_file" | tr -d ' ')
-    log "[$i/$total_chunks] done, $lines lines → $out_file"
-  else
+  attempt=0
+  backoff=10
+  while :; do
+    attempt=$(( attempt + 1 ))
+    if logcli query \
+          --quiet \
+          --timezone=UTC \
+          --from="$cur_iso" \
+          --to="$nxt_iso" \
+          --output=jsonl \
+          --forward \
+          --limit=0 \
+          --batch=5000 \
+          --parallel-duration="$PARALLEL" \
+          --parallel-max-workers="$WORKERS" \
+          --part-path-prefix="$OUT_DIR/parts/${tag}" \
+          --merge-parts \
+          --keep-parts \
+          "$QUERY" \
+          > "${out_file}.tmp" 2>>"$LOG"; then
+      mv "${out_file}.tmp" "$out_file"
+      lines=$(wc -l <"$out_file" | tr -d ' ')
+      log "[$i/$total_chunks] done, $lines lines → $out_file"
+      break
+    fi
     rc=$?
-    log "[$i/$total_chunks] FAILED rc=$rc, leaving ${out_file}.tmp for inspection"
-    exit "$rc"
-  fi
+    if [ "$attempt" -gt "$RETRIES" ]; then
+      log "[$i/$total_chunks] FAILED rc=$rc after $attempt attempts, leaving ${out_file}.tmp for inspection"
+      exit "$rc"
+    fi
+    log "[$i/$total_chunks] attempt $attempt failed rc=$rc, retrying in ${backoff}s"
+    sleep "$backoff"
+    backoff=$(( backoff * 2 ))
+    [ "$backoff" -gt 300 ] && backoff=300
+  done
 
   cur=$nxt
 done
