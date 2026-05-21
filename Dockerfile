@@ -40,6 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      systemd-sysv \
      tree \
      unminimize \
+     unzip \
      vim \
      wget \
      whois \
@@ -195,6 +196,22 @@ RUN curl -fsSL https://justine.lol/rusage/rusage.com -o /usr/local/bin/rusage \
     && echo "9d6c8b52d352d071ed78c9c79571eb62a372873298011e5f7e9693ba964bf184  /usr/local/bin/rusage" \
        | sha256sum -c - \
     && chmod +x /usr/local/bin/rusage
+
+# Loki logcli
+# https://github.com/grafana/loki/releases
+# sha256 from the SHA256SUMS file published with the release
+RUN arch="$(dpkg --print-architecture)" \
+    && case "$arch" in \
+         amd64) sha256="7850d566d2af10d7adf255ed9452de632ab20c0f269dc61fac7f70bed4d99e48" ;; \
+         arm64) sha256="2fec7cbf4c0929f2fbd1e339753b14bc6432aadb41abf4b4155b00d3f6509e4e" ;; \
+         *) echo "unsupported arch: $arch" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://github.com/grafana/loki/releases/download/v3.7.2/logcli-linux-${arch}.zip" -o /tmp/logcli.zip \
+    && echo "${sha256}  /tmp/logcli.zip" | sha256sum -c - \
+    && unzip -p /tmp/logcli.zip "logcli-linux-${arch}" > /usr/local/bin/logcli \
+    && chmod +x /usr/local/bin/logcli \
+    && rm /tmp/logcli.zip \
+    && logcli --version
 
 # mitmproxy
 RUN bash -c "pip install mitmproxy"
