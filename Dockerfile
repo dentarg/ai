@@ -226,6 +226,7 @@ COPY ./tools/claude.sh /usr/local/bin/c
 COPY ./tools/gemini.sh /usr/local/bin/g
 COPY ./tools/codex.sh /usr/local/bin/cx
 COPY ./tools/exit.sh /usr/local/bin/x
+COPY ./tools/loki.sh /usr/local/bin/loki
 COPY ./tools/claude-hook.sh /usr/local/bin/claude-hook
 COPY ./tools/claude-login.sh /usr/local/bin/claude-login
 RUN chmod +x /usr/local/bin/start.sh \
@@ -234,6 +235,7 @@ RUN chmod +x /usr/local/bin/start.sh \
              /usr/local/bin/g \
              /usr/local/bin/cx \
              /usr/local/bin/x \
+             /usr/local/bin/loki \
              /usr/local/bin/claude-hook \
              /usr/local/bin/claude-login
 
