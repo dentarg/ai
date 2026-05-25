@@ -1,3 +1,6 @@
+[core]
+	excludesfile = /etc/gitignore
+
 [alias]
 	st = status
 	co = checkout

@@ -310,6 +310,7 @@ ENV LC_ALL C.UTF-8
 # do this late to allow tweaking without rebuilding previous layers
 COPY dot.bashrc $HOME/.bashrc
 COPY .gitconfig /etc/gitconfig
+COPY gitignore-global /etc/gitignore
 COPY bin/refresh-tokens /usr/local/bin/refresh-tokens
 RUN chmod +x /usr/local/bin/refresh-tokens
 
