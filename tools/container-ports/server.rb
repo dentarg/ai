@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 # Tiny web app that lists running Docker containers and links to their
-# host-published ports. Auto-refreshes on an interval. Stdlib only.
+# host-published ports. Auto-refresh off by default (set REFRESH=<seconds>).
+# Stdlib only.
 
 require "socket"
 require "json"
@@ -8,7 +9,7 @@ require "cgi"
 
 PORT             = (ENV["PORT"] || 4567).to_i
 BIND             = ENV["BIND"] || "127.0.0.1"
-REFRESH_SECONDS  = (ENV["REFRESH"] || 5).to_i
+REFRESH_SECONDS  = (ENV["REFRESH"] || 0).to_i
 
 Container = Struct.new(:id, :name, :image, :status, :ports, :labels, keyword_init: true)
 
@@ -84,7 +85,7 @@ def render_html
     <html>
     <head>
       <meta charset="utf-8">
-      <meta http-equiv="refresh" content="#{REFRESH_SECONDS}">
+      #{REFRESH_SECONDS > 0 ? %(<meta http-equiv="refresh" content="#{REFRESH_SECONDS}">) : ""}
       <title>Running containers</title>
       <style>
         :root {
@@ -131,7 +132,7 @@ def render_html
     </head>
     <body>
       <h1>Running containers</h1>
-      <div class="meta">Refreshing every #{REFRESH_SECONDS}s · #{Time.now.strftime('%H:%M:%S')}</div>
+      <div class="meta">#{REFRESH_SECONDS > 0 ? "Refreshing every #{REFRESH_SECONDS}s" : "Auto-refresh off"} · #{Time.now.strftime('%H:%M:%S')}</div>
       #{body}
     </body>
     </html>
@@ -192,7 +193,7 @@ ensure
 end
 
 server = TCPServer.new(BIND, PORT)
-puts "container-ports listening on http://#{BIND}:#{PORT} (refresh #{REFRESH_SECONDS}s)"
+puts "container-ports listening on http://#{BIND}:#{PORT} (refresh #{REFRESH_SECONDS > 0 ? "#{REFRESH_SECONDS}s" : "off"})"
 
 trap("INT")  { puts "\nshutting down"; exit 0 }
 trap("TERM") { exit 0 }
