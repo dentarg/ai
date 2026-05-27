@@ -7,6 +7,7 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_DIR=$(dirname "$SCRIPT_DIR")
 
 AI_DIR=${AI_DIR:-"${HOME}/ai"}
+BUNDLE_DIR=${AI_DIR}/bundle
 COMMAND_HISTORY_DIR=${AI_DIR}/commandhistory
 HISTORY_DIR=${AI_DIR}/history
 REPOS_DIR=${AI_DIR}/repos
@@ -20,6 +21,7 @@ case "$CWD_LABEL" in
   "$HOME"/*) CWD_LABEL="~/${CWD_LABEL#$HOME/}" ;;
 esac
 
+mkdir -p $BUNDLE_DIR
 mkdir -p $COMMAND_HISTORY_DIR
 mkdir -p $HISTORY_DIR
 mkdir -p $REPOS_DIR
@@ -35,6 +37,7 @@ podman run --rm --interactive --tty \
   --cap-add=SYS_PTRACE \
   --env HOST_DIR="$(basename "$(pwd)")" \
   --env PORT=${PORT} \
+  --volume ${BUNDLE_DIR}:/bundle \
   --volume ${COMMAND_HISTORY_DIR}:/commandhistory \
   --volume ${HISTORY_DIR}:/history \
   --volume ${REPOS_DIR}:/repos \

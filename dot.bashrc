@@ -1,5 +1,10 @@
 source /workspace/.bash_profile
 
+# share installed gems across containers via a host-mounted volume (see bin/ai).
+# bundler namespaces installs as /bundle/ruby/<abi>/..., so multiple ruby
+# versions coexist and native extensions are reused. start.sh (run via `s`)
+# inherits this from the interactive shell.
+export BUNDLE_PATH=/bundle
 # due to https://github.com/ruby/rubygems/issues/9124
 export BUNDLE_DEFAULT_CLI_COMMAND=install
 export BUNDLE_IGNORE_FUNDING_REQUESTS=1 # no post install messages will be printed

@@ -9,7 +9,7 @@ Agents work best when they can freely run shell commands, edit files, install pa
 - The project you're working on mounted at `/app`.
 - Language runtimes, databases (PostgreSQL, LavinMQ), and common tools preinstalled, so agents don't spend turns bootstrapping.
 - OAuth credentials and API keys mounted from `~/ai/settings`, with multi-profile support and automatic token refresh.
-- Shell history, agent session history, and cloned repos persisted on the host across container restarts.
+- Shell history, agent session history, cloned repos, and installed gems persisted on the host across container restarts.
 - `mitmproxy` available for inspecting what the agent actually sends over the wire.
 
 ## Setup
