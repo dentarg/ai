@@ -152,7 +152,7 @@ resume_flag=()
 
 exec claude \
   --dangerously-skip-permissions \
-  --model claude-opus-4-7 \
+  --model claude-opus-4-8 \
   --effort high \
   "${resume_flag[@]}" \
   "${debug_flag[@]}"

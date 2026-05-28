@@ -30,6 +30,7 @@ MONTHS = {m: i for i, m in enumerate(
 # Tuple: (input, output, cache_read, cache_write_5m, cache_write_1h)
 PRICING_BY_MODEL: dict[str, tuple[float, float, float, float, float]] = {
     # Opus 4.5+: reduced pricing
+    "claude-opus-4-8":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
     "claude-opus-4-7":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
     "claude-opus-4-6":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
     "claude-opus-4-5":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
