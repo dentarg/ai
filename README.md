@@ -30,10 +30,14 @@ Optionally, add `sentry.token` to `$HOME/ai/settings` to enable the
 # start podman and share the current working directory
 bin/ai
 
-# start services (and run "bundle install" if Gemfile exists)
+# start podman and auto-launch "c <profile>" once the container is up
+bin/ai <profile>
+
+# start services (and run "bundle install" if Gemfile exists).
+# also runs automatically as part of "c" below.
 s
 
-# launch claude with a specific oauth profile
+# launch claude with a specific oauth profile (runs "s" first)
 c <profile>
 
 # or launch claude with an Anthropic API key

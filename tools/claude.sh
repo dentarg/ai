@@ -92,6 +92,10 @@ if [[ -z "$profile" && -z "$apikey" ]]; then
   usage
 fi
 
+# Bring up services (postgres, lavinmq, redis) and run bundle install.
+# Don't let a service hiccup block claude from starting.
+start.sh || true
+
 rm -f $HOME/.claude/.credentials.json
 rm -f $HOME/.claude # should be a symlink
 rm -f $HOME/.claude.json

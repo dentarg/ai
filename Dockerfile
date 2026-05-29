@@ -263,7 +263,7 @@ After=multi-user.target
 [Service]
 Type=simple
 Environment=HOME=$HOME
-PassEnvironment=HOST_DIR PORT
+PassEnvironment=HOST_DIR PORT CLAUDE_PROFILE
 ExecStart=/bin/bash
 WorkingDirectory=/app
 StandardInput=tty

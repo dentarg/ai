@@ -95,3 +95,12 @@ link_dotfiles
 
 # source user's bashrc from dotfiles if present (after container setup)
 [[ -f /settings/dotfiles/.bashrc ]] && source /settings/dotfiles/.bashrc
+
+# When bin/ai is given a profile, auto-launch claude on the console shell.
+# Unset first so nested shells (and claude's own subshells) don't relaunch;
+# on exit you're left at a normal prompt.
+if [[ $- == *i* && -n "${CLAUDE_PROFILE:-}" ]]; then
+  profile="$CLAUDE_PROFILE"
+  unset CLAUDE_PROFILE
+  c "$profile"
+fi

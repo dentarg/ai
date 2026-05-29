@@ -15,6 +15,13 @@ SETTINGS_DIR=${AI_DIR}/settings
 
 PORT=${PORT:-1337}
 
+# Optional claude profile; when given, the container auto-launches `c <profile>`.
+PROFILE=${1:-}
+PROFILE_ENV=""
+if [ -n "$PROFILE" ]; then
+  PROFILE_ENV="--env CLAUDE_PROFILE=$PROFILE"
+fi
+
 CWD_LABEL=$(pwd)
 case "$CWD_LABEL" in
   "$HOME") CWD_LABEL="~" ;;
@@ -37,6 +44,7 @@ podman run --rm --interactive --tty \
   --cap-add=SYS_PTRACE \
   --env HOST_DIR="$(basename "$(pwd)")" \
   --env PORT=${PORT} \
+  ${PROFILE_ENV} \
   --volume ${BUNDLE_DIR}:/bundle \
   --volume ${COMMAND_HISTORY_DIR}:/commandhistory \
   --volume ${HISTORY_DIR}:/history \
