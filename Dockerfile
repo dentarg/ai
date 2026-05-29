@@ -146,6 +146,7 @@ RUN bash -c "rv ruby install 3.4.8"
 RUN bash -c "rv ruby install 3.4.9"
 RUN bash -c "rv ruby install 4.0.2"
 RUN bash -c "rv ruby install 4.0.3"
+RUN bash -c "rv ruby install 4.0.5"
 RUN bash -c "rv run ruby --yjit --version"
 RUN bash -c "rv run bundle --version"
 
