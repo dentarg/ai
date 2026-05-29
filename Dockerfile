@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      postgresql \
      ragel \
      rdap \
+     redis-server \
      ripgrep \
      rsync \
      silversearcher-ag \
@@ -219,7 +220,7 @@ RUN arch="$(dpkg --print-architecture)" \
 RUN bash -c "pip install mitmproxy"
 
 # we don't want to wait when starting the container
-RUN systemctl disable postgresql lavinmq
+RUN systemctl disable postgresql lavinmq redis-server
 
 # convenience scripts
 COPY ./tools/start.sh /usr/local/bin/start.sh
