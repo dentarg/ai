@@ -30,7 +30,10 @@ Optionally, add `sentry.token` to `$HOME/ai/settings` to enable the
 # start podman and share the current working directory
 bin/ai
 
-# start podman and auto-launch "c <profile>" once the container is up
+# start podman and auto-launch "c <profile>" once the container is up.
+# before launching, the shared "~/ai/settings" token for <profile> is
+# refreshed on the host (silent refresh, falling back to interactive login
+# only if it has fully expired) so every session reuses a valid token.
 bin/ai <profile>
 
 # start services (and run "bundle install" if Gemfile exists).

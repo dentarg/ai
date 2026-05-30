@@ -34,6 +34,32 @@ mkdir -p $HISTORY_DIR
 mkdir -p $REPOS_DIR
 mkdir -p $SETTINGS_DIR/dotfiles
 
+# Keep the shared OAuth token fresh on the host before launching, so every
+# container session reuses it instead of re-authenticating. Silently refresh
+# via the stored refresh token; only fall back to interactive login when that
+# token is exhausted and the access token is still expired.
+refresh_claude_token() {
+  profile=$1
+  cred_file="${SETTINGS_DIR}/.credentials.${profile}.json"
+
+  command -v refresh-tokens >/dev/null 2>&1 || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  [ -f "$cred_file" ] || return 0
+
+  CREDENTIALS_DIR="$SETTINGS_DIR" refresh-tokens --once >/dev/null 2>&1 || true
+
+  expires_at=$(jq -r '.claudeAiOauth.expiresAt // 0' "$cred_file" 2>/dev/null || echo 0)
+  now_ms=$(( $(date +%s) * 1000 ))
+  if [ "${expires_at:-0}" -gt "$now_ms" ]; then
+    return 0
+  fi
+
+  echo "at=info msg=\"claude token expired, logging in\" profile=$profile" >&2
+  CREDENTIALS_DIR="$SETTINGS_DIR" refresh-tokens --login "$profile"
+}
+
+[ -n "$PROFILE" ] && refresh_claude_token "$PROFILE"
+
 # NET_ADMIN  tcpdump
 # NET_RAW    ping
 # SYS_PTRACE strace
