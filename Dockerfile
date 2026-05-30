@@ -272,6 +272,9 @@ StandardError=tty
 TTYPath=/dev/console
 TTYReset=yes
 TTYVHangup=yes
+# Quiet the harmless "Failed to make mounts private" warning systemd-shutdown
+# emits in the unprivileged container; it inherits the manager log level.
+ExecStopPost=/usr/bin/systemctl log-level err
 ExecStopPost=/bin/kill -37 1
 
 [Install]
