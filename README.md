@@ -10,6 +10,7 @@ Agents work best when they can freely run shell commands, edit files, install pa
 - Language runtimes, databases (PostgreSQL, LavinMQ, Redis), and common tools preinstalled, so agents don't spend turns bootstrapping.
 - OAuth credentials and API keys mounted from `~/ai/settings`, with multi-profile support and automatic token refresh.
 - Shell history, agent session history, cloned repos, and installed gems persisted on the host across container restarts.
+- A shared directory mounted at `/share` (from `~/ai/share`) for passing files between the host and containers.
 - `mitmproxy` available for inspecting what the agent actually sends over the wire.
 
 ## Setup

@@ -12,6 +12,7 @@ COMMAND_HISTORY_DIR=${AI_DIR}/commandhistory
 HISTORY_DIR=${AI_DIR}/history
 REPOS_DIR=${AI_DIR}/repos
 SETTINGS_DIR=${AI_DIR}/settings
+SHARE_DIR=${AI_DIR}/share
 
 PORT=${PORT:-1337}
 
@@ -33,6 +34,7 @@ mkdir -p $COMMAND_HISTORY_DIR
 mkdir -p $HISTORY_DIR
 mkdir -p $REPOS_DIR
 mkdir -p $SETTINGS_DIR/dotfiles
+mkdir -p $SHARE_DIR
 
 # Keep the shared OAuth token fresh on the host before launching, so every
 # container session reuses it instead of re-authenticating. Silently refresh
@@ -76,6 +78,7 @@ podman run --rm --interactive --tty \
   --volume ${HISTORY_DIR}:/history \
   --volume ${REPOS_DIR}:/repos \
   --volume ${SETTINGS_DIR}:/settings \
+  --volume ${SHARE_DIR}:/share \
   --volume ${REPO_DIR}/claude:/claude:ro \
   --volume $(pwd):/app \
   --workdir /app \
