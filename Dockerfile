@@ -193,6 +193,16 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
+# glow - terminal markdown renderer (Charm apt repo)
+RUN curl -fsSL https://repo.charm.sh/apt/gpg.key \
+        | gpg --dearmor -o /usr/share/keyrings/charm.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" \
+        > /etc/apt/sources.list.d/charm.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends glow \
+    && rm -rf /var/lib/apt/lists/* \
+    && glow --version
+
 # rusage - detailed getrusage(2) stats wrapper, drop-in replacement for time(1).
 # Single-binary Cosmopolitan APE that runs on x86_64 + arm64 (and any OS).
 # sha256 from https://justine.lol/rusage/
