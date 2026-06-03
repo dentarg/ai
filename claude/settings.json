@@ -6,7 +6,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "PROFILE=$(cat $HOME/.claude/.profile 2>/dev/null || echo default); HOST=$(hostname); BRANCH=$(git branch --show-current 2>/dev/null); jq -r --arg profile \"$PROFILE\" --arg host \"$HOST\" --arg branch \"$BRANCH\" '\"[\" + env.HOST_DIR + \"] \" + $profile + \" | \" + $host + (if $branch != \"\" then \" | \" + $branch else \"\" end) + \" | \" + .model.display_name + \" | \" + ((.context_window.used_percentage // 0) | tostring) + \"% context\"'"
+    "command": "PROFILE=$(cat $HOME/.claude/.profile 2>/dev/null || echo default); HOST=$(hostname); BRANCH=$(git branch --show-current 2>/dev/null); jq -r --arg profile \"$PROFILE\" --arg host \"$HOST\" --arg branch \"$BRANCH\" '\"[\" + env.HOST_DIR + \"] \" + $profile + \" | \" + $host + (if $branch != \"\" then \" | \" + $branch else \"\" end) + \" | \" + .model.display_name + \" | \" + ((.context_window.used_percentage // 0) | tostring) + \"% context | \" + .session_id'"
   },
   "hooks": {
     "SessionStart": [
