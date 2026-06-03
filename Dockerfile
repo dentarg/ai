@@ -1,6 +1,7 @@
 FROM ubuntu:26.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+     bat \
      bind9-host \
      build-essential \
      ca-certificates \
@@ -52,6 +53,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      zsh \
      && yes | unminimize \
      && rm -rf /var/lib/apt/lists /var/cache/apt/archives
+
+# Ubuntu ships bat's binary as "batcat"; expose it under the expected name
+RUN ln -s /usr/bin/batcat /usr/local/bin/bat
 
 # Install Chromium dependencies and browser from Debian sid
 # (Ubuntu's chromium-browser is a snap wrapper that won't work in containers)
