@@ -161,6 +161,9 @@ RUN bash -c "git clone --branch do-no-set-gem-home https://github.com/eregon/chr
 RUN bash -c "git clone https://github.com/rbenv/ruby-build.git"
 RUN bash -c "ruby-build/bin/ruby-build jruby-10.0.4.0 $RUBIES_DIR/jruby-10.0.4.0"
 
+# TruffleRuby via ruby-build
+RUN bash -c "ruby-build/bin/ruby-build truffleruby-34.0.1 $RUBIES_DIR/truffleruby-34.0.1"
+
 # Install puppeteer-core (uses system Chromium instead of bundling its own)
 RUN bash -c "npm install -g puppeteer-core"
 
