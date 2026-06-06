@@ -31,6 +31,9 @@ cp /settings/AGENTS.md       $HOME/.codex
 # directory?" prompt. The .codex home is recreated on each launch, so the
 # trust answer is never persisted otherwise.
 cat > $HOME/.codex/config.toml <<EOF
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+
 [projects."$PWD"]
 trust_level = "trusted"
 EOF
