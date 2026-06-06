@@ -27,6 +27,14 @@ ln -s $settings_home $HOME/.codex
 cp /settings/codex/auth.json $HOME/.codex
 cp /settings/AGENTS.md       $HOME/.codex
 
+# Pre-trust the working directory so codex skips the "Do you trust this
+# directory?" prompt. The .codex home is recreated on each launch, so the
+# trust answer is never persisted otherwise.
+cat > $HOME/.codex/config.toml <<EOF
+[projects."$PWD"]
+trust_level = "trusted"
+EOF
+
 exec codex \
   --dangerously-bypass-approvals-and-sandbox \
   --search
