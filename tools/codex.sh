@@ -33,6 +33,7 @@ cp /settings/AGENTS.md       $HOME/.codex
 cat > $HOME/.codex/config.toml <<EOF
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
+check_for_update_on_startup = false
 
 [projects."$PWD"]
 trust_level = "trusted"
