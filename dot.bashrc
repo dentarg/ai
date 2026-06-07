@@ -97,9 +97,14 @@ link_dotfiles
 [[ -f /settings/dotfiles/.bashrc ]] && source /settings/dotfiles/.bashrc
 
 # When bin/ai is given a profile, auto-launch claude on the console shell.
+# CLAUDE_PROFILE lives in the container env, so it also leaks into every
+# later `podman exec` shell (e.g. bin/pod) — guard on the console tty so only
+# the systemd shell.service session auto-launches. /dev/console is a symlink to
+# the console's pts (e.g. /dev/pts/0); the shell.service runs on that pts, while
+# `podman exec` shells get the next pts and drop to a normal prompt.
 # Unset first so nested shells (and claude's own subshells) don't relaunch;
 # on exit you're left at a normal prompt.
-if [[ $- == *i* && -n "${CLAUDE_PROFILE:-}" ]]; then
+if [[ $- == *i* && -n "${CLAUDE_PROFILE:-}" && "$(tty)" == "$(readlink -f /dev/console)" ]]; then
   profile="$CLAUDE_PROFILE"
   unset CLAUDE_PROFILE
   c "$profile"
