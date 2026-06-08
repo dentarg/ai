@@ -37,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      redis-server \
      ripgrep \
      rsync \
+     shellcheck \
      silversearcher-ag \
      strace \
      sudo \
