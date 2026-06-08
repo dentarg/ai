@@ -65,7 +65,8 @@ x
 `cx` launches Codex through a temporary symlink named after the host directory
 captured by `bin/ai`, so Codex's terminal title and project/status fields show
 that host directory name instead of `/app`. Its generated statusline shows the
-project, git branch, model/reasoning, context used, and thread id.
+project, git branch, model/reasoning, context used, and thread id. TUI
+notifications are disabled for quieter terminal sessions.
 
 ## Prerequisites
 

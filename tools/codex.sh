@@ -67,6 +67,7 @@ sandbox_mode = "danger-full-access"
 check_for_update_on_startup = false
 
 [tui]
+notifications = false
 status_line = ["project-name", "git-branch", "model-with-reasoning", "context-used", "thread-id"]
 terminal_title = ["project-name"]
 
