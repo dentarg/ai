@@ -21,7 +21,8 @@ into `~/.claude/` when you launch claude with a matching profile. See the
 [OAuth Login](#oauth-login) section for how to generate these.
 
 Optionally, add `AGENTS.md` to `$HOME/ai/settings` — it becomes `CLAUDE.md`
-for Claude Code and `GEMINI.md` for Gemini CLI.
+for Claude Code, `GEMINI.md` for Gemini CLI, and is copied into Codex's
+session config.
 
 Optionally, add `sentry.token` to `$HOME/ai/settings` to enable the
 [Sentry MCP](https://mcp.sentry.dev/) server in Claude Code. See
@@ -60,6 +61,11 @@ cx
 # exit the container
 x
 ```
+
+`cx` launches Codex through a temporary symlink named after the host directory
+captured by `bin/ai`, so Codex's terminal title and project/status fields show
+that host directory name instead of `/app`. Its generated statusline shows the
+project, git branch, model/reasoning, context used, and thread id.
 
 ## Prerequisites
 
