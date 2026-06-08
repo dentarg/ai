@@ -10,10 +10,13 @@ history_dir () {
   echo "/history/${year}/${month}/${day_time}_${tool}"
 }
 
-if [[ ! -d /settings/codex ]]; then
-  echo "/settings/codex not found!"
+shared_codex_home=/settings/codex
+shared_auth="${shared_codex_home}/auth.json"
+
+if [[ ! -f "$shared_auth" ]]; then
+  echo "at=error msg=\"codex auth file not found\" path=$shared_auth"
   echo ""
-  echo "  First time? You want to create /settings/codex/auth.json with OPENAI_API_KEY"
+  echo "  First time? Run codex-login to Sign in with Device Code."
   echo ""
   exit 1
 fi
@@ -24,8 +27,8 @@ rm -f $HOME/.codex # should be a symlink
 mkdir -p $settings_home
 ln -s $settings_home $HOME/.codex
 
-cp /settings/codex/auth.json $HOME/.codex
-cp /settings/AGENTS.md       $HOME/.codex
+install -m 600 "$shared_auth" "$HOME/.codex/auth.json"
+[[ -f /settings/AGENTS.md ]] && cp /settings/AGENTS.md "$HOME/.codex"
 
 # Pre-trust the working directory so codex skips the "Do you trust this
 # directory?" prompt. The .codex home is recreated on each launch, so the
@@ -39,6 +42,24 @@ check_for_update_on_startup = false
 trust_level = "trusted"
 EOF
 
-exec codex \
+sync_auth_back() {
+  local session_auth="$HOME/.codex/auth.json"
+  [[ -s "$session_auth" ]] || return 0
+
+  if ! install -m 600 "$session_auth" "$shared_auth"; then
+    echo "at=warn msg=\"failed to sync codex auth back to settings\" path=$shared_auth" >&2
+  fi
+}
+
+trap sync_auth_back EXIT
+
+set +e
+codex \
   --dangerously-bypass-approvals-and-sandbox \
   --search
+status=$?
+set -e
+
+sync_auth_back
+trap - EXIT
+exit "$status"

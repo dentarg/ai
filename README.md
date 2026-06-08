@@ -79,7 +79,9 @@ bin/setup-vm
 
 ## OAuth Login
 
-First-time setup to get OAuth credentials:
+First-time setup to get OAuth credentials.
+
+Claude Code:
 
 ```shell
 # inside the container, or via podman run
@@ -88,6 +90,22 @@ refresh-tokens --login <profile>
 ```
 
 This generates an OAuth authorization URL. Open it in your browser, sign in, and paste the code back into the terminal. Credentials are saved to `~/.claude/.credentials.json` (or `.credentials.<profile>.json`).
+
+OpenAI Codex:
+
+```shell
+# inside the container
+codex-login
+
+# or from the host
+bin/codex-login
+```
+
+This standalone helper starts Codex's "Sign in with Device Code" flow without
+running the Codex CLI. Open the displayed URL, enter the one-time code, and
+finish sign-in in your browser. Credentials are saved to
+`/settings/codex/auth.json` in the container, or
+`$HOME/ai/settings/codex/auth.json` from the host.
 
 ## Token Refresh Service
 

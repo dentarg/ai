@@ -1,0 +1,350 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+AI_DIR="${AI_DIR:-${HOME:?HOME must be set}/ai}"
+CODEX_CLIENT_ID="${CODEX_CLIENT_ID:-app_EMoamEEZ73f0CkXaXp7hrann}"
+CODEX_ISSUER="${CODEX_ISSUER:-https://auth.openai.com}"
+CODEX_MAX_WAIT="${CODEX_MAX_WAIT:-900}"
+
+default_codex_settings_dir() {
+  if [[ -d /settings ]]; then
+    echo "/settings/codex"
+  else
+    echo "${AI_DIR}/settings/codex"
+  fi
+}
+
+CODEX_SETTINGS_DIR="${CODEX_SETTINGS_DIR:-${CODEX_HOME:-$(default_codex_settings_dir)}}"
+
+usage() {
+  echo "Usage: $(basename "$0") [--login|--status|--help]"
+  echo ""
+  echo "Commands:"
+  echo "  --login    Sign in with Device Code and save Codex auth (default)"
+  echo "  --status   Show Codex login status for the shared auth directory"
+  echo "  --help     Show this help"
+  echo ""
+  echo "Environment:"
+  echo "  CODEX_SETTINGS_DIR   Codex auth directory (default: /settings/codex in the container,"
+  echo "                       otherwise ~/ai/settings/codex)"
+  echo "  CODEX_HOME           Used as CODEX_SETTINGS_DIR when CODEX_SETTINGS_DIR is unset"
+  echo "  CODEX_ISSUER         OAuth issuer (default: https://auth.openai.com)"
+  echo "  CODEX_CLIENT_ID      OAuth client id"
+  echo "  CODEX_MAX_WAIT       Device auth timeout in seconds (default: 900)"
+}
+
+need_command() {
+  local command="$1"
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "Error: $command command not found" >&2
+    return 1
+  fi
+}
+
+request_json() {
+  local method="$1"
+  local url="$2"
+  local body="$3"
+  local content_type="$4"
+  local response http_status
+
+  response=$(curl -sS --compressed -w '\n%{http_code}' -X "$method" "$url" \
+    -H "Content-Type: $content_type" \
+    -d "$body") || true
+  http_status="${response##*$'\n'}"
+  response="${response%$'\n'*}"
+
+  printf '%s\n%s\n' "$http_status" "$response"
+}
+
+request_form() {
+  local url="$1"
+  local code="$2"
+  local redirect_uri="$3"
+  local code_verifier="$4"
+  local response http_status
+
+  response=$(curl -sS --compressed -w '\n%{http_code}' -X POST "$url" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    --data-urlencode "grant_type=authorization_code" \
+    --data-urlencode "code=${code}" \
+    --data-urlencode "redirect_uri=${redirect_uri}" \
+    --data-urlencode "client_id=${CODEX_CLIENT_ID}" \
+    --data-urlencode "code_verifier=${code_verifier}") || true
+  http_status="${response##*$'\n'}"
+  response="${response%$'\n'*}"
+
+  printf '%s\n%s\n' "$http_status" "$response"
+}
+
+json_error_message() {
+  jq -r '.error.message // .message // .error_description // (.error | strings) // empty' 2>/dev/null <<<"$1" || true
+}
+
+require_success() {
+  local status="$1"
+  local body="$2"
+  local message="$3"
+
+  if [[ "$status" =~ ^2[0-9][0-9]$ ]]; then
+    return 0
+  fi
+
+  local error
+  error=$(json_error_message "$body")
+  if [[ -n "$error" ]]; then
+    echo "Error: ${message}: HTTP ${status}: ${error}" >&2
+  else
+    echo "Error: ${message}: HTTP ${status}" >&2
+  fi
+  return 1
+}
+
+base64_url_decode() {
+  local value="$1"
+  local padding=$(( (4 - (${#value} % 4)) % 4 ))
+  value="${value}$(printf '%*s' "$padding" '' | tr ' ' '=')"
+  value="${value//-/+}"
+  value="${value//_/\/}"
+
+  if base64 --decode >/dev/null 2>&1 <<<""; then
+    printf '%s' "$value" | base64 --decode
+  else
+    printf '%s' "$value" | base64 -D
+  fi
+}
+
+jwt_payload() {
+  local jwt="$1"
+  local payload
+  payload=$(cut -d . -f 2 <<<"$jwt")
+  [[ -n "$payload" && "$payload" != "$jwt" ]] || return 1
+  base64_url_decode "$payload"
+}
+
+token_account_id() {
+  local id_token="$1"
+  jwt_payload "$id_token" \
+    | jq -r '."https://api.openai.com/auth".chatgpt_account_id // empty' 2>/dev/null \
+    || true
+}
+
+timestamp_utc() {
+  date -u +"%Y-%m-%dT%H:%M:%SZ"
+}
+
+auth_file() {
+  echo "${CODEX_SETTINGS_DIR}/auth.json"
+}
+
+save_auth() {
+  local id_token="$1"
+  local access_token="$2"
+  local refresh_token="$3"
+  local account_id="$4"
+  local file tmp
+  file=$(auth_file)
+  tmp="${file}.tmp"
+
+  mkdir -p "$CODEX_SETTINGS_DIR"
+  chmod 700 "$CODEX_SETTINGS_DIR" 2>/dev/null || true
+
+  jq -n \
+    --arg id_token "$id_token" \
+    --arg access_token "$access_token" \
+    --arg refresh_token "$refresh_token" \
+    --arg account_id "$account_id" \
+    --arg last_refresh "$(timestamp_utc)" \
+    '{
+      auth_mode: "chatgpt",
+      OPENAI_API_KEY: null,
+      tokens: {
+        id_token: $id_token,
+        access_token: $access_token,
+        refresh_token: $refresh_token,
+        account_id: (if $account_id == "" then null else $account_id end)
+      },
+      last_refresh: $last_refresh
+    }' > "$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" "$file"
+}
+
+request_device_code() {
+  local issuer api_url body response status response_body
+  issuer="${CODEX_ISSUER%/}"
+  api_url="${issuer}/api/accounts/deviceauth/usercode"
+  body=$(jq -n --arg client_id "$CODEX_CLIENT_ID" '{client_id: $client_id}')
+
+  response=$(request_json POST "$api_url" "$body" "application/json")
+  status=$(sed -n '1p' <<<"$response")
+  response_body=$(sed '1d' <<<"$response")
+  require_success "$status" "$response_body" "device code request failed"
+
+  printf '%s' "$response_body"
+}
+
+poll_for_authorization_code() {
+  local device_auth_id="$1"
+  local user_code="$2"
+  local interval="$3"
+  local issuer api_url started now elapsed body response status response_body
+  issuer="${CODEX_ISSUER%/}"
+  api_url="${issuer}/api/accounts/deviceauth/token"
+  started=$(date +%s)
+
+  echo "Waiting for authorization..." >&2
+
+  while true; do
+    body=$(jq -n \
+      --arg device_auth_id "$device_auth_id" \
+      --arg user_code "$user_code" \
+      '{device_auth_id: $device_auth_id, user_code: $user_code}')
+    response=$(request_json POST "$api_url" "$body" "application/json")
+    status=$(sed -n '1p' <<<"$response")
+    response_body=$(sed '1d' <<<"$response")
+
+    if [[ "$status" =~ ^2[0-9][0-9]$ ]]; then
+      printf '%s' "$response_body"
+      return 0
+    fi
+
+    if [[ "$status" != "403" && "$status" != "404" ]]; then
+      require_success "$status" "$response_body" "device auth failed"
+    fi
+
+    now=$(date +%s)
+    elapsed=$(( now - started ))
+    if (( elapsed >= CODEX_MAX_WAIT )); then
+      echo "Error: device auth timed out after ${CODEX_MAX_WAIT}s" >&2
+      return 1
+    fi
+
+    sleep "$interval"
+  done
+}
+
+exchange_code_for_tokens() {
+  local authorization_code="$1"
+  local code_verifier="$2"
+  local issuer token_url redirect_uri response status response_body
+  issuer="${CODEX_ISSUER%/}"
+  token_url="${issuer}/oauth/token"
+  redirect_uri="${issuer}/deviceauth/callback"
+
+  response=$(request_form "$token_url" "$authorization_code" "$redirect_uri" "$code_verifier")
+  status=$(sed -n '1p' <<<"$response")
+  response_body=$(sed '1d' <<<"$response")
+  require_success "$status" "$response_body" "device code exchange failed"
+
+  printf '%s' "$response_body"
+}
+
+login() {
+  need_command curl
+  need_command jq
+  need_command base64
+  need_command date
+
+  local user_code_response device_auth_id user_code interval
+  user_code_response=$(request_device_code)
+  device_auth_id=$(jq -r '.device_auth_id // empty' <<<"$user_code_response")
+  user_code=$(jq -r '.user_code // .usercode // empty' <<<"$user_code_response")
+  interval=$(jq -r '(.interval // 5) | tonumber? // 5' <<<"$user_code_response")
+
+  if [[ -z "$device_auth_id" || -z "$user_code" ]]; then
+    echo "Error: device code response did not include device_auth_id and user_code" >&2
+    return 1
+  fi
+  if (( interval < 1 )); then
+    interval=5
+  fi
+
+  local verification_url="${CODEX_ISSUER%/}/codex/device"
+
+  echo ""
+  echo "Sign in with Device Code"
+  echo ""
+  echo "1. Open this URL in your browser:"
+  echo ""
+  echo "  ${verification_url}"
+  echo ""
+  echo "2. Enter this one-time code (expires in 15 minutes):"
+  echo ""
+  echo "  ${user_code}"
+  echo ""
+  echo "Device codes are a common phishing target. Never share this code."
+  echo ""
+
+  local code_response authorization_code code_verifier token_response
+  code_response=$(poll_for_authorization_code "$device_auth_id" "$user_code" "$interval")
+  authorization_code=$(jq -r '.authorization_code // empty' <<<"$code_response")
+  code_verifier=$(jq -r '.code_verifier // empty' <<<"$code_response")
+
+  if [[ -z "$authorization_code" || -z "$code_verifier" ]]; then
+    echo "Error: device auth response did not include authorization_code and code_verifier" >&2
+    return 1
+  fi
+
+  token_response=$(exchange_code_for_tokens "$authorization_code" "$code_verifier")
+
+  local id_token access_token refresh_token account_id
+  id_token=$(jq -r '.id_token // empty' <<<"$token_response")
+  access_token=$(jq -r '.access_token // empty' <<<"$token_response")
+  refresh_token=$(jq -r '.refresh_token // empty' <<<"$token_response")
+
+  if [[ -z "$id_token" || -z "$access_token" || -z "$refresh_token" ]]; then
+    echo "Error: token exchange response did not include id_token, access_token, and refresh_token" >&2
+    return 1
+  fi
+
+  account_id=$(token_account_id "$id_token")
+  save_auth "$id_token" "$access_token" "$refresh_token" "$account_id"
+
+  echo ""
+  echo "Login successful! Credentials saved to $(auth_file)"
+}
+
+status() {
+  need_command jq
+
+  local file
+  file=$(auth_file)
+  if [[ ! -f "$file" ]]; then
+    echo "Not logged in"
+    return 1
+  fi
+
+  if jq -e '.auth_mode == "chatgpt" and (.tokens.access_token | type == "string") and (.tokens.refresh_token | type == "string")' "$file" >/dev/null; then
+    echo "Logged in using ChatGPT"
+  elif jq -e '.OPENAI_API_KEY | type == "string"' "$file" >/dev/null; then
+    echo "Logged in using an API key"
+  else
+    echo "Auth file exists but does not contain a recognized Codex login"
+    return 1
+  fi
+}
+
+main() {
+  local command="${1:---login}"
+  case "$command" in
+    --login)
+      shift || true
+      login "$@"
+      ;;
+    --status)
+      shift || true
+      status "$@"
+      ;;
+    --help|-h)
+      usage
+      ;;
+    *)
+      usage
+      return 1
+      ;;
+  esac
+}
+
+main "$@"

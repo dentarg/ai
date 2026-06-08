@@ -333,8 +333,10 @@ ENV LC_ALL C.UTF-8
 COPY dot.bashrc $HOME/.bashrc
 COPY .gitconfig /etc/gitconfig
 COPY gitignore-global /etc/gitignore
+COPY bin/codex-login /usr/local/bin/codex-login
 COPY bin/refresh-tokens /usr/local/bin/refresh-tokens
-RUN chmod +x /usr/local/bin/refresh-tokens
+RUN chmod +x /usr/local/bin/codex-login \
+             /usr/local/bin/refresh-tokens
 
 # Quiet systemd: hide status messages and the INFO-level boot banner
 # (systemd version, detected virtualization/architecture, "Queued start job…").
