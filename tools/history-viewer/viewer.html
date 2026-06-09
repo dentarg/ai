@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Claude Code history</title>
+<title>Agent session history</title>
 <style>
   :root {
     --bg: #f7f4ed;
@@ -119,6 +119,16 @@
   .session-card .meta { color: var(--muted-2); font-size: 12.5px; margin-top: 8px; display: flex; gap: 14px;
     font-variant-numeric: tabular-nums; }
   .session-card .match { color: var(--accent); font-size: 12.5px; margin-top: 6px; }
+
+  /* agent distinction: coral = Claude, blue = Codex */
+  .agent-badge { display: inline-block; font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 7px;
+    border-radius: 999px; vertical-align: middle; }
+  .agent-claude { background: var(--accent-soft); color: var(--accent); }
+  .agent-codex  { background: #e1ecf8; color: #356aa8; }
+  .session-card { border-left: 3px solid var(--border); }
+  .session-card.claude { border-left-color: var(--accent-line); }
+  .session-card.codex  { border-left-color: #6f9fd8; }
 
   /* session page */
   .back { color: var(--muted); margin-bottom: 16px; display: inline-block; font-size: 14px; }
@@ -288,7 +298,7 @@
 </head>
 <body>
 <header id="topbar">
-  <a class="brand" href="?">claude history</a>
+  <a class="brand" href="?">agent history</a>
   <nav>
     <a id="nav-index" href="?">Sessions</a>
     <a id="nav-stats" href="?view=stats">Stats</a>
@@ -440,10 +450,14 @@ function renderMarkdown(src) {
 const state = {
   sessions: [],
   searchResults: null,   // null = no active search
-  filters: { search: "", branch: "" },
+  filters: { search: "", branch: "", agent: "" },
   showInternals: false,
   statsRange: "all",     // "all" | "30d" | "7d"
+  currentAgent: "claude", // agent of the open session ("claude" | "codex")
 };
+
+const AGENTS = ["claude", "codex"];
+function agentLabel(a) { return a === "codex" ? "Codex" : "Claude"; }
 
 // ---------- routing ----------
 const contentEl = document.getElementById("content");
@@ -491,7 +505,8 @@ function applyFilters(sessions) {
   return sessions.filter(s => {
     if (matches && !matches.has(s.path)) return false;
     if (f.branch && s.gitBranch !== f.branch) return false;
-    if (s.tool !== "claude") return false;
+    if (!AGENTS.includes(s.tool)) return false;
+    if (f.agent && s.tool !== f.agent) return false;
     return true;
   });
 }
@@ -513,6 +528,9 @@ function renderIndexPage() {
         <button class="clear-search" id="f-search-clear" type="button" title="Clear search"
           style="${f.search ? "" : "display:none"}">×</button>
       </div>
+      <select id="f-agent"><option value="">All agents</option>${
+        AGENTS.map(a => `<option value="${a}"${a===f.agent?" selected":""}>${agentLabel(a)}</option>`).join("")
+      }</select>
       <select id="f-branch">${opt(branches, f.branch, "All branches")}</select>
       <a class="reset-all" id="f-reset" href="#">Reset filters</a>
     </div>
@@ -538,6 +556,11 @@ function renderIndexPage() {
     search.focus();
   });
 
+  document.getElementById("f-agent").addEventListener("change", (e) => {
+    state.filters.agent = e.target.value;
+    drawSessions();
+  });
+
   document.getElementById("f-branch").addEventListener("change", (e) => {
     state.filters.branch = e.target.value;
     drawSessions();
@@ -545,7 +568,7 @@ function renderIndexPage() {
 
   document.getElementById("f-reset").addEventListener("click", (e) => {
     e.preventDefault();
-    state.filters = { search: "", branch: "" };
+    state.filters = { search: "", branch: "", agent: "" };
     state.searchResults = null;
     renderIndexPage();
   });
@@ -593,9 +616,10 @@ function drawSessions() {
       const match = matches && matches.get(s.path);
       const href = "?s=" + encodeURIComponent(s.path);
       const title = s.name || s.firstPrompt || "(untitled)";
-      return `<a class="session-card" href="${href}">
+      const badge = `<span class="agent-badge agent-${esc(s.tool)}">${esc(agentLabel(s.tool))}</span> `;
+      return `<a class="session-card ${esc(s.tool)}" href="${href}">
         <div class="row1">
-          <div><span class="name">${esc(title)}</span><span class="branch">${esc(s.gitBranch || "")}</span><span class="repo">${esc(s.repo || "")}</span></div>
+          <div>${badge}<span class="name">${esc(title)}</span><span class="branch">${esc(s.gitBranch || "")}</span><span class="repo">${esc(s.repo || "")}</span></div>
           <div class="time">${esc(fmtTimeOfDay(s.startedAt || s.runStartedAt))}</div>
         </div>
         ${s.name && s.firstPrompt ? `<div class="prompt">${esc(s.firstPrompt)}</div>` : ""}
@@ -666,6 +690,7 @@ async function renderSessionPage(path) {
   }
   const data = await r.json();
   state.currentEvents = data.events;
+  state.currentAgent = data.agent || session?.tool || "claude";
   drawTranscript();
 }
 
@@ -679,6 +704,7 @@ function renderSessionHeader(s, path) {
   head.innerHTML = `
     <div class="session-header">
       <div class="title">
+        <span class="agent-badge agent-${esc(s.tool)}">${esc(agentLabel(s.tool))}</span>
         <div class="repo">${esc(s.name || s.firstPrompt?.slice(0, 80) || "(untitled)")}</div>
         <div class="branch">${esc(s.gitBranch || "")} · ${esc(s.repo || "")}</div>
       </div>
@@ -835,7 +861,7 @@ function renderAssistant(e) {
   const aid = e.uuid ? ` id="evt-${esc(e.uuid)}"` : "";
   const anchor = e.uuid ? `<a class="anchor first" href="#evt-${esc(e.uuid)}" title="Link to this message">#</a>` : "";
   const copy = e.uuid && hasText ? `<button class="copy-md" data-copy-uuid="${esc(e.uuid)}" title="Copy markdown" type="button">copy</button>` : "";
-  return `<div class="evt assistant"${aid}><div class="who"><b>Claude</b><span>${esc(model)}</span><span class="ts">${esc(ts)}</span>${anchor}${copy}</div>
+  return `<div class="evt assistant"${aid}><div class="who"><b>${esc(agentLabel(state.currentAgent))}</b><span>${esc(model)}</span><span class="ts">${esc(ts)}</span>${anchor}${copy}</div>
     <div class="body">${blocks.join("")}</div></div>`;
 }
 
@@ -992,7 +1018,7 @@ function buildSessionMarkdown(s, events, mode) {
       );
       if (!interesting) continue;
       const model = e.message?.model ? ` (${e.message.model})` : "";
-      out.push(`## Claude${model} — ${fmtTime(e.timestamp)}`, "");
+      out.push(`## ${agentLabel(state.currentAgent)}${model} — ${fmtTime(e.timestamp)}`, "");
       for (const b of blocks) {
         if (b.type === "text" && b.text?.trim()) {
           out.push(b.text.trim(), "");
@@ -1050,7 +1076,7 @@ function exportSession(s, events, mode) {
   const datePart = (s?.startedAt || s?.runStartedAt || "").slice(0, 10) || "session";
   const slug = (s?.name || s?.firstPrompt || "session")
     .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "session";
-  const filename = `claude-${datePart}-${slug}-${mode}.md`;
+  const filename = `${state.currentAgent}-${datePart}-${slug}-${mode}.md`;
   const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1093,6 +1119,8 @@ function modelLabel(m) {
     const ver = match[3] ? `${match[2]}.${match[3]}` : match[2];
     return `${family} ${ver}`;
   }
+  // gpt-5.5 → "GPT-5.5", gpt-5-mini → "GPT-5 mini"
+  if (/^gpt-/i.test(m)) return m.replace(/^gpt-/i, "GPT-").replace(/-(mini|nano|codex)/i, " $1");
   return m;
 }
 
@@ -1101,9 +1129,9 @@ function pad2DateKey(d) {
 }
 
 function buildTokenChartData(sessions, range) {
-  // Filter to claude sessions and gather valid timestamps.
-  const claude = sessions.filter(s => s.tool === "claude" && (s.startedAt || s.runStartedAt));
-  if (!claude.length) return null;
+  // Filter to priced agent sessions (Claude + Codex) with valid timestamps.
+  const rows = sessions.filter(s => AGENTS.includes(s.tool) && (s.startedAt || s.runStartedAt));
+  if (!rows.length) return null;
 
   // Range start/end (inclusive day keys).
   let startKey, endKey;
@@ -1115,7 +1143,7 @@ function buildTokenChartData(sessions, range) {
     startKey = pad2DateKey(startDate);
     endKey = pad2DateKey(today);
   } else {
-    const allKeys = claude.map(s => localDayKey(s.startedAt || s.runStartedAt)).filter(Boolean).sort();
+    const allKeys = rows.map(s => localDayKey(s.startedAt || s.runStartedAt)).filter(Boolean).sort();
     startKey = allKeys[0];
     endKey = allKeys[allKeys.length - 1];
   }
@@ -1132,7 +1160,7 @@ function buildTokenChartData(sessions, range) {
   const perModelSeries = new Map();   // model → [tokens per day]
   const perModelTotals = new Map();   // model → { in, out, cacheRead, cacheCreate, total, cost }
   let grandTotalTokens = 0;
-  for (const s of claude) {
+  for (const s of rows) {
     const key = localDayKey(s.startedAt || s.runStartedAt);
     const idx = dayIndex.get(key);
     if (idx === undefined) continue;
@@ -1377,7 +1405,7 @@ function renderStatsPage() {
     bucket[key].sessions += 1; bucket[key].tokens += t; bucket[key].cost += cost;
   };
   for (const s of ss) {
-    if (s.tool !== "claude") continue;
+    if (!AGENTS.includes(s.tool)) continue;
     totals.sessions += 1; totals.events += s.events || 0;
     const t = totalTokens(s.tokens); totals.tokens += t;
     const cost = s.cost || 0; totals.cost += cost;

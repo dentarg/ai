@@ -49,6 +49,18 @@ PRICING_BY_MODEL: dict[str, tuple[float, float, float, float, float]] = {
     "claude-haiku-3":    ( 0.25,  1.25, 0.03,  0.30,  0.50),
 }
 
+# Per-model USD pricing per 1M tokens for OpenAI / Codex models, from
+# openai.com/api/pricing. Tuple: (input, output, cached_input). OpenAI has no
+# separate cache-write tiers, so the structure is simpler than the Claude one.
+PRICING_BY_MODEL_OPENAI: dict[str, tuple[float, float, float]] = {
+    "gpt-5.5":     (5.00, 30.00, 0.50),
+    "gpt-5.4":     (2.50, 15.00, 0.25),
+    "gpt-5.1":     (1.25, 10.00, 0.125),
+    "gpt-5":       (1.25, 10.00, 0.125),
+    "gpt-5-mini":  (0.25,  2.00, 0.025),
+    "gpt-5-nano":  (0.05,  0.40, 0.005),
+}
+
 
 def pricing_for(model: str) -> tuple[float, float, float, float, float] | None:
     """Longest-prefix match against PRICING_BY_MODEL.
@@ -91,6 +103,40 @@ def event_cost(model: str, usage: dict) -> float:
     if usage.get("inference_geo") == "us":
         cost *= 1.1
     return cost
+
+
+def openai_pricing_for(model: str) -> tuple[float, float, float] | None:
+    """Longest-prefix match against PRICING_BY_MODEL_OPENAI.
+
+    Codex reports ids like `gpt-5.5` or `gpt-5.5-codex`; the latter falls back
+    to the `gpt-5.5` base rate.
+    """
+    if not model:
+        return None
+    best = None
+    for key in PRICING_BY_MODEL_OPENAI:
+        if model == key or model.startswith(key + "-"):
+            if best is None or len(key) > len(best):
+                best = key
+    return PRICING_BY_MODEL_OPENAI[best] if best else None
+
+
+def codex_cost(model: str, usage: dict) -> float:
+    """Cost in USD for a Codex session's cumulative `total_token_usage`.
+
+    OpenAI's `input_tokens` already includes the cached portion, so the freshly
+    billed input is `input_tokens - cached_input_tokens`. `output_tokens`
+    already includes reasoning tokens.
+    """
+    p = openai_pricing_for(model)
+    if not p:
+        return 0.0
+    p_in, p_out, p_cached = p
+    input_total = usage.get("input_tokens", 0) or 0
+    cached = usage.get("cached_input_tokens", 0) or 0
+    output = usage.get("output_tokens", 0) or 0
+    fresh_in = max(0, input_total - cached)
+    return (fresh_in * p_in + cached * p_cached + output * p_out) / 1_000_000
 
 
 def log(event: str, **fields) -> None:
@@ -266,8 +312,277 @@ def summarize_session(path: Path) -> dict:
     }
 
 
+def _codex_repo(cwd: str | None, repo_url: str | None) -> str | None:
+    """Prefer the git remote's repo name; fall back to the cwd basename."""
+    if repo_url:
+        name = repo_url.rstrip("/").rsplit("/", 1)[-1]
+        if name.endswith(".git"):
+            name = name[:-4]
+        if name:
+            return name
+    return Path(cwd).name if cwd else None
+
+
+def summarize_codex_session(path: Path) -> dict:
+    """Summarize a Codex rollout jsonl, returning the same shape as
+    summarize_session so the manifest is agent-agnostic.
+
+    Codex token usage is reported as a cumulative `total_token_usage`; we keep
+    the last snapshot. OpenAI's input count includes the cached portion, so we
+    split it into fresh input (`input_tokens`) and cache reads.
+    """
+    sid = None
+    cwd = None
+    branch = None
+    repo_url = None
+    version = None
+    first_prompt = ""
+    user_msgs = 0
+    assistant_msgs = 0
+    models: set[str] = set()
+    primary_model = None
+    last_usage: dict = {}
+    first_ts = None
+    last_ts = None
+    line_count = 0
+
+    with path.open("r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            line_count += 1
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                evt = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            ts = evt.get("timestamp")
+            if ts:
+                first_ts = first_ts or ts
+                last_ts = ts
+            etype = evt.get("type")
+            payload = evt.get("payload") or {}
+            ptype = payload.get("type")
+            if etype == "session_meta":
+                sid = sid or payload.get("id")
+                cwd = cwd or payload.get("cwd")
+                version = version or payload.get("cli_version")
+                git = payload.get("git") or {}
+                branch = branch or git.get("branch")
+                repo_url = repo_url or git.get("repository_url")
+            elif etype == "turn_context":
+                model = payload.get("model")
+                if model:
+                    models.add(model)
+                    primary_model = model
+            elif etype == "event_msg" and ptype == "user_message":
+                user_msgs += 1
+                if not first_prompt:
+                    text = (payload.get("message") or "").strip()
+                    if text:
+                        first_prompt = text[:300]
+            elif etype == "event_msg" and ptype == "agent_message":
+                assistant_msgs += 1
+            elif etype == "event_msg" and ptype == "token_count":
+                usage = (payload.get("info") or {}).get("total_token_usage")
+                if usage:
+                    last_usage = usage
+
+    input_total = last_usage.get("input_tokens", 0) or 0
+    cached = last_usage.get("cached_input_tokens", 0) or 0
+    output = last_usage.get("output_tokens", 0) or 0
+    fresh_in = max(0, input_total - cached)
+    totals = {
+        "input_tokens": fresh_in,
+        "output_tokens": output,
+        "cache_read_tokens": cached,
+        "cache_creation_tokens": 0,
+        "cache_5m_tokens": 0,
+        "cache_1h_tokens": 0,
+    }
+    cost = codex_cost(primary_model, last_usage)
+    by_model: dict[str, dict[str, int]] = {}
+    cost_by_model: dict[str, float] = {}
+    if primary_model:
+        by_model[primary_model] = {
+            "input_tokens": fresh_in,
+            "output_tokens": output,
+            "cache_read_tokens": cached,
+            "cache_creation_tokens": 0,
+        }
+        cost_by_model[primary_model] = cost
+
+    return {
+        "sessionId": sid,
+        "cwd": cwd,
+        "repo": _codex_repo(cwd, repo_url),
+        "gitBranch": branch,
+        "version": version,
+        "name": None,
+        "firstPrompt": first_prompt,
+        "events": line_count,
+        "messages": user_msgs + assistant_msgs,
+        "userMessages": user_msgs,
+        "assistantMessages": assistant_msgs,
+        "models": sorted(models),
+        "tokens": totals,
+        "tokensByModel": by_model,
+        "cost": round(cost, 4),
+        "costByModel": {m: round(c, 4) for m, c in cost_by_model.items()},
+        "startedAt": first_ts,
+        "endedAt": last_ts,
+    }
+
+
+CODEX_REASONING_PLACEHOLDER = "⋯ reasoning hidden (encrypted, not stored)"
+
+
+def codex_to_transcript(raw_events: list[dict]) -> list[dict]:
+    """Normalize a Codex rollout into the Claude-shaped event stream the
+    frontend already renders.
+
+    Assistant-side items (reasoning, assistant text, tool calls) within a turn
+    are grouped into one `assistant` event; each `function_call_output` becomes
+    a `tool_result` packaged in a following `user` event, mirroring Claude's
+    convention. Duplicate `agent_message` lines and the developer/user context
+    `response_item`s are dropped; everything else passes through as an internal
+    event.
+    """
+    out: list[dict] = []
+    assistant_blocks: list[dict] = []
+    pending_results: list[dict] = []
+    assistant_ts = None
+    result_ts = None
+    current_model = None
+    counter = 0
+
+    def next_uuid(prefix: str) -> str:
+        nonlocal counter
+        counter += 1
+        return f"codex-{prefix}-{counter}"
+
+    def flush_assistant() -> None:
+        nonlocal assistant_blocks, assistant_ts
+        if not assistant_blocks:
+            return
+        out.append({
+            "type": "assistant",
+            "uuid": next_uuid("a"),
+            "timestamp": assistant_ts,
+            "message": {"model": current_model, "content": assistant_blocks},
+        })
+        assistant_blocks = []
+        assistant_ts = None
+
+    def flush_results() -> None:
+        nonlocal pending_results, result_ts
+        if not pending_results:
+            return
+        out.append({
+            "type": "user",
+            "uuid": next_uuid("r"),
+            "timestamp": result_ts,
+            "message": {"content": pending_results},
+        })
+        pending_results = []
+        result_ts = None
+
+    def add_assistant_block(block: dict, ts) -> None:
+        nonlocal assistant_ts
+        flush_results()
+        if assistant_ts is None:
+            assistant_ts = ts
+        assistant_blocks.append(block)
+
+    for evt in raw_events:
+        ts = evt.get("timestamp")
+        etype = evt.get("type")
+        payload = evt.get("payload") or {}
+        ptype = payload.get("type")
+
+        if etype == "event_msg" and ptype == "user_message":
+            flush_results()
+            flush_assistant()
+            out.append({
+                "type": "user",
+                "uuid": next_uuid("u"),
+                "timestamp": ts,
+                "message": {"content": payload.get("message", "")},
+            })
+            continue
+
+        if etype == "turn_context":
+            model = payload.get("model")
+            if model:
+                current_model = model
+            # turn_context is internal; fall through to emit it below.
+
+        if etype == "response_item" and ptype == "reasoning":
+            summary = payload.get("summary") or []
+            text = "\n\n".join(
+                s.get("text", "") for s in summary
+                if isinstance(s, dict) and s.get("text")
+            ).strip()
+            add_assistant_block(
+                {"type": "thinking", "thinking": text or CODEX_REASONING_PLACEHOLDER},
+                ts,
+            )
+            continue
+
+        if etype == "response_item" and ptype == "message" and payload.get("role") == "assistant":
+            text = "".join(
+                b.get("text", "") for b in (payload.get("content") or [])
+                if isinstance(b, dict) and b.get("type") == "output_text"
+            )
+            if text.strip():
+                add_assistant_block({"type": "text", "text": text}, ts)
+            continue
+
+        if etype == "response_item" and ptype == "function_call":
+            args = payload.get("arguments")
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except json.JSONDecodeError:
+                    args = {"raw": args}
+            add_assistant_block(
+                {"type": "tool_use", "name": payload.get("name", "?"), "input": args or {}},
+                ts,
+            )
+            continue
+
+        if etype == "response_item" and ptype == "function_call_output":
+            flush_assistant()
+            if result_ts is None:
+                result_ts = ts
+            pending_results.append({
+                "type": "tool_result",
+                "content": payload.get("output", ""),
+                "is_error": False,
+            })
+            continue
+
+        # Drop duplicates and raw context; surface the rest as internal events.
+        if etype == "event_msg" and ptype == "agent_message":
+            continue
+        if etype == "response_item" and ptype == "message" and payload.get("role") in ("user", "developer"):
+            continue
+
+        flush_results()
+        flush_assistant()
+        out.append(evt)
+
+    flush_results()
+    flush_assistant()
+    return out
+
+
 def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
-    """Walk <root>/<year>/<month>/<run>/projects/*/*.jsonl and summarize.
+    """Walk each run dir and summarize its session transcripts.
+
+    Claude/Gemini runs store `<run>/projects/<slug>/*.jsonl`; Codex runs store
+    `<run>/sessions/YYYY/MM/DD/rollout-*.jsonl`. Both are summarized into the
+    same entry shape, tagged with the run's `tool`.
 
     `cache` maps relative path → {"sig": (size, mtime_ns), "entry": dict}.
     Files whose signature is unchanged reuse the cached summary; new and
@@ -278,6 +593,38 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
         return sessions
     if cache is None:
         cache = {}
+
+    def add_session(jsonl: Path, summarizer, project: str, run_dir: Path,
+                    meta: dict, fallback_name: str | None) -> None:
+        rel = jsonl.relative_to(history_root).as_posix()
+        try:
+            st = jsonl.stat()
+        except OSError as e:
+            log("warn", op="stat", path=str(jsonl), err=repr(e))
+            return
+        sig = (st.st_size, st.st_mtime_ns)
+        cached = cache.get(rel)
+        if cached and cached["sig"] == sig:
+            sessions.append(cached["entry"])
+            return
+        try:
+            summary = summarizer(jsonl)
+        except OSError as e:
+            log("warn", op="summarize", path=str(jsonl), err=repr(e))
+            return
+        entry = {
+            "path": rel,
+            "runDir": run_dir.name,
+            "tool": meta["tool"],
+            "runStartedAt": meta["timestamp"],
+            "project": project,
+            **summary,
+        }
+        if not entry.get("name") and fallback_name:
+            entry["name"] = fallback_name
+        cache[rel] = {"sig": sig, "entry": entry}
+        sessions.append(entry)
+
     for year_dir in sorted(p for p in history_root.iterdir() if p.is_dir() and re.fullmatch(r"\d{4}", p.name)):
         for month_dir in sorted(p for p in year_dir.iterdir() if p.is_dir()):
             for run_dir in sorted(p for p in month_dir.iterdir() if p.is_dir()):
@@ -285,45 +632,23 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
                 if not meta:
                     continue
                 projects = run_dir / "projects"
-                if not projects.is_dir():
-                    continue
-                fallback_name = None
-                name_file = run_dir / ".session_name"
-                if name_file.is_file():
-                    try:
-                        fallback_name = name_file.read_text(encoding="utf-8", errors="replace").strip() or None
-                    except OSError as e:
-                        log("warn", op="read_name", path=str(name_file), err=repr(e))
-                for project_dir in sorted(p for p in projects.iterdir() if p.is_dir()):
-                    for jsonl in sorted(project_dir.glob("*.jsonl")):
-                        rel = jsonl.relative_to(history_root).as_posix()
+                codex_sessions = run_dir / "sessions"
+                if projects.is_dir():
+                    fallback_name = None
+                    name_file = run_dir / ".session_name"
+                    if name_file.is_file():
                         try:
-                            st = jsonl.stat()
+                            fallback_name = name_file.read_text(encoding="utf-8", errors="replace").strip() or None
                         except OSError as e:
-                            log("warn", op="stat", path=str(jsonl), err=repr(e))
-                            continue
-                        sig = (st.st_size, st.st_mtime_ns)
-                        cached = cache.get(rel)
-                        if cached and cached["sig"] == sig:
-                            sessions.append(cached["entry"])
-                            continue
-                        try:
-                            summary = summarize_session(jsonl)
-                        except OSError as e:
-                            log("warn", op="summarize", path=str(jsonl), err=repr(e))
-                            continue
-                        entry = {
-                            "path": rel,
-                            "runDir": run_dir.name,
-                            "tool": meta["tool"],
-                            "runStartedAt": meta["timestamp"],
-                            "project": project_dir.name,
-                            **summary,
-                        }
-                        if not entry.get("name") and fallback_name:
-                            entry["name"] = fallback_name
-                        cache[rel] = {"sig": sig, "entry": entry}
-                        sessions.append(entry)
+                            log("warn", op="read_name", path=str(name_file), err=repr(e))
+                    for project_dir in sorted(p for p in projects.iterdir() if p.is_dir()):
+                        for jsonl in sorted(project_dir.glob("*.jsonl")):
+                            add_session(jsonl, summarize_session, project_dir.name,
+                                        run_dir, meta, fallback_name)
+                elif meta["tool"] == "codex" and codex_sessions.is_dir():
+                    for jsonl in sorted(codex_sessions.rglob("rollout-*.jsonl")):
+                        add_session(jsonl, summarize_codex_session, "",
+                                    run_dir, meta, None)
     sessions.sort(key=lambda s: (s.get("startedAt") or s["runStartedAt"]), reverse=True)
     return sessions
 
@@ -362,7 +687,9 @@ class ViewerState:
             return None
         if candidate.suffix != ".jsonl":
             return None
-        if "projects" not in candidate.parts:
+        parts = candidate.parts
+        # Claude/Gemini live under projects/; Codex rollouts under sessions/.
+        if "projects" not in parts and "sessions" not in parts:
             return None
         if not candidate.is_file():
             return None
@@ -433,7 +760,13 @@ def make_handler(state: ViewerState, html_path: Path):
                         events.append(json.loads(line))
                     except json.JSONDecodeError:
                         events.append({"type": "__parse_error", "raw": line})
-            return self._send_json(HTTPStatus.OK, {"path": rel, "events": events})
+            # Codex rollouts use a different schema; normalize them into the
+            # Claude-shaped event stream the frontend renders.
+            is_codex = "sessions" in resolved.parts and resolved.name.startswith("rollout-")
+            if is_codex:
+                events = codex_to_transcript(events)
+            agent = "codex" if is_codex else "claude"
+            return self._send_json(HTTPStatus.OK, {"path": rel, "agent": agent, "events": events})
 
         def _serve_search(self, q: str, limit: int):
             q = q.strip()
