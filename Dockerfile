@@ -97,12 +97,10 @@ WORKDIR $HOME
 COPY inside_deps/ ./
 
 RUN bash _brew.sh
-RUN bash _claude.sh
 RUN bash _nvm.sh
 RUN sh _mise.sh
 RUN sh _rv.sh
 RUN rm _brew.sh \
-       _claude.sh \
        _mise.sh \
        _nvm.sh \
        _rv.sh
@@ -144,7 +142,6 @@ RUN bash -c "npm -v"
 
 RUN bash -c "npm install -g @github/copilot"
 RUN bash -c "npm install -g @google/gemini-cli"
-RUN bash -c "npm install -g @openai/codex"
 
 RUN bash -c "rv ruby install 3.4.7"
 RUN bash -c "rv ruby install 3.4.8"
@@ -320,12 +317,32 @@ EOT
 
 RUN systemctl enable refresh-tokens.service
 
+#
+# Coding agents (Claude Code, Codex)
+#
+# Installed as late as possible so picking up a new release only re-runs these
+# layers and the cheap tweaks below — never the heavy language/database layers
+# above.
+#
+# Each `ADD` fetches the upstream "latest" manifest. buildah re-downloads a URL
+# on every build, so the layer's cache key tracks the manifest content: it stays
+# byte-identical while the version is unchanged (cache hit) and differs the moment
+# a new version ships (cache miss), which busts the install RUN that follows.
+# (BuildKit instead caches ADD-from-URL by URL string and would not re-fetch.)
+
+# Claude Code — _claude.sh downloads and checksum-verifies the latest standalone release
+ADD https://downloads.claude.ai/claude-code-releases/latest /tmp/claude-version
+RUN bash _claude.sh && rm _claude.sh /tmp/claude-version
+# created by claude native installer
+RUN rm -rf $HOME/.claude
+
+# Codex — npm global, latest published version
+ADD https://registry.npmjs.org/@openai/codex/latest /tmp/codex-version.json
+RUN bash -c "npm install -g @openai/codex" && rm /tmp/codex-version.json
+
 # Claude Code plugins
 # RUN bash -c "claude plugin marketplace add https://github.com/anthropics/claude-code"
 # RUN bash -c "claude plugin install ralph-wiggum@claude-code-plugins"
-
-# created by claude native installer
-RUN rm -rf $HOME/.claude
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
