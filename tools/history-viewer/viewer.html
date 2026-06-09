@@ -21,6 +21,40 @@
     --aux-text: #6f6a5d;
     --error-bg: #fbe6dc;
     --error-line: #c96442;
+    --error-border: #f0c7b3;
+    --topbar-bg: rgba(247,244,237,0.92);
+    --shadow: rgba(0,0,0,0.08);
+    /* agent distinction (Codex). Claude reuses --accent / --accent-soft. */
+    --agent-codex-bg: #e1ecf8;
+    --agent-codex-fg: #356aa8;
+    --agent-codex-line: #6f9fd8;
+  }
+  /* Dark palette. An inline <head> script resolves the effective theme
+     (stored choice, else the OS preference) and sets data-theme before
+     first paint, so only this one block is needed. */
+  :root[data-theme="dark"] {
+    --bg: #1a1917;
+    --surface: #242220;
+    --surface-2: #2c2a27;
+    --text: #ece8e0;
+    --muted: #a8a295;
+    --muted-2: #7c766b;
+    --border: #38352f;
+    --border-soft: #302d28;
+    --accent: #e0795a;
+    --accent-soft: #3a2a22;
+    --accent-line: #8a4a35;
+    --code-bg: #2a2724;
+    --aux-bg: #262320;
+    --aux-text: #9a948a;
+    --error-bg: #3a221c;
+    --error-line: #e0795a;
+    --error-border: #5a3328;
+    --topbar-bg: rgba(26,25,23,0.92);
+    --shadow: rgba(0,0,0,0.45);
+    --agent-codex-bg: #20303f;
+    --agent-codex-fg: #7fb0e0;
+    --agent-codex-line: #4a6f96;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
@@ -48,7 +82,7 @@
 
   #topbar {
     position: sticky; top: 0; z-index: 20;
-    background: rgba(247,244,237,0.92); backdrop-filter: blur(8px);
+    background: var(--topbar-bg); backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--border);
     padding: 12px 24px; display: flex; align-items: center; gap: 22px;
   }
@@ -57,6 +91,12 @@
   #topbar nav a { color: var(--muted); padding: 4px 0; font-size: 14px; }
   #topbar nav a:hover { color: var(--text); text-decoration: none; }
   #topbar nav a.active { color: var(--text); border-bottom: 2px solid var(--accent); padding-bottom: 2px; }
+  #topbar .theme-toggle { margin-left: auto; background: none; border: 1px solid var(--border);
+    color: var(--muted); width: 30px; height: 30px; padding: 0; border-radius: 7px;
+    font-size: 15px; line-height: 1; display: inline-flex; align-items: center;
+    justify-content: center; }
+  #topbar .theme-toggle:hover { color: var(--accent); border-color: var(--accent-line);
+    background: var(--surface); }
 
   main { max-width: 920px; margin: 0 auto; padding: 28px 24px 80px; }
 
@@ -125,10 +165,10 @@
     letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 7px;
     border-radius: 999px; vertical-align: middle; }
   .agent-claude { background: var(--accent-soft); color: var(--accent); }
-  .agent-codex  { background: #e1ecf8; color: #356aa8; }
+  .agent-codex  { background: var(--agent-codex-bg); color: var(--agent-codex-fg); }
   .session-card { border-left: 3px solid var(--border); }
   .session-card.claude { border-left-color: var(--accent-line); }
-  .session-card.codex  { border-left-color: #6f9fd8; }
+  .session-card.codex  { border-left-color: var(--agent-codex-line); }
 
   /* session page */
   .back { color: var(--muted); margin-bottom: 16px; display: inline-block; font-size: 14px; }
@@ -176,7 +216,7 @@
   .aux .markdown { font-size: 14px; }
   .aux .markdown p { margin: 4px 0; }
   .aux.tool-result.error { border-left-color: var(--error-line); }
-  .aux.tool-result.error pre { background: var(--error-bg); border-color: #f0c7b3; }
+  .aux.tool-result.error pre { background: var(--error-bg); border-color: var(--error-border); }
 
   .clamp { position: relative; }
   .clamp .clamped { max-height: 60lh; overflow: hidden; position: relative; }
@@ -266,7 +306,7 @@
   .chart-wrap { position: relative; }
   .chart-tooltip { position: absolute; pointer-events: none;
     background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-    padding: 9px 12px; font-size: 12.5px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    padding: 9px 12px; font-size: 12.5px; box-shadow: 0 4px 12px var(--shadow);
     min-width: 200px; max-width: 280px; z-index: 5;
     opacity: 0; transition: opacity 0.08s; }
   .chart-tooltip.visible { opacity: 1; }
@@ -295,6 +335,18 @@
   .empty { color: var(--muted); padding: 60px 20px; text-align: center; }
   .hidden { display: none !important; }
 </style>
+<script>
+  // Resolve the theme (stored choice, else OS preference) and set it before
+  // first paint to avoid a flash of the wrong theme.
+  (function () {
+    var stored = null;
+    try { stored = localStorage.getItem("theme"); } catch (e) {}
+    var dark = stored
+      ? stored === "dark"
+      : window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
 </head>
 <body>
 <header id="topbar">
@@ -303,6 +355,7 @@
     <a id="nav-index" href="?">Sessions</a>
     <a id="nav-stats" href="?view=stats">Stats</a>
   </nav>
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode"></button>
 </header>
 <main id="content"><div class="empty">Loading…</div></main>
 <script>
@@ -1453,6 +1506,25 @@ function renderStatsPage() {
   hookRangeTabs(contentEl);
   hookChartHover(contentEl, chartBlock.data);
 }
+
+// ---------- theme toggle ----------
+function setupThemeToggle() {
+  const btn = document.getElementById("theme-toggle");
+  if (!btn) return;
+  const sync = () => {
+    const dark = document.documentElement.dataset.theme === "dark";
+    btn.textContent = dark ? "☀" : "☾";
+    btn.title = dark ? "Switch to light mode" : "Switch to dark mode";
+  };
+  btn.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("theme", next); } catch (e) {}
+    sync();
+  });
+  sync();
+}
+setupThemeToggle();
 
 // ---------- bootstrap ----------
 async function bootstrap() {

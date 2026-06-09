@@ -19,6 +19,7 @@ Flags: `--history PATH` (default `/history`), `--port N` (default 8765), `--host
 ## Features
 
 - Browse every Claude and Codex session from the archive, newest first
+- Light / dark theme: follows the OS preference by default, with a topbar toggle (☾/☀) that pins your choice in `localStorage`
 - Clear agent distinction: each session is tagged with a coloured badge (coral **Claude** / blue **Codex**) and a matching card stripe; filter by agent or branch, plus full-text search across all transcripts
 - Transcript rendering: user/assistant bubbles, collapsed thinking + tool calls, "show internals" toggle. Codex rollouts are normalised into the same view — tool calls grouped per turn, and a placeholder where the (encrypted) reasoning was
 - Export to markdown — **clean** (just the user/assistant prose) or **full** (thinking, tool calls, results, meta wrappers)
