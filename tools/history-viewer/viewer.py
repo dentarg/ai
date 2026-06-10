@@ -29,6 +29,8 @@ MONTHS = {m: i for i, m in enumerate(
 # Per-model USD pricing per 1M tokens, from platform.claude.com/docs/en/about-claude/pricing
 # Tuple: (input, output, cache_read, cache_write_5m, cache_write_1h)
 PRICING_BY_MODEL: dict[str, tuple[float, float, float, float, float]] = {
+    # Fable: top tier, above Opus
+    "claude-fable-5":    (10.00, 50.00, 1.00, 12.50, 20.00),
     # Opus 4.5+: reduced pricing
     "claude-opus-4-8":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
     "claude-opus-4-7":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
