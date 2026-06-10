@@ -649,7 +649,11 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
                     for jsonl in sorted(codex_sessions.rglob("rollout-*.jsonl")):
                         add_session(jsonl, summarize_codex_session, "",
                                     run_dir, meta, None)
-    sessions.sort(key=lambda s: (s.get("startedAt") or s["runStartedAt"]), reverse=True)
+    # Sort by last-updated time (last event), falling back to start time so
+    # the most recently active sessions surface first.
+    sessions.sort(
+        key=lambda s: (s.get("endedAt") or s.get("startedAt") or s["runStartedAt"]),
+        reverse=True)
     return sessions
 
 

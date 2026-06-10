@@ -154,6 +154,7 @@
   .session-card .repo { color: var(--muted-2); font-size: 12.5px; margin-left: 6px; font-weight: normal; }
   .session-card .time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums;
     flex-shrink: 0; }
+  .session-card .time .arrow { color: var(--muted-2); margin: 0 1px; }
   .session-card .prompt { color: var(--muted); margin-top: 6px; font-size: 14px; line-height: 1.45;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .session-card .meta { color: var(--muted-2); font-size: 12.5px; margin-top: 8px; display: flex; gap: 14px;
@@ -376,6 +377,14 @@ function fmtTimeOfDay(iso) {
   if (isNaN(d)) return iso;
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
+function fmtShortDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  return d.toLocaleString(undefined, { month: "short", day: "numeric" });
+}
+function sessionStarted(s) { return s.startedAt || s.runStartedAt; }
+function sessionUpdated(s) { return s.endedAt || s.startedAt || s.runStartedAt; }
 function fmtBytes(n) { return (n||0).toLocaleString(); }
 function fmtTokens(t) {
   if (!t) return "0";
@@ -655,7 +664,7 @@ function drawSessions() {
   const matches = state.searchResults ? new Map(state.searchResults.map(r => [r.path, r])) : null;
   const dayGroups = new Map();
   for (const s of sessions) {
-    const key = localDayKey(s.startedAt || s.runStartedAt);
+    const key = localDayKey(sessionUpdated(s));
     if (!dayGroups.has(key)) dayGroups.set(key, []);
     dayGroups.get(key).push(s);
   }
@@ -670,10 +679,20 @@ function drawSessions() {
       const href = "?s=" + encodeURIComponent(s.path);
       const title = s.name || s.firstPrompt || "(untitled)";
       const badge = `<span class="agent-badge agent-${esc(s.tool)}">${esc(agentLabel(s.tool))}</span> `;
+      const started = sessionStarted(s), updated = sessionUpdated(s);
+      const startTod = fmtTimeOfDay(started), updTod = fmtTimeOfDay(updated);
+      // Grouped under the last-updated day, so spell out the start date when
+      // the session began on an earlier day.
+      const crossDay = localDayKey(started) !== localDayKey(updated);
+      const startLabel = crossDay ? `${fmtShortDate(started)} ${startTod}` : startTod;
+      const timeHtml = (updTod && (updTod !== startTod || crossDay))
+        ? `${esc(startLabel)} <span class="arrow">→</span> ${esc(updTod)}`
+        : esc(startTod);
+      const timeTitle = `started ${fmtTime(started)} · last updated ${fmtTime(updated)}`;
       return `<a class="session-card ${esc(s.tool)}" href="${href}">
         <div class="row1">
           <div>${badge}<span class="name">${esc(title)}</span><span class="branch">${esc(s.gitBranch || "")}</span><span class="repo">${esc(s.repo || "")}</span></div>
-          <div class="time">${esc(fmtTimeOfDay(s.startedAt || s.runStartedAt))}</div>
+          <div class="time" title="${esc(timeTitle)}">${timeHtml}</div>
         </div>
         ${s.name && s.firstPrompt ? `<div class="prompt">${esc(s.firstPrompt)}</div>` : ""}
         <div class="meta">
@@ -767,7 +786,7 @@ function renderSessionHeader(s, path) {
         <button class="copy" data-copy="${esc(s.sessionId || "")}">copy</button>
       </div>
       <div class="stats">
-        <span>${esc(fmtTime(s.startedAt))} → ${esc(fmtTime(s.endedAt))}</span>
+        <span title="started → last updated">${esc(fmtTime(s.startedAt))} → ${esc(fmtTime(s.endedAt))}</span>
         <span><b>${s.messages}</b> msgs</span>
         <span><b>${fmtTokens(total)}</b> tokens</span>
         <span><b>${fmtCost(s.cost)}</b></span>

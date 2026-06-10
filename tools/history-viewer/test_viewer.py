@@ -119,5 +119,35 @@ class CodexToTranscript(unittest.TestCase):
         self.assertNotIn("env", json.dumps(ev))
 
 
+class ManifestSorting(unittest.TestCase):
+    def _write_codex_run(self, root: Path, run_dir: str,
+                         started: str, ended: str, sid: str) -> None:
+        sess = root / "2026" / "06_Jun" / run_dir / "sessions" / "2026" / "06" / "08"
+        sess.mkdir(parents=True, exist_ok=True)
+        events = [
+            {"timestamp": started, "type": "session_meta",
+             "payload": {"id": sid, "cwd": "/app"}},
+            {"timestamp": ended, "type": "event_msg",
+             "payload": {"type": "user_message", "message": "hi"}},
+        ]
+        (sess / f"rollout-{sid}.jsonl").write_text(
+            "".join(json.dumps(e) + "\n" for e in events), encoding="utf-8")
+
+    def test_sorted_by_last_updated_not_start(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Started earlier, but stayed active the longest.
+            self._write_codex_run(root, "08_Mon_10-00_codex",
+                                   "2026-06-08T10:00:00Z", "2026-06-08T15:00:00Z", "long")
+            # Started later, but went idle sooner.
+            self._write_codex_run(root, "08_Mon_12-00_codex",
+                                   "2026-06-08T12:00:00Z", "2026-06-08T12:30:00Z", "short")
+            sessions = viewer.build_manifest(root)
+
+        # Most recently updated first, even though it started before the other.
+        self.assertEqual([s["sessionId"] for s in sessions], ["long", "short"])
+        self.assertEqual(sessions[0]["endedAt"], "2026-06-08T15:00:00Z")
+
+
 if __name__ == "__main__":
     unittest.main()
