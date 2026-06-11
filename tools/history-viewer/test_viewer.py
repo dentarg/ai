@@ -149,5 +149,56 @@ class ManifestSorting(unittest.TestCase):
         self.assertEqual(sessions[0]["endedAt"], "2026-06-08T15:00:00Z")
 
 
+class PublishToPastehtml(unittest.TestCase):
+    def _recorder(self, responses: list[tuple[int, dict]]):
+        """Fake _pastehtml_call: records requests, replays canned responses."""
+        calls = []
+
+        def call(method, url, body, headers):
+            calls.append({"method": method, "url": url,
+                          "body": body, "headers": headers})
+            return responses[len(calls) - 1]
+        return calls, call
+
+    def test_creates_paste_when_no_token(self):
+        calls, call = self._recorder([(201, {"token": "t1", "update_token": "u1"})])
+        status, payload = viewer.publish_to_pastehtml(
+            "<html></html>", "my session.html", call=call)
+
+        self.assertEqual(status, 201)
+        self.assertEqual(payload["update_token"], "u1")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["method"], "POST")
+        # Filename is URL-quoted into the query string; body is the raw HTML.
+        self.assertTrue(calls[0]["url"].endswith("?filename=my%20session.html"))
+        self.assertEqual(calls[0]["body"], b"<html></html>")
+        self.assertEqual(calls[0]["headers"], {})
+
+    def test_updates_existing_paste_with_token(self):
+        calls, call = self._recorder([(200, {"token": "t1"})])
+        status, payload = viewer.publish_to_pastehtml(
+            "<html></html>", "s.html",
+            token="t1", update_token="u1", call=call)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["method"], "PATCH")
+        self.assertTrue(calls[0]["url"].endswith("/t1"))
+        self.assertEqual(calls[0]["headers"], {"Authorization": "Bearer u1"})
+
+    def test_stale_token_falls_back_to_create(self):
+        calls, call = self._recorder([
+            (404, {"error": "not found"}),
+            (201, {"token": "t2", "update_token": "u2"}),
+        ])
+        status, payload = viewer.publish_to_pastehtml(
+            "<html></html>", "s.html",
+            token="gone", update_token="u1", call=call)
+
+        self.assertEqual(status, 201)
+        self.assertEqual(payload["token"], "t2")
+        self.assertEqual([c["method"] for c in calls], ["PATCH", "POST"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -23,6 +23,7 @@ Flags: `--history PATH` (default `/history`), `--port N` (default 8765), `--host
 - Clear agent distinction: each session is tagged with a coloured badge (coral **Claude** / blue **Codex**) and a matching card stripe; filter by agent or branch, plus full-text search across all transcripts
 - Transcript rendering: user/assistant bubbles, collapsed thinking + tool calls, "show internals" toggle. Codex rollouts are normalised into the same view — tool calls grouped per turn, and a placeholder where the (encrypted) reasoning was
 - Export to markdown — **clean** (just the user/assistant prose) or **full** (thinking, tool calls, results, meta wrappers)
+- Publish to [pastehtml.dev](https://pastehtml.dev) — renders the transcript as currently shown (internals toggle included) into a self-contained HTML page and publishes it to a private shareable link (2 MB limit). The paste's `update_token` is kept in the browser's `localStorage`, so re-publishing the same session updates the existing paste and the shared link stays current. The server proxies the API (`POST /api/publish`, pastehtml.dev sends no CORS headers), so it needs outbound network access; point `PASTEHTML_API` at a self-hosted instance to override
 - Session titles skip slash-command and `<local-command-caveat>` wrappers, picking the first real user prompt instead
 - Stats dashboard (Claude + Codex): tokens-per-day chart (line per model, with All time / Last 30 days / Last 7 days tabs and a per-model legend showing share, In/Out/cache tokens, and cost), plus breakdown tables by day / week / month / repo / model
 
@@ -34,4 +35,4 @@ Pure Python stdlib + a single HTML file — no dependencies, no build step. The 
 
     cd tools/history-viewer && python3 -m unittest test_viewer -v
 
-Covers Codex summary/cost parsing and the rollout → transcript normalisation (stdlib only, no fixtures on disk).
+Covers Codex summary/cost parsing, the rollout → transcript normalisation, and the pastehtml.dev create/update/fallback logic (stdlib only, no fixtures on disk).

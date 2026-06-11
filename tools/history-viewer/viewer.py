@@ -14,11 +14,13 @@ import re
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 RUN_DIR_RE = re.compile(r"^(\d{2})_([A-Za-z]{3})_(\d{2})-(\d{2})_(\w+)$")
@@ -702,6 +704,53 @@ class ViewerState:
         return candidate
 
 
+# pastehtml.dev: publish a single self-contained HTML file, get a private
+# shareable link (https://pastehtml.dev/llms.txt). Overridable for tests and
+# self-hosted instances.
+PASTEHTML_API = os.environ.get("PASTEHTML_API", "https://pastehtml.dev/api/pastes")
+PASTEHTML_MAX_BYTES = 2 * 1024 * 1024
+
+
+def _pastehtml_call(method: str, url: str, body: bytes, headers: dict) -> tuple[int, dict]:
+    """One HTTP round-trip to pastehtml.dev; returns (status, parsed JSON)."""
+    req = urllib.request.Request(url, data=body, method=method)
+    req.add_header("Content-Type", "text/html; charset=utf-8")
+    # Cloudflare answers 403 to urllib's default Python-urllib/3.x agent.
+    req.add_header("User-Agent", "history-viewer (+https://pastehtml.dev/llms.txt)")
+    for k, v in headers.items():
+        req.add_header(k, v)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.status, json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read().decode("utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return e.code, {"error": f"pastehtml returned HTTP {e.code}"}
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+        return 502, {"error": f"pastehtml request failed: {e}"}
+
+
+def publish_to_pastehtml(html: str, filename: str,
+                         token: str | None = None,
+                         update_token: str | None = None,
+                         call=_pastehtml_call) -> tuple[int, dict]:
+    """Create or update a paste on pastehtml.dev.
+
+    With a token + update_token the existing paste is PATCHed so the shared
+    link stays current; a stale token (403/404) falls back to creating a
+    fresh paste, whose response carries a new update_token.
+    """
+    body = html.encode("utf-8")
+    if token and update_token:
+        status, payload = call(
+            "PATCH", f"{PASTEHTML_API}/{quote(token)}", body,
+            {"Authorization": f"Bearer {update_token}"})
+        if status not in (403, 404):
+            return status, payload
+    return call("POST", f"{PASTEHTML_API}?filename={quote(filename)}", body, {})
+
+
 def make_handler(state: ViewerState, html_path: Path):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
@@ -740,6 +789,37 @@ def make_handler(state: ViewerState, html_path: Path):
                 limit = int(qs.get("limit", ["50"])[0])
                 return self._serve_search(q, limit)
             return self._send_error_json(HTTPStatus.NOT_FOUND, "not found")
+
+        def do_POST(self):
+            if urlparse(self.path).path != "/api/publish":
+                return self._send_error_json(HTTPStatus.NOT_FOUND, "not found")
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            # JSON-escaping inflates the HTML, so allow some headroom over
+            # pastehtml's 2 MB document limit.
+            if not 0 < length <= 4 * PASTEHTML_MAX_BYTES:
+                return self._send_error_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                                             "request body missing or too large")
+            try:
+                req = json.loads(self.rfile.read(length))
+            except json.JSONDecodeError:
+                req = None
+            if not isinstance(req, dict):
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "invalid JSON body")
+            html = req.get("html") or ""
+            if not html.strip():
+                return self._send_error_json(HTTPStatus.BAD_REQUEST, "html is required")
+            if len(html.encode("utf-8")) > PASTEHTML_MAX_BYTES:
+                return self._send_error_json(
+                    HTTPStatus.UNPROCESSABLE_ENTITY,
+                    "document exceeds pastehtml's 2 MB limit")
+            status, payload = publish_to_pastehtml(
+                html, req.get("filename") or "session.html",
+                token=req.get("token"), update_token=req.get("update_token"))
+            log("info", op="publish", status=status, token=payload.get("token", "-"))
+            return self._send_json(status, payload)
 
         def _serve_html(self):
             try:

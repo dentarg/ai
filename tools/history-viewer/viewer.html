@@ -194,6 +194,8 @@
     justify-content: flex-end; flex-wrap: wrap; margin-top: 10px; }
   .session-header .actions { display: inline-flex; gap: 8px; }
   .session-header .actions button { padding: 4px 10px; font-size: 12.5px; }
+  .session-header .paste-link { font-size: 12.5px; word-break: break-all; }
+  .paste-footer { color: var(--muted-2); font-size: 12.5px; margin-top: 28px; }
 
   .evt { margin: 22px 0; }
   .evt .who { font-size: 11.5px; color: var(--muted-2); margin-bottom: 6px;
@@ -773,6 +775,7 @@ function renderSessionHeader(s, path) {
     return;
   }
   const total = totalTokens(s.tokens);
+  const paste = loadPasteRecord(path);
   head.innerHTML = `
     <div class="session-header">
       <div class="title">
@@ -800,7 +803,10 @@ function renderSessionHeader(s, path) {
           <button id="export-clean" title="Export user/assistant prose, no tool calls">Export clean</button>
           <button id="export-full" title="Export everything: thinking, tool calls, results">Export full</button>
           <button id="export-gist" title="Copy clean markdown and open gist.github.com in a new tab">→ Gist</button>
+          <button id="export-paste" title="Publish the rendered transcript as a self-contained page on pastehtml.dev">${paste ? "Update pastehtml" : "→ pastehtml"}</button>
         </span>
+        <a id="paste-link" class="paste-link" href="${esc(paste?.live_url || "")}"
+           target="_blank" rel="noopener noreferrer" ${paste ? "" : "hidden"}>${esc(paste?.live_url || "")}</a>
       </div>
     </div>
   `;
@@ -816,6 +822,9 @@ function renderSessionHeader(s, path) {
   });
   document.getElementById("export-gist").addEventListener("click", (e) => {
     exportToGist(s, state.currentEvents || [], "clean", e.currentTarget);
+  });
+  document.getElementById("export-paste").addEventListener("click", (e) => {
+    publishToPastehtml(s, path, e.currentTarget);
   });
   head.querySelectorAll("button.copy").forEach(btn => {
     btn.addEventListener("click", async () => {
@@ -839,10 +848,7 @@ const INTERNAL_TYPES = new Set([
   "attachment", "__parse_error",
 ]);
 
-function drawTranscript() {
-  const tEl = document.getElementById("transcript");
-  if (!tEl) return;
-  const events = state.currentEvents || [];
+function transcriptHtml(events) {
   const parts = [];
   let pending = [];
   const flush = () => {
@@ -862,7 +868,13 @@ function drawTranscript() {
     else { pending.push(e); }
   }
   flush();
-  tEl.innerHTML = parts.join("\n") || `<div class="empty">Empty session.</div>`;
+  return parts.join("\n") || `<div class="empty">Empty session.</div>`;
+}
+
+function drawTranscript() {
+  const tEl = document.getElementById("transcript");
+  if (!tEl) return;
+  tEl.innerHTML = transcriptHtml(state.currentEvents || []);
   hookClampButtons(tEl);
   hookCopyMarkdownButtons(tEl);
   // If the URL has a #evt-... hash, scroll to it now that the transcript exists.
@@ -1143,18 +1155,141 @@ function exportToGist(s, events, mode, btn) {
   });
 }
 
-function exportSession(s, events, mode) {
-  const md = buildSessionMarkdown(s, events, mode);
+function exportBasename(s) {
   const datePart = (s?.startedAt || s?.runStartedAt || "").slice(0, 10) || "session";
   const slug = (s?.name || s?.firstPrompt || "session")
     .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "session";
-  const filename = `${state.currentAgent}-${datePart}-${slug}-${mode}.md`;
+  return `${state.currentAgent}-${datePart}-${slug}`;
+}
+
+function exportSession(s, events, mode) {
+  const md = buildSessionMarkdown(s, events, mode);
+  const filename = `${exportBasename(s)}-${mode}.md`;
   const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ---------- publish to pastehtml.dev ----------
+// The update_token for each published session lives in localStorage so
+// re-publishing PATCHes the same paste and the shared link stays current.
+function loadPasteRecord(path) {
+  try { return JSON.parse(localStorage.getItem("pastehtml:" + path) || "null"); }
+  catch { return null; }
+}
+function savePasteRecord(path, rec) {
+  try { localStorage.setItem("pastehtml:" + path, JSON.stringify(rec)); } catch {}
+}
+
+function buildSessionHtml(s, events) {
+  const title = s?.name || s?.firstPrompt?.slice(0, 80) || "(untitled)";
+  const agent = agentLabel(state.currentAgent);
+  // Reuse the viewer's own stylesheet so the paste matches what's on screen.
+  const css = document.querySelector("style").textContent;
+  const body = document.createElement("div");
+  body.innerHTML = transcriptHtml(events);
+  // Clipboard buttons are dead weight without the app; anchors still work.
+  body.querySelectorAll("button.copy-md").forEach(el => el.remove());
+  const total = totalTokens(s?.tokens);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1, width=device-width">
+<title>${esc(title)} — ${esc(agent)} session</title>
+<style>${css}</style>
+<script>
+  if (matchMedia("(prefers-color-scheme: dark)").matches)
+    document.documentElement.dataset.theme = "dark";
+<\/script>
+</head>
+<body>
+<main>
+  <div class="session-header">
+    <div class="title">
+      <span class="agent-badge agent-${esc(state.currentAgent)}">${esc(agent)}</span>
+      <div class="repo">${esc(title)}</div>
+      <div class="branch">${esc(s?.gitBranch || "")} · ${esc(s?.repo || "")}</div>
+    </div>
+    <div class="stats">
+      <span>${esc(fmtTime(s?.startedAt))} → ${esc(fmtTime(s?.endedAt))}</span>
+      <span><b>${s?.messages ?? "?"}</b> msgs</span>
+      <span><b>${fmtTokens(total)}</b> tokens</span>
+      <span><b>${fmtCost(s?.cost || 0)}</b></span>
+      <span>${(s?.models || []).map(esc).join(", ")}</span>
+    </div>
+  </div>
+  <div id="transcript">${body.innerHTML}</div>
+  <div class="paste-footer">${esc(agent)} session transcript, archived with history-viewer.</div>
+</main>
+<script>
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".clamp .show-all");
+    if (!btn) return;
+    btn.parentElement.classList.add("expanded");
+    btn.remove();
+  });
+<\/script>
+</body>
+</html>
+`;
+}
+
+async function publishToPastehtml(s, path, btn) {
+  const events = state.currentEvents || [];
+  const flash = (msg) => {
+    btn.textContent = msg;
+    setTimeout(() => { btn.textContent = loadPasteRecord(path) ? "Update pastehtml" : "→ pastehtml"; }, 2500);
+  };
+  if (!events.length) return flash("session still loading…");
+  const html = buildSessionHtml(s, events);
+  const size = new Blob([html]).size;
+  if (size > 2 * 1024 * 1024) {
+    return flash(`too large: ${(size / 1024 / 1024).toFixed(1)} MB (limit 2 MB)`);
+  }
+  const rec = loadPasteRecord(path) || {};
+  btn.disabled = true;
+  btn.textContent = "publishing…";
+  try {
+    const r = await fetch("/api/publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        html,
+        filename: exportBasename(s) + ".html",
+        token: rec.token,
+        update_token: rec.update_token,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok || !data.live_url) {
+      const msg = data.error || (data.errors || []).join("; ") || `HTTP ${r.status}`;
+      return flash("failed: " + msg);
+    }
+    // A stale token falls back to a fresh paste server-side, in which case
+    // the response carries a new token pair; otherwise keep the stored one.
+    savePasteRecord(path, {
+      token: data.token,
+      update_token: data.update_token || rec.update_token,
+      live_url: data.live_url,
+      url: data.url,
+    });
+    const link = document.getElementById("paste-link");
+    if (link) {
+      link.href = data.live_url;
+      link.textContent = data.live_url;
+      link.hidden = false;
+    }
+    const copied = await copyToClipboard(data.live_url);
+    flash(copied ? "published — link copied" : "published");
+  } catch (err) {
+    flash("failed: " + (err?.message || err));
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ---------- stats chart ----------
