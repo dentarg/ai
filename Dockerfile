@@ -137,6 +137,7 @@ RUN bash -c "python --version"
 RUN bash -c "rustc --version"
 
 RUN bash -c "nvm install 22"
+RUN bash -c "npm install -g npm@11"
 RUN bash -c "node -v"
 RUN bash -c "npm -v"
 
