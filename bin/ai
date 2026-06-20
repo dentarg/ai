@@ -20,6 +20,11 @@ PORT=${PORT:-1337}
 PROFILE=${1:-}
 PROFILE_ENV=""
 if [ -n "$PROFILE" ]; then
+  CRED_FILE="${SETTINGS_DIR}/.credentials.${PROFILE}.json"
+  if [ ! -f "$CRED_FILE" ]; then
+    echo "at=fatal msg=\"claude profile not found\" profile=$PROFILE path=$CRED_FILE" >&2
+    exit 1
+  fi
   PROFILE_ENV="--env CLAUDE_PROFILE=$PROFILE"
 fi
 
