@@ -16,8 +16,35 @@ SHARE_DIR=${AI_DIR}/share
 
 PORT=${PORT:-1337}
 
+# Parse arguments:
+#   [profile]        optional claude profile; auto-launches `c <profile>`.
+#   --ports <list>   extra ports to publish, comma-separated. Each entry is
+#                    "PORT" (host==container) or "SRC:DST" (host:container).
+PROFILE=""
+PORTS=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ports)
+      shift
+      [ $# -gt 0 ] || { echo "at=fatal msg=\"--ports requires an argument\"" >&2; exit 1; }
+      PORTS=$1
+      ;;
+    --ports=*)
+      PORTS=${1#--ports=}
+      ;;
+    -*)
+      echo "at=fatal msg=\"unknown option\" option=$1" >&2
+      exit 1
+      ;;
+    *)
+      [ -z "$PROFILE" ] || { echo "at=fatal msg=\"unexpected argument\" arg=$1" >&2; exit 1; }
+      PROFILE=$1
+      ;;
+  esac
+  shift
+done
+
 # Optional claude profile; when given, the container auto-launches `c <profile>`.
-PROFILE=${1:-}
 PROFILE_ENV=""
 if [ -n "$PROFILE" ]; then
   CRED_FILE="${SETTINGS_DIR}/.credentials.${PROFILE}.json"
@@ -26,6 +53,25 @@ if [ -n "$PROFILE" ]; then
     exit 1
   fi
   PROFILE_ENV="--env CLAUDE_PROFILE=$PROFILE"
+fi
+
+# Build extra "--publish SRC:DST" flags from --ports.
+PUBLISH_PORTS=""
+if [ -n "$PORTS" ]; then
+  OLD_IFS=$IFS
+  IFS=,
+  for spec in $PORTS; do
+    IFS=$OLD_IFS
+    case "$spec" in
+      *:*) src=${spec%%:*}; dst=${spec##*:} ;;
+      *)   src=$spec; dst=$spec ;;
+    esac
+    case "$src" in ''|*[!0-9]*) echo "at=fatal msg=\"invalid port spec\" spec=$spec" >&2; exit 1 ;; esac
+    case "$dst" in ''|*[!0-9]*) echo "at=fatal msg=\"invalid port spec\" spec=$spec" >&2; exit 1 ;; esac
+    PUBLISH_PORTS="$PUBLISH_PORTS --publish ${src}:${dst}"
+    IFS=,
+  done
+  IFS=$OLD_IFS
 fi
 
 CWD_LABEL=$(pwd)
@@ -88,5 +134,6 @@ podman run --rm --interactive --tty \
   --volume $(pwd):/app \
   --workdir /app \
   --publish ${PORT} \
+  ${PUBLISH_PORTS} \
   --label cwd="${CWD_LABEL}" \
   ai:latest

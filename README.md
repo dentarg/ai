@@ -38,6 +38,12 @@ bin/ai
 # only if it has fully expired) so every session reuses a valid token.
 bin/ai <profile>
 
+# publish extra ports from the container to the host. each entry is either
+# "PORT" (host==container) or "SRC:DST" (host:container); comma-separate many.
+bin/ai --ports 9999             # host 9999 -> container 9999
+bin/ai --ports 8888:7777        # host 8888 -> container 7777
+bin/ai <profile> --ports 9999,8888:7777
+
 # start services (and run "bundle install" if Gemfile exists).
 # also runs automatically as part of "c" below.
 s
