@@ -123,7 +123,7 @@ def render_html
         tr:hover td { background: var(--row-hover); }
         a { color: var(--link); text-decoration: none; }
         a:hover { text-decoration: underline; }
-        .port { display: inline-block; margin: 0 0.5rem 0.25rem 0; padding: 0.1rem 0.4rem; background: var(--port-bg); border-radius: 3px; font-size: 0.85rem; }
+        .port { display: block; width: fit-content; margin: 0 0 0.25rem; padding: 0.1rem 0.4rem; background: var(--port-bg); border-radius: 3px; font-size: 0.85rem; }
         .no-ports { color: var(--faint); font-size: 0.85rem; }
         .error { color: var(--error); }
         .empty { color: var(--muted); }
