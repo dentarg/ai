@@ -17,13 +17,24 @@ SHARE_DIR=${AI_DIR}/share
 PORT=${PORT:-1337}
 
 # Parse arguments:
-#   [profile]        optional claude profile; auto-launches `c <profile>`.
-#   --ports <list>   extra ports to publish, comma-separated. Each entry is
-#                    "PORT" (host==container) or "SRC:DST" (host:container).
+#   [profile]            optional claude profile; auto-launches `c <profile>`.
+#   -r, --resume <id>    resume a prior session; passed on to `c --resume <id>`.
+#                        Works with or without a profile (`c` auto-detects it).
+#   --ports <list>       extra ports to publish, comma-separated. Each entry is
+#                        "PORT" (host==container) or "SRC:DST" (host:container).
 PROFILE=""
+RESUME=""
 PORTS=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    -r|--resume)
+      shift
+      [ $# -gt 0 ] || { echo "at=fatal msg=\"--resume requires a session id\"" >&2; exit 1; }
+      RESUME=$1
+      ;;
+    --resume=*)
+      RESUME=${1#--resume=}
+      ;;
     --ports)
       shift
       [ $# -gt 0 ] || { echo "at=fatal msg=\"--ports requires an argument\"" >&2; exit 1; }
@@ -54,6 +65,10 @@ if [ -n "$PROFILE" ]; then
   fi
   PROFILE_ENV="--env CLAUDE_PROFILE=$PROFILE"
 fi
+
+# Optional session to resume; passed through to `c --resume <id>` on launch.
+RESUME_ENV=""
+[ -n "$RESUME" ] && RESUME_ENV="--env CLAUDE_RESUME=$RESUME"
 
 # Build extra "--publish SRC:DST" flags from --ports.
 PUBLISH_PORTS=""
@@ -124,6 +139,7 @@ podman run --rm --interactive --tty \
   --env HOST_DIR="$(basename "$(pwd)")" \
   --env PORT=${PORT} \
   ${PROFILE_ENV} \
+  ${RESUME_ENV} \
   --volume ${BUNDLE_DIR}:/bundle \
   --volume ${COMMAND_HISTORY_DIR}:/commandhistory \
   --volume ${HISTORY_DIR}:/history \

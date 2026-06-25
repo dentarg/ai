@@ -96,16 +96,21 @@ link_dotfiles
 # source user's bashrc from dotfiles if present (after container setup)
 [[ -f /settings/dotfiles/.bashrc ]] && source /settings/dotfiles/.bashrc
 
-# When bin/ai is given a profile, auto-launch claude on the console shell.
-# CLAUDE_PROFILE lives in the container env, so it also leaks into every
-# later `podman exec` shell (e.g. bin/pod) — guard on the console tty so only
-# the systemd shell.service session auto-launches. /dev/console is a symlink to
-# the console's pts (e.g. /dev/pts/0); the shell.service runs on that pts, while
-# `podman exec` shells get the next pts and drop to a normal prompt.
+# When bin/ai is given a profile and/or --resume, auto-launch claude on the
+# console shell. CLAUDE_PROFILE/CLAUDE_RESUME live in the container env, so they
+# also leak into every later `podman exec` shell (e.g. bin/pod) — guard on the
+# console tty so only the systemd shell.service session auto-launches.
+# /dev/console is a symlink to the console's pts (e.g. /dev/pts/0); the
+# shell.service runs on that pts, while `podman exec` shells get the next pts
+# and drop to a normal prompt.
 # Unset first so nested shells (and claude's own subshells) don't relaunch;
 # on exit you're left at a normal prompt.
-if [[ $- == *i* && -n "${CLAUDE_PROFILE:-}" && "$(tty)" == "$(readlink -f /dev/console)" ]]; then
-  profile="$CLAUDE_PROFILE"
-  unset CLAUDE_PROFILE
-  c "$profile"
+if [[ $- == *i* && ( -n "${CLAUDE_PROFILE:-}" || -n "${CLAUDE_RESUME:-}" ) && "$(tty)" == "$(readlink -f /dev/console)" ]]; then
+  profile="${CLAUDE_PROFILE:-}"
+  resume="${CLAUDE_RESUME:-}"
+  unset CLAUDE_PROFILE CLAUDE_RESUME
+  c_args=()
+  [[ -n "$profile" ]] && c_args+=("$profile")
+  [[ -n "$resume" ]] && c_args+=(--resume "$resume")
+  c "${c_args[@]}"
 fi

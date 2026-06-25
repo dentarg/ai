@@ -38,6 +38,11 @@ bin/ai
 # only if it has fully expired) so every session reuses a valid token.
 bin/ai <profile>
 
+# resume a prior session: passed through to "c --resume <id>" on launch.
+# works with or without a profile (c auto-detects it from the session).
+bin/ai --resume <session-id>
+bin/ai <profile> --resume <session-id>
+
 # publish extra ports from the container to the host. each entry is either
 # "PORT" (host==container) or "SRC:DST" (host:container); comma-separate many.
 bin/ai --ports 9999             # host 9999 -> container 9999
