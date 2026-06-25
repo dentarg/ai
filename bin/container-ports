@@ -3,4 +3,7 @@
 set -e
 set -u
 
-PORT=9999 ruby tools/container-ports/server.rb
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+REPO_DIR=$(dirname "$SCRIPT_DIR")
+
+PORT=9999 ruby "${REPO_DIR}/tools/container-ports/server.rb"
