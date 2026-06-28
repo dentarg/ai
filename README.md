@@ -59,7 +59,7 @@ c <profile>
 # or launch claude with an Anthropic API key
 c --apikey sk-ant-...
 
-# resume a prior session (searches /history for the session id; a prefix is enough).
+# resume a prior Claude session (searches /history for the session id; a prefix is enough).
 # profile is auto-detected from the session's saved .profile file.
 c --resume <session-id>
 
