@@ -43,6 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      sudo \
      systemd \
      systemd-sysv \
+     tmux \
      tree \
      unminimize \
      unzip \
@@ -144,6 +145,9 @@ RUN bash -c "nvm install 22"
 RUN bash -c "npm install -g npm@11"
 RUN bash -c "node -v"
 RUN bash -c "npm -v"
+
+RUN bash -c "brew install ast-grep"
+RUN bash -c "ast-grep --version"
 
 RUN bash -c "npm install -g @github/copilot"
 RUN bash -c "npm install -g @google/gemini-cli"

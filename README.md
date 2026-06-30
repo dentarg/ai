@@ -276,6 +276,8 @@ bin/setup-vm
 - [x] Python
 - [x] Rust
 - [x] Go
+- [x] ast-grep
+- [x] tmux
 - [x] SSH (`ssh-keygen`, ...)
 - [x] PostgreSQL
 - [x] LavinMQ
