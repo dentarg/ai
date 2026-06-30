@@ -57,6 +57,11 @@ bin/ai <profile> --ports 9999,8888:7777
 bin/ai <profile> --remote
 AI_REMOTE=1 bin/ai <profile>
 
+# enable fast mode for the session (off by default).
+# equivalently set AI_FAST=1 in your shell. see "Fast mode" below.
+bin/ai <profile> --fast
+AI_FAST=1 bin/ai <profile>
+
 # start services (and run "bundle install" if Gemfile exists).
 # also runs automatically as part of "c" below.
 s
@@ -228,6 +233,30 @@ they show as `<dir>-<random-words>` instead of the container hostname.
 
 To enable it on an already-running session, run `/remote-control` (or `/rc`)
 in the TUI; a `/rc active` link then appears in the footer.
+
+## Fast mode
+
+[Fast mode](https://code.claude.com/docs/en/fast-mode) runs Opus with
+higher-speed output. It is **off by default** and opt-in per session, because
+it draws from usage credits at a higher rate and has separate rate limits.
+Turn it on with either:
+
+```shell
+bin/ai <profile> --fast      # one-off flag
+AI_FAST=1 bin/ai <profile>   # or set the env in your shell
+```
+
+`bin/ai` forwards this into the container as `AI_FAST=1`; `c` then sets
+`fastMode` in the session's `~/.claude/settings.json` — the same key the
+`/fast` toggle writes. Running `c` directly honours the same `--fast` flag and
+`AI_FAST` env. To make it the default for every session, export `AI_FAST=1` in
+your host shell profile. Toggle it within a session with `/fast [on|off]`.
+
+`c` also exports `CLAUDE_CODE_SKIP_FAST_MODE_ORG_CHECK=1` in the fast path.
+Without it the persisted `fastMode` is evaluated once at startup, while the
+async fast-mode availability check is still pending, so in a fresh container it
+resolves to off and never re-applies; skipping that check lets the setting
+engage immediately.
 
 ## Tricks
 

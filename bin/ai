@@ -37,11 +37,14 @@ is_true() {
 #                        "PORT" (host==container) or "SRC:DST" (host:container).
 #   --remote             enable Claude Code remote control; passed to `c --remote`.
 #                        Also enabled when AI_REMOTE is truthy (1/true/yes/on).
+#   --fast               enable fast mode; passed to `c --fast`.
+#                        Also enabled when AI_FAST is truthy (1/true/yes/on).
 PROFILE=""
 RESUME=""
 PORTS=""
 CODEX_AUTO_START=""
 REMOTE=${AI_REMOTE:-}
+FAST=${AI_FAST:-}
 while [ $# -gt 0 ]; do
   case "$1" in
     cx)
@@ -67,6 +70,9 @@ while [ $# -gt 0 ]; do
       ;;
     --remote)
       REMOTE=1
+      ;;
+    --fast)
+      FAST=1
       ;;
     -*)
       echo "at=fatal msg=\"unknown option\" option=\"$1\"" >&2
@@ -107,6 +113,10 @@ CODEX_ENV=""
 # Opt-in remote control; `c` reads AI_REMOTE in the container and enables it.
 REMOTE_ENV=""
 is_true "$REMOTE" && REMOTE_ENV="--env AI_REMOTE=1"
+
+# Opt-in fast mode; `c` reads AI_FAST in the container and enables it.
+FAST_ENV=""
+is_true "$FAST" && FAST_ENV="--env AI_FAST=1"
 
 # Build extra "--publish SRC:DST" flags from --ports.
 PUBLISH_PORTS=""
@@ -180,6 +190,7 @@ podman run --rm --interactive --tty \
   ${RESUME_ENV:-} \
   ${CODEX_ENV:-} \
   ${REMOTE_ENV:-} \
+  ${FAST_ENV:-} \
   --volume ${BUNDLE_DIR}:/bundle \
   --volume ${COMMAND_HISTORY_DIR}:/commandhistory \
   --volume ${HISTORY_DIR}:/history \

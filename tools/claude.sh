@@ -11,6 +11,18 @@ is_true () {
   esac
 }
 
+# Merge a jq assignment into the session's settings.json, creating it if
+# missing. Used by the per-session --remote / --fast opt-ins.
+enable_setting () {
+  local file=$1
+  local filter=$2
+  local tmp
+  [[ -f "$file" ]] || echo '{}' > "$file"
+  tmp=$(mktemp)
+  jq "$filter" "$file" > "$tmp"
+  mv "$tmp" "$file"
+}
+
 history_dir () {
   local tool=$1
   local year
@@ -64,6 +76,8 @@ usage () {
   echo "      --debug=<filter> Pass --debug <filter> to claude (e.g. --debug=api,hooks)."
   echo "      --remote         Enable Claude Code remote control for this session."
   echo "                       Also enabled when AI_REMOTE is truthy (1/true/yes/on)."
+  echo "      --fast           Enable fast mode for this session."
+  echo "                       Also enabled when AI_FAST is truthy (1/true/yes/on)."
   exit 1
 }
 
@@ -71,6 +85,7 @@ main () {
   local profile=""
   local apikey=""
   local remote="${AI_REMOTE:-}"
+  local fast="${AI_FAST:-}"
   local resume_id=""
   local jsonl=""
   local saved
@@ -103,6 +118,10 @@ main () {
         ;;
       --remote)
         remote=1
+        shift
+        ;;
+      --fast)
+        fast=1
         shift
         ;;
       -h|--help)
@@ -203,17 +222,25 @@ main () {
     cp -f /claude/settings.json "$settings_claude_home/settings.json"
   fi
 
+  settings_file="$settings_claude_home/settings.json"
+
   # Opt-in Claude Code remote control (--remote or AI_REMOTE truthy). Off by
   # default: it exposes this session to claude.ai/the mobile app behind only
-  # your login, so enable it deliberately rather than for every run. This is
-  # the settings key the `/config` "Enable Remote Control for all sessions"
-  # toggle writes; the bridge starts automatically each session.
-  if is_true "$remote"; then
-    settings_file="$settings_claude_home/settings.json"
-    [[ -f "$settings_file" ]] || echo '{}' > "$settings_file"
-    tmp=$(mktemp)
-    jq '.remoteControlAtStartup = true' "$settings_file" > "$tmp"
-    mv "$tmp" "$settings_file"
+  # your login. Sets the key the `/config` "Enable Remote Control for all
+  # sessions" toggle writes; the bridge then starts automatically each session.
+  is_true "$remote" && enable_setting "$settings_file" '.remoteControlAtStartup = true'
+
+  # Opt-in fast mode (--fast or AI_FAST truthy). Off by default: it draws from
+  # usage credits at a higher rate with separate rate limits. Needs Opus 4.6+,
+  # which the launch model below satisfies.
+  #
+  # The persisted setting is evaluated once at startup while the async fast-mode
+  # availability check is still "pending", so in a fresh container it resolves
+  # to off and never re-applies. Skip that check (the org/availability gate) so
+  # the setting engages immediately.
+  if is_true "$fast"; then
+    enable_setting "$settings_file" '.fastMode = true'
+    export CLAUDE_CODE_SKIP_FAST_MODE_ORG_CHECK=1
   fi
 
   echo "${profile:-apikey}" > "$HOME/.claude/.profile"
