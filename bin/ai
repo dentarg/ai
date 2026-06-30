@@ -16,8 +16,14 @@ SHARE_DIR=${AI_DIR}/share
 
 PORT=${PORT:-1337}
 
+fatal_unexpected_arg() {
+  echo "at=fatal msg=\"unexpected argument\" arg=\"$1\"" >&2
+  exit 1
+}
+
 # Parse arguments:
 #   [profile]            optional claude profile; auto-launches `c <profile>`.
+#   cx                   auto-launches `cx` once the container is up.
 #   -r, --resume <id>    resume a prior session; passed on to `c --resume <id>`.
 #                        Works with or without a profile (`c` auto-detects it).
 #   --ports <list>       extra ports to publish, comma-separated. Each entry is
@@ -25,8 +31,14 @@ PORT=${PORT:-1337}
 PROFILE=""
 RESUME=""
 PORTS=""
+CODEX_AUTO_START=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    cx)
+      [ -z "$PROFILE" ] || fatal_unexpected_arg "$1"
+      [ -z "$CODEX_AUTO_START" ] || fatal_unexpected_arg "$1"
+      CODEX_AUTO_START=1
+      ;;
     -r|--resume)
       shift
       [ $# -gt 0 ] || { echo "at=fatal msg=\"--resume requires a session id\"" >&2; exit 1; }
@@ -44,16 +56,22 @@ while [ $# -gt 0 ]; do
       PORTS=${1#--ports=}
       ;;
     -*)
-      echo "at=fatal msg=\"unknown option\" option=$1" >&2
+      echo "at=fatal msg=\"unknown option\" option=\"$1\"" >&2
       exit 1
       ;;
     *)
-      [ -z "$PROFILE" ] || { echo "at=fatal msg=\"unexpected argument\" arg=$1" >&2; exit 1; }
+      [ -z "$CODEX_AUTO_START" ] || fatal_unexpected_arg "$1"
+      [ -z "$PROFILE" ] || fatal_unexpected_arg "$1"
       PROFILE=$1
       ;;
   esac
   shift
 done
+
+if [ -n "$CODEX_AUTO_START" ] && [ -n "$RESUME" ]; then
+  echo "at=fatal msg=\"--resume is only supported for claude\"" >&2
+  exit 1
+fi
 
 # Optional claude profile; when given, the container auto-launches `c <profile>`.
 PROFILE_ENV=""
@@ -69,6 +87,9 @@ fi
 # Optional session to resume; passed through to `c --resume <id>` on launch.
 RESUME_ENV=""
 [ -n "$RESUME" ] && RESUME_ENV="--env CLAUDE_RESUME=$RESUME"
+
+CODEX_ENV=""
+[ -n "$CODEX_AUTO_START" ] && CODEX_ENV="--env CODEX_AUTO_START=1"
 
 # Build extra "--publish SRC:DST" flags from --ports.
 PUBLISH_PORTS=""
@@ -140,6 +161,7 @@ podman run --rm --interactive --tty \
   --env PORT=${PORT} \
   ${PROFILE_ENV} \
   ${RESUME_ENV} \
+  ${CODEX_ENV} \
   --volume ${BUNDLE_DIR}:/bundle \
   --volume ${COMMAND_HISTORY_DIR}:/commandhistory \
   --volume ${HISTORY_DIR}:/history \

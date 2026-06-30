@@ -96,8 +96,8 @@ link_dotfiles
 # source user's bashrc from dotfiles if present (after container setup)
 [[ -f /settings/dotfiles/.bashrc ]] && source /settings/dotfiles/.bashrc
 
-# When bin/ai is given a profile and/or --resume, auto-launch claude on the
-# console shell. CLAUDE_PROFILE/CLAUDE_RESUME live in the container env, so they
+# When bin/ai is given a profile, --resume, or cx, auto-launch the requested
+# agent on the console shell. These flags live in the container env, so they
 # also leak into every later `podman exec` shell (e.g. bin/pod) — guard on the
 # console tty so only the systemd shell.service session auto-launches.
 # /dev/console is a symlink to the console's pts (e.g. /dev/pts/0); the
@@ -105,12 +105,24 @@ link_dotfiles
 # and drop to a normal prompt.
 # Unset first so nested shells (and claude's own subshells) don't relaunch;
 # on exit you're left at a normal prompt.
-if [[ $- == *i* && ( -n "${CLAUDE_PROFILE:-}" || -n "${CLAUDE_RESUME:-}" ) && "$(tty)" == "$(readlink -f /dev/console)" ]]; then
+auto_launch_requested=false
+if [[ -n "${CLAUDE_PROFILE:-}" || -n "${CLAUDE_RESUME:-}" || -n "${CODEX_AUTO_START:-}" ]]; then
+  auto_launch_requested=true
+fi
+
+if [[ $- == *i* && "$auto_launch_requested" == true && "$(tty)" == "$(readlink -f /dev/console)" ]]; then
   profile="${CLAUDE_PROFILE:-}"
   resume="${CLAUDE_RESUME:-}"
-  unset CLAUDE_PROFILE CLAUDE_RESUME
-  c_args=()
-  [[ -n "$profile" ]] && c_args+=("$profile")
-  [[ -n "$resume" ]] && c_args+=(--resume "$resume")
-  c "${c_args[@]}"
+  codex_auto_start="${CODEX_AUTO_START:-}"
+  unset CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START
+
+  if [[ -n "$codex_auto_start" ]]; then
+    start.sh || true
+    cx
+  else
+    c_args=()
+    [[ -n "$profile" ]] && c_args+=("$profile")
+    [[ -n "$resume" ]] && c_args+=(--resume "$resume")
+    c "${c_args[@]}"
+  fi
 fi

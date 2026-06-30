@@ -38,6 +38,9 @@ bin/ai
 # only if it has fully expired) so every session reuses a valid token.
 bin/ai <profile>
 
+# start podman and auto-launch "cx" once the container is up.
+bin/ai cx
+
 # resume a prior session: passed through to "c --resume <id>" on launch.
 # works with or without a profile (c auto-detects it from the session).
 bin/ai --resume <session-id>
