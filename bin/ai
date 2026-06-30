@@ -21,6 +21,13 @@ fatal_unexpected_arg() {
   exit 1
 }
 
+is_true() {
+  case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Parse arguments:
 #   [profile]            optional claude profile; auto-launches `c <profile>`.
 #   cx                   auto-launches `cx` once the container is up.
@@ -28,10 +35,13 @@ fatal_unexpected_arg() {
 #                        Works with or without a profile (`c` auto-detects it).
 #   --ports <list>       extra ports to publish, comma-separated. Each entry is
 #                        "PORT" (host==container) or "SRC:DST" (host:container).
+#   --remote             enable Claude Code remote control; passed to `c --remote`.
+#                        Also enabled when AI_REMOTE is truthy (1/true/yes/on).
 PROFILE=""
 RESUME=""
 PORTS=""
 CODEX_AUTO_START=""
+REMOTE=${AI_REMOTE:-}
 while [ $# -gt 0 ]; do
   case "$1" in
     cx)
@@ -54,6 +64,9 @@ while [ $# -gt 0 ]; do
       ;;
     --ports=*)
       PORTS=${1#--ports=}
+      ;;
+    --remote)
+      REMOTE=1
       ;;
     -*)
       echo "at=fatal msg=\"unknown option\" option=\"$1\"" >&2
@@ -90,6 +103,10 @@ RESUME_ENV=""
 
 CODEX_ENV=""
 [ -n "$CODEX_AUTO_START" ] && CODEX_ENV="--env CODEX_AUTO_START=1"
+
+# Opt-in remote control; `c` reads AI_REMOTE in the container and enables it.
+REMOTE_ENV=""
+is_true "$REMOTE" && REMOTE_ENV="--env AI_REMOTE=1"
 
 # Build extra "--publish SRC:DST" flags from --ports.
 PUBLISH_PORTS=""
@@ -162,6 +179,7 @@ podman run --rm --interactive --tty \
   ${PROFILE_ENV:-} \
   ${RESUME_ENV:-} \
   ${CODEX_ENV:-} \
+  ${REMOTE_ENV:-} \
   --volume ${BUNDLE_DIR}:/bundle \
   --volume ${COMMAND_HISTORY_DIR}:/commandhistory \
   --volume ${HISTORY_DIR}:/history \

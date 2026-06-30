@@ -52,6 +52,11 @@ bin/ai --ports 9999             # host 9999 -> container 9999
 bin/ai --ports 8888:7777        # host 8888 -> container 7777
 bin/ai <profile> --ports 9999,8888:7777
 
+# enable Claude Code remote control for the session (off by default).
+# equivalently set AI_REMOTE=1 in your shell. see "Remote control" below.
+bin/ai <profile> --remote
+AI_REMOTE=1 bin/ai <profile>
+
 # start services (and run "bundle install" if Gemfile exists).
 # also runs automatically as part of "c" below.
 s
@@ -193,6 +198,36 @@ For self-hosted Sentry, additionally drop the hostname in
 through as `--host=...`.
 
 No `sentry.token` → no MCP server registered.
+
+## Remote control
+
+[Remote control](https://code.claude.com/docs/en/remote-control) lets you
+monitor and steer a running Claude Code session from claude.ai or the Claude
+mobile app. The session keeps running in the container — only its I/O is
+mirrored, over the same outbound HTTPS the agent already uses.
+
+It is **off by default** and opt-in per session, because it exposes the
+session (filesystem, MCP servers, every tool call) to anyone with your
+claude.ai login. Turn it on with either:
+
+```shell
+bin/ai <profile> --remote      # one-off flag
+AI_REMOTE=1 bin/ai <profile>   # or set the env in your shell
+```
+
+`bin/ai` forwards this into the container as `AI_REMOTE=1`; `c` then sets
+`remoteControlAtStartup` in the session's `~/.claude/settings.json` — the same
+key the `/config` "Enable Remote Control for all sessions" toggle writes, so the
+bridge starts automatically. Running `c` directly honours the same `--remote`
+flag and `AI_REMOTE` env. To make it the default for every session, export
+`AI_REMOTE=1` in your host shell profile.
+
+Remote sessions are labelled by the host directory in the claude.ai/mobile
+list — `c` sets `CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX` from `HOST_DIR`, so
+they show as `<dir>-<random-words>` instead of the container hostname.
+
+To enable it on an already-running session, run `/remote-control` (or `/rc`)
+in the TUI; a `/rc active` link then appears in the footer.
 
 ## Tricks
 

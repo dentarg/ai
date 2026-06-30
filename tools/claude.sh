@@ -4,6 +4,13 @@ set -e
 
 HISTORY_ROOT=${HISTORY_ROOT:-/history}
 
+is_true () {
+  case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 history_dir () {
   local tool=$1
   local year
@@ -55,16 +62,20 @@ usage () {
   echo "                       and ~/.claude is symlinked to its original home."
   echo "  -d, --debug          Pass --debug to claude."
   echo "      --debug=<filter> Pass --debug <filter> to claude (e.g. --debug=api,hooks)."
+  echo "      --remote         Enable Claude Code remote control for this session."
+  echo "                       Also enabled when AI_REMOTE is truthy (1/true/yes/on)."
   exit 1
 }
 
 main () {
   local profile=""
   local apikey=""
+  local remote="${AI_REMOTE:-}"
   local resume_id=""
   local jsonl=""
   local saved
   local settings_claude_home
+  local settings_file
   local settings_credentials
   local sentry_token
   local sentry_host
@@ -88,6 +99,10 @@ main () {
         ;;
       --debug=*)
         debug_flag=(--debug "${1#--debug=}")
+        shift
+        ;;
+      --remote)
+        remote=1
         shift
         ;;
       -h|--help)
@@ -188,6 +203,19 @@ main () {
     cp -f /claude/settings.json "$settings_claude_home/settings.json"
   fi
 
+  # Opt-in Claude Code remote control (--remote or AI_REMOTE truthy). Off by
+  # default: it exposes this session to claude.ai/the mobile app behind only
+  # your login, so enable it deliberately rather than for every run. This is
+  # the settings key the `/config` "Enable Remote Control for all sessions"
+  # toggle writes; the bridge starts automatically each session.
+  if is_true "$remote"; then
+    settings_file="$settings_claude_home/settings.json"
+    [[ -f "$settings_file" ]] || echo '{}' > "$settings_file"
+    tmp=$(mktemp)
+    jq '.remoteControlAtStartup = true' "$settings_file" > "$tmp"
+    mv "$tmp" "$settings_file"
+  fi
+
   echo "${profile:-apikey}" > "$HOME/.claude/.profile"
 
   if [[ -n "$apikey" ]]; then
@@ -195,6 +223,13 @@ main () {
   fi
 
   [[ -n "$resume_id" ]] && resume_flag=(--resume "$resume_id")
+
+  # Label remote-control sessions by the host directory rather than the
+  # container hostname, so they're legible in the claude.ai/mobile session
+  # list (shows as "<HOST_DIR>-<random-words>"). Only remote control reads it.
+  if [[ -n "${HOST_DIR:-}" ]]; then
+    export CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX="$HOST_DIR"
+  fi
 
   exec claude \
     --dangerously-skip-permissions \
