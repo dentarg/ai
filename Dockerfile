@@ -94,7 +94,11 @@ ENV RUBIES_DIR="${HOME}/.local/share/rv/rubies"
 RUN mkdir $HOME
 WORKDIR $HOME
 
-COPY inside_deps/ ./
+COPY inside_deps/_brew.sh \
+     inside_deps/_mise.sh \
+     inside_deps/_nvm.sh \
+     inside_deps/_rv.sh \
+     ./
 
 RUN bash _brew.sh
 RUN bash _nvm.sh
@@ -231,26 +235,6 @@ RUN bash -c "pip install mitmproxy"
 # we don't want to wait when starting the container
 RUN systemctl disable postgresql lavinmq redis-server
 
-# convenience scripts
-COPY ./tools/start.sh /usr/local/bin/start.sh
-COPY ./tools/screenshot.sh /usr/local/bin/screenshot.sh
-COPY ./tools/claude.sh /usr/local/bin/c
-COPY ./tools/gemini.sh /usr/local/bin/g
-COPY ./tools/codex.sh /usr/local/bin/cx
-COPY ./tools/exit.sh /usr/local/bin/x
-COPY ./tools/loki.sh /usr/local/bin/loki
-COPY ./tools/claude-hook.sh /usr/local/bin/claude-hook
-COPY ./tools/claude-login.sh /usr/local/bin/claude-login
-RUN chmod +x /usr/local/bin/start.sh \
-             /usr/local/bin/screenshot.sh \
-             /usr/local/bin/c \
-             /usr/local/bin/g \
-             /usr/local/bin/cx \
-             /usr/local/bin/x \
-             /usr/local/bin/loki \
-             /usr/local/bin/claude-hook \
-             /usr/local/bin/claude-login
-
 #
 # systemd
 #
@@ -313,25 +297,20 @@ RUN systemctl enable refresh-tokens.service
 #
 # Coding agents (Claude Code, Codex)
 #
-# Installed as late as possible so picking up a new release only re-runs these
-# layers and the cheap tweaks below — never the heavy language/database layers
-# above.
-#
-# Each `ADD` fetches the upstream "latest" manifest. buildah re-downloads a URL
-# on every build, so the layer's cache key tracks the manifest content: it stays
-# byte-identical while the version is unchanged (cache hit) and differs the moment
-# a new version ships (cache miss), which busts the install RUN that follows.
-# (BuildKit instead caches ADD-from-URL by URL string and would not re-fetch.)
+# Agent versions are pinned in versions/ and refreshed by build_image flags.
 
-# Claude Code — _claude.sh downloads and checksum-verifies the latest standalone release
-ADD https://downloads.claude.ai/claude-code-releases/latest /tmp/claude-version
-RUN bash _claude.sh && rm _claude.sh /tmp/claude-version
+# Codex — npm global, pinned version
+COPY versions/codex /tmp/codex-version
+RUN bash -c 'npm install -g "@openai/codex@$(cat /tmp/codex-version)"' \
+    && rm /tmp/codex-version
+
+# Claude Code — official installer, asked to install the pinned version
+COPY inside_deps/_claude.sh ./
+COPY versions/claude-code /tmp/claude-version
+RUN bash _claude.sh "$(cat /tmp/claude-version)" \
+    && rm _claude.sh /tmp/claude-version
 # created by claude native installer
 RUN rm -rf $HOME/.claude
-
-# Codex — npm global, latest published version
-ADD https://registry.npmjs.org/@openai/codex/latest /tmp/codex-version.json
-RUN bash -c "npm install -g @openai/codex" && rm /tmp/codex-version.json
 
 # Claude Code plugins
 # RUN bash -c "claude plugin marketplace add https://github.com/anthropics/claude-code"
@@ -341,12 +320,30 @@ ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
 # do this late to allow tweaking without rebuilding previous layers
+COPY ./tools/start.sh /usr/local/bin/start.sh
+COPY ./tools/screenshot.sh /usr/local/bin/screenshot.sh
+COPY ./tools/claude.sh /usr/local/bin/c
+COPY ./tools/gemini.sh /usr/local/bin/g
+COPY ./tools/codex.sh /usr/local/bin/cx
+COPY ./tools/exit.sh /usr/local/bin/x
+COPY ./tools/loki.sh /usr/local/bin/loki
+COPY ./tools/claude-hook.sh /usr/local/bin/claude-hook
+COPY ./tools/claude-login.sh /usr/local/bin/claude-login
 COPY dot.bashrc $HOME/.bashrc
 COPY .gitconfig /etc/gitconfig
 COPY gitignore-global /etc/gitignore
 COPY bin/codex-login /usr/local/bin/codex-login
 COPY bin/refresh-tokens /usr/local/bin/refresh-tokens
-RUN chmod +x /usr/local/bin/codex-login \
+RUN chmod +x /usr/local/bin/start.sh \
+             /usr/local/bin/screenshot.sh \
+             /usr/local/bin/c \
+             /usr/local/bin/g \
+             /usr/local/bin/cx \
+             /usr/local/bin/x \
+             /usr/local/bin/loki \
+             /usr/local/bin/claude-hook \
+             /usr/local/bin/claude-login \
+             /usr/local/bin/codex-login \
              /usr/local/bin/refresh-tokens
 
 # Quiet systemd: hide status messages and the INFO-level boot banner

@@ -89,7 +89,16 @@ brew install podman
 # init the VM, enable zram swap, set kernel.keys quotas
 bin/setup-vm
 
+# normal builds use the pinned agent versions in "versions/" and do not
+# check upstream "latest" endpoints.
 ./build_image
+
+# update pinned Claude Code and Codex version files, then rebuild
+./build_image --update-agents
+
+# update only one pinned agent version file
+./build_image --update-claude
+./build_image --update-codex
 
 # rebuild all layers and pull latest base image
 ./build_image --force

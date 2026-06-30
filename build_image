@@ -11,15 +11,77 @@ set -u
 # check date when it was built with
 # podman image inspect ai:latest | jq '.[].Created'
 
-EXTRA_ARGS=""
+FORCE=0
+UPDATE_CLAUDE=0
+UPDATE_CODEX=0
+
+usage () {
+  echo "Usage: ./build_image [--force] [--update-claude] [--update-codex]" >&2
+  echo "       ./build_image [--force] --update-agents" >&2
+  exit 1
+}
+
+update_claude_version () {
+  version=$(curl -fsSL https://downloads.claude.ai/claude-code-releases/latest)
+  case "$version" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *)
+      echo "at=fatal msg=\"invalid Claude Code version\" version=\"$version\"" >&2
+      exit 1
+      ;;
+  esac
+  mkdir -p versions
+  printf '%s\n' "$version" > versions/claude-code
+}
+
+update_codex_version () {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo 'at=fatal msg="jq is required to update Codex version pin"' >&2
+    exit 1
+  fi
+
+  version=$(curl -fsSL https://registry.npmjs.org/@openai/codex/latest | jq -r .version)
+  case "$version" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *)
+      echo "at=fatal msg=\"invalid Codex version\" version=\"$version\"" >&2
+      exit 1
+      ;;
+  esac
+  mkdir -p versions
+  printf '%s\n' "$version" > versions/codex
+}
 
 for arg in "$@"; do
   case "$arg" in
     --force)
-      EXTRA_ARGS="--no-cache --pull"
+      FORCE=1
+      ;;
+    --update-claude)
+      UPDATE_CLAUDE=1
+      ;;
+    --update-codex)
+      UPDATE_CODEX=1
+      ;;
+    --update-agents)
+      UPDATE_CLAUDE=1
+      UPDATE_CODEX=1
+      ;;
+    -h|--help)
+      usage
+      ;;
+    *)
+      echo "at=fatal msg=\"unknown option\" option=\"$arg\"" >&2
+      usage
       ;;
   esac
 done
 
+[ "$UPDATE_CLAUDE" -eq 1 ] && update_claude_version
+[ "$UPDATE_CODEX" -eq 1 ] && update_codex_version
+
 set -x
-podman build $EXTRA_ARGS . --tag ai:latest
+set -- build
+[ "$FORCE" -eq 1 ] && set -- "$@" --no-cache --pull
+set -- "$@" . --tag ai:latest
+podman "$@"
