@@ -159,9 +159,9 @@ podman run --rm --interactive --tty \
   --cap-add=SYS_PTRACE \
   --env HOST_DIR="$(basename "$(pwd)")" \
   --env PORT=${PORT} \
-  ${PROFILE_ENV} \
-  ${RESUME_ENV} \
-  ${CODEX_ENV} \
+  ${PROFILE_ENV:-} \
+  ${RESUME_ENV:-} \
+  ${CODEX_ENV:-} \
   --volume ${BUNDLE_DIR}:/bundle \
   --volume ${COMMAND_HISTORY_DIR}:/commandhistory \
   --volume ${HISTORY_DIR}:/history \
@@ -172,6 +172,6 @@ podman run --rm --interactive --tty \
   --volume $(pwd):/app \
   --workdir /app \
   --publish ${PORT} \
-  ${PUBLISH_PORTS} \
+  ${PUBLISH_PORTS:-} \
   --label cwd="${CWD_LABEL}" \
   ai:latest
