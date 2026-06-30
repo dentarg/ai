@@ -22,10 +22,14 @@ trap 'rm -rf "$tmpdir"' EXIT
 
 session_id=11111111-2222-4333-8444-555555555555
 subagent_id=agent-a1111111111111111
-run_dir="${tmpdir}/example_claude_home"
+run_dir="${tmpdir}/example_claude"
 workspace_dir="${run_dir}/projects/example-workspace"
 session_dir="${workspace_dir}/${session_id}"
+other_workspace_dir="${tmpdir}/example_gemini/projects/example-workspace"
 expected="${workspace_dir}/${session_id}.jsonl"
+
+mkdir -p "$other_workspace_dir"
+printf '{}\n' > "${other_workspace_dir}/${session_id}.jsonl"
 
 mkdir -p "${session_dir}/subagents"
 printf '{}\n' > "${session_dir}/subagents/${subagent_id}.jsonl"

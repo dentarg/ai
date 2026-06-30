@@ -21,19 +21,28 @@ find_resume_jsonl () {
   local history_root=$1
   local session_id=$2
   local match
+  local projects_dir
 
   case "$session_id" in
     ""|*[!A-Za-z0-9_-]*) return 1 ;;
   esac
 
-  match=$(
-    find "$history_root" -regextype posix-extended -type f \
-      -regex ".*/projects/[^/]+/${session_id}[^/]*[.]jsonl" \
-      -print -quit 2>/dev/null
-  )
-  [[ -n "$match" ]] || return 1
+  while IFS= read -r projects_dir; do
+    [[ -n "$projects_dir" ]] || continue
 
-  printf '%s\n' "$match"
+    match=$(
+      find "$projects_dir" -mindepth 2 -maxdepth 2 -type f \
+        -name "${session_id}*.jsonl" -print -quit 2>/dev/null
+    )
+    if [[ -n "$match" ]]; then
+      printf '%s\n' "$match"
+      return 0
+    fi
+  done <<EOF
+$(find "$history_root" -maxdepth 4 -type d -path "*_claude/projects" -print 2>/dev/null)
+EOF
+
+  return 1
 }
 
 usage () {
