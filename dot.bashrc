@@ -106,7 +106,7 @@ link_dotfiles
 # Unset first so nested shells (and claude's own subshells) don't relaunch;
 # on exit you're left at a normal prompt.
 auto_launch_requested=false
-if [[ -n "${CLAUDE_PROFILE:-}" || -n "${CLAUDE_RESUME:-}" || -n "${CODEX_AUTO_START:-}" ]]; then
+if [[ -n "${CLAUDE_PROFILE:-}" || -n "${CLAUDE_RESUME:-}" || -n "${CODEX_AUTO_START:-}" || -n "${CODEX_RESUME:-}" ]]; then
   auto_launch_requested=true
 fi
 
@@ -114,11 +114,14 @@ if [[ $- == *i* && "$auto_launch_requested" == true && "$(tty)" == "$(readlink -
   profile="${CLAUDE_PROFILE:-}"
   resume="${CLAUDE_RESUME:-}"
   codex_auto_start="${CODEX_AUTO_START:-}"
-  unset CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START
+  codex_resume="${CODEX_RESUME:-}"
+  unset CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_RESUME
 
-  if [[ -n "$codex_auto_start" ]]; then
+  if [[ -n "$codex_auto_start" || -n "$codex_resume" ]]; then
     start.sh || true
-    cx
+    cx_args=()
+    [[ -n "$codex_resume" ]] && cx_args+=(--resume "$codex_resume")
+    cx "${cx_args[@]}"
   else
     c_args=()
     [[ -n "$profile" ]] && c_args+=("$profile")

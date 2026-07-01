@@ -41,10 +41,13 @@ bin/ai <profile>
 # start podman and auto-launch "cx" once the container is up.
 bin/ai cx
 
-# resume a prior session: passed through to "c --resume <id>" on launch.
+# resume a prior Claude session: passed through to "c --resume <id>" on launch.
 # works with or without a profile (c auto-detects it from the session).
 bin/ai --resume <session-id>
 bin/ai <profile> --resume <session-id>
+
+# resume a prior Codex session: passed through to "cx --resume <id>" on launch.
+bin/ai cx --resume <session-id>
 
 # publish extra ports from the container to the host. each entry is either
 # "PORT" (host==container) or "SRC:DST" (host:container); comma-separate many.
@@ -82,6 +85,9 @@ g
 # launch openai codex
 cx
 
+# resume a prior Codex session (searches /history for the session id; a prefix is enough).
+cx --resume <session-id>
+
 # exit the container
 x
 ```
@@ -91,6 +97,8 @@ captured by `bin/ai`, so Codex's terminal title and project/status fields show
 that host directory name instead of `/app`. Its generated statusline shows the
 project, git branch, model/reasoning, context used, and thread id. TUI
 notifications are disabled for quieter terminal sessions.
+`cx --resume <id>` searches archived Codex rollouts under `/history` and
+reuses the original Codex home before launching `codex resume <id>`.
 
 ## Prerequisites
 

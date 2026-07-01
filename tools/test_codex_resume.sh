@@ -1,0 +1,50 @@
+#!/bin/bash
+
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=tools/codex.sh
+source "${SCRIPT_DIR}/codex.sh"
+
+assert_equal () {
+  local expected=$1
+  local actual=$2
+  local message=$3
+
+  if [[ "$actual" != "$expected" ]]; then
+    echo "at=fatal msg=\"${message}\" expected=\"${expected}\" actual=\"${actual}\"" >&2
+    exit 1
+  fi
+}
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+session_id=11111111-2222-4333-8444-555555555555
+legacy_id=legacy-session
+run_dir="${tmpdir}/example_codex"
+session_day_dir="${run_dir}/sessions/2026/06/08"
+other_workspace_dir="${tmpdir}/example_claude/projects/example-workspace"
+expected="${session_day_dir}/rollout-2026-06-08T10-00-00-${session_id}.jsonl"
+legacy_expected="${session_day_dir}/rollout-${legacy_id}.jsonl"
+
+mkdir -p "$session_day_dir"
+mkdir -p "$other_workspace_dir"
+
+printf '{}\n' > "${other_workspace_dir}/${session_id}.jsonl"
+printf '{"type":"session_meta","payload":{"id":"%s"}}\n' "$session_id" > "$expected"
+
+actual=$(find_codex_resume_jsonl "$tmpdir" "$session_id")
+assert_equal "$expected" "$actual" "resume lookup selected wrong transcript"
+
+actual=$(find_codex_resume_jsonl "$tmpdir" "${session_id:0:8}")
+assert_equal "$expected" "$actual" "resume prefix lookup selected wrong transcript"
+
+printf '{"type":"session_meta","payload":{"id":"%s"}}\n' "$legacy_id" > "$legacy_expected"
+actual=$(find_codex_resume_jsonl "$tmpdir" "legacy")
+assert_equal "$legacy_expected" "$actual" "resume lookup did not use session metadata fallback"
+
+actual=$(find_codex_resume_jsonl "$tmpdir" "missing" || true)
+assert_equal "" "$actual" "resume lookup should fail when no Codex session matches"
+
+echo 'at=info msg="codex resume lookup tests passed"'

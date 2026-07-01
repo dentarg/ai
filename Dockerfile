@@ -259,7 +259,7 @@ After=multi-user.target
 [Service]
 Type=simple
 Environment=HOME=$HOME
-PassEnvironment=HOST_DIR PORT CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START AI_REMOTE AI_FAST
+PassEnvironment=HOST_DIR PORT CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_RESUME AI_REMOTE AI_FAST
 ExecStart=/bin/bash
 WorkingDirectory=/app
 StandardInput=tty
