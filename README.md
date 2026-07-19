@@ -351,6 +351,7 @@ bin/setup-vm
 - [x] ast-grep
 - [x] tmux
 - [x] SSH (`ssh-keygen`, ...)
+- [x] SQLite
 - [x] PostgreSQL
 - [x] LavinMQ
 - [x] Redis
