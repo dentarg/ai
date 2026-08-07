@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      rsync \
      shellcheck \
      silversearcher-ag \
+     socat \
      sqlite3 \
      strace \
      sudo \
