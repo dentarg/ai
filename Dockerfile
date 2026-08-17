@@ -52,6 +52,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      vim \
      wget \
      whois \
+     yt-dlp \
      zip \
      zlib1g-dev \
      zsh \
