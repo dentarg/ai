@@ -21,6 +21,28 @@ fatal_unexpected_arg() {
   exit 1
 }
 
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [profile | cx] [options]
+
+Start the AI development container, optionally launching Claude Code with a
+profile or Codex with "cx".
+
+Options:
+  -r, --resume <id>   Resume a prior Claude or Codex session
+      --ports <list>  Publish comma-separated PORT or HOST:CONTAINER ports
+      --remote        Enable Claude Code remote control
+      --fast          Enable Claude Code fast mode
+  -h, --help          Show this help
+
+Environment:
+  AI_DIR              Directory for persistent AI data (default: \$HOME/ai)
+  AI_REMOTE           Enable remote control when set to 1, true, yes, or on
+  AI_FAST             Enable fast mode when set to 1, true, yes, or on
+  PORT                Primary published port (default: 1337)
+EOF
+}
+
 is_true() {
   case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
     1|true|yes|on) return 0 ;;
@@ -40,6 +62,7 @@ is_true() {
 #                        Also enabled when AI_REMOTE is truthy (1/true/yes/on).
 #   --fast               enable fast mode; passed to `c --fast`.
 #                        Also enabled when AI_FAST is truthy (1/true/yes/on).
+#   -h, --help           show usage and exit.
 PROFILE=""
 RESUME=""
 PORTS=""
@@ -48,6 +71,10 @@ REMOTE=${AI_REMOTE:-}
 FAST=${AI_FAST:-}
 while [ $# -gt 0 ]; do
   case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
     cx)
       [ -z "$PROFILE" ] || fatal_unexpected_arg "$1"
       [ -z "$CODEX_AUTO_START" ] || fatal_unexpected_arg "$1"
