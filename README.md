@@ -34,8 +34,8 @@ bin/ai
 
 # start podman and auto-launch "c <profile>" once the container is up.
 # before launching, the shared "~/ai/settings" token for <profile> is
-# refreshed on the host (silent refresh, falling back to interactive login
-# only if it has fully expired) so every session reuses a valid token.
+# refreshed on the host. If it has expired, recent Claude session history is
+# searched for a newer active copy before falling back to interactive login.
 bin/ai <profile>
 
 # start podman and auto-launch "cx" once the container is up.
@@ -171,6 +171,14 @@ journalctl -u refresh-tokens -f
 
 # one-shot refresh (e.g. before launching a session)
 refresh-tokens --once
+
+# inspect active credentials saved in recent Claude session history
+refresh-tokens --list-active
+refresh-tokens --list-active <profile>
+
+# print or copy the freshest active credentials for a profile
+refresh-tokens --find-active <profile>
+refresh-tokens --copy-active <profile> /path/to/.credentials.json
 ```
 
 The service can also run as a standalone container to refresh `/settings` credentials:
@@ -189,6 +197,8 @@ Environment variables:
 | `CREDENTIALS_DIR` | `~/.claude` | Directory containing `.credentials*.json` files |
 | `CHECK_INTERVAL` | `300` | Seconds between checks |
 | `REFRESH_BEFORE` | `3600` | Seconds before expiry to trigger refresh |
+| `HISTORY_DIR` | `~/ai/history` | Claude session history to search |
+| `HISTORY_DAYS` | `2` | Recent file-age window to search |
 
 ## MCP Servers
 

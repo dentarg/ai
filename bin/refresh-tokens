@@ -5,6 +5,8 @@ set -euo pipefail
 CREDENTIALS_DIR="${CREDENTIALS_DIR:-${HOME:?HOME must be set}/.claude}"
 CHECK_INTERVAL="${CHECK_INTERVAL:-300}"
 REFRESH_BEFORE="${REFRESH_BEFORE:-3600}"
+HISTORY_DIR="${HISTORY_DIR:-${HOME}/ai/history}"
+HISTORY_DAYS="${HISTORY_DAYS:-2}"
 
 CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 TOKEN_URL="https://platform.claude.com/v1/oauth/token"
@@ -144,6 +146,96 @@ run() {
   if [[ "$found" -eq 0 ]]; then
     log info "msg=\"no credential files found\" dir=$CREDENTIALS_DIR"
   fi
+}
+
+active_history_credentials() {
+  local profile_filter="${1:-}"
+
+  case "$HISTORY_DAYS" in
+    ''|*[!0-9]*|0)
+      log error "msg=\"invalid history search window\" days=$HISTORY_DAYS"
+      return 1
+      ;;
+  esac
+
+  [[ -d "$HISTORY_DIR" ]] || return 0
+
+  local now file profile expires_at
+  now=$(now_ms)
+
+  while IFS= read -r -d '' file; do
+    [[ -f "${file%/*}/.profile" ]] || continue
+    IFS= read -r profile < "${file%/*}/.profile" || true
+    [[ -n "$profile" ]] || continue
+    [[ -z "$profile_filter" || "$profile" == "$profile_filter" ]] || continue
+
+    expires_at=$(jq -r \
+      '.claudeAiOauth.expiresAt | numbers // empty' "$file" 2>/dev/null) || continue
+    [[ "$expires_at" =~ ^[0-9]+$ ]] || continue
+    (( expires_at > now )) || continue
+
+    printf '%s\t%s\t%s\n' "$expires_at" "$profile" "$file"
+  done < <(
+    find "$HISTORY_DIR" \
+      -mindepth 4 \
+      -maxdepth 4 \
+      -type f \
+      -path '*_claude/.credentials.json' \
+      -mtime "-${HISTORY_DAYS}" \
+      -print0 2>/dev/null
+  ) | sort -t $'\t' -k1,1nr -k3,3r
+}
+
+list_active_history_credentials() {
+  local profile_filter="${1:-}"
+  local expires_at profile file
+
+  printf 'PROFILE\tEXPIRES\tPATH\n'
+  while IFS=$'\t' read -r expires_at profile file; do
+    [[ -n "$file" ]] || continue
+    printf '%s\t%s\t%s\n' \
+      "$profile" "$(format_expiry "$expires_at")" "$file"
+  done < <(active_history_credentials "$profile_filter")
+}
+
+find_active_history_credentials() {
+  local profile=$1
+  local expires_at file
+
+  while IFS=$'\t' read -r expires_at _ file; do
+    [[ -n "$file" ]] || continue
+    printf '%s\n' "$file"
+    return 0
+  done < <(active_history_credentials "$profile")
+
+  return 1
+}
+
+copy_active_history_credentials() {
+  local profile=$1
+  local destination=$2
+  local source destination_dir tmp
+
+  if ! source=$(find_active_history_credentials "$profile"); then
+    log error "msg=\"no active credentials found\" profile=\"$profile\" dir=\"$HISTORY_DIR\""
+    return 1
+  fi
+
+  destination_dir=$(dirname "$destination")
+  if [[ ! -d "$destination_dir" ]]; then
+    log error "msg=\"destination directory not found\" dir=\"$destination_dir\""
+    return 1
+  fi
+
+  if ! tmp=$(mktemp "${destination}.tmp.XXXXXX"); then
+    return 1
+  fi
+  if ! (umask 077 && cp "$source" "$tmp" && chmod 600 "$tmp"); then
+    rm -f "$tmp"
+    return 1
+  fi
+  mv "$tmp" "$destination"
+  log info "msg=\"copied active credentials\" profile=\"$profile\" source=\"$source\" destination=\"$destination\""
 }
 
 login() {
@@ -293,12 +385,20 @@ usage() {
   echo "  --login [profile]   Sign in with OAuth and save credentials"
   echo "  --once              Refresh all tokens once and exit"
   echo "  --daemon            Run as a daemon, refreshing tokens periodically"
+  echo "  --list-active [profile]"
+  echo "                      List active credentials in Claude session history"
+  echo "  --find-active <profile>"
+  echo "                      Print the freshest active credentials path"
+  echo "  --copy-active <profile> <path>"
+  echo "                      Copy the freshest active credentials to path"
   echo "  --help, -h          Show this help"
   echo ""
   echo "Environment:"
   echo "  CREDENTIALS_DIR   Directory with .credentials*.json files (default: ~/.claude)"
   echo "  CHECK_INTERVAL    Seconds between checks in daemon mode (default: 300)"
   echo "  REFRESH_BEFORE    Seconds before expiry to refresh (default: 3600)"
+  echo "  HISTORY_DIR       Claude session history (default: ~/ai/history)"
+  echo "  HISTORY_DAYS      Recent days of history to search (default: 2)"
 }
 
 main() {
@@ -315,6 +415,17 @@ main() {
         run
         sleep "$CHECK_INTERVAL"
       done
+      ;;
+    --list-active)
+      list_active_history_credentials "${2:-}"
+      ;;
+    --find-active)
+      [[ -n "${2:-}" ]] || { usage >&2; return 1; }
+      find_active_history_credentials "$2"
+      ;;
+    --copy-active)
+      [[ -n "${2:-}" && -n "${3:-}" ]] || { usage >&2; return 1; }
+      copy_active_history_credentials "$2" "$3"
       ;;
     --help|-h)
       usage

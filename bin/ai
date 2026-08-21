@@ -199,6 +199,12 @@ refresh_claude_token() {
     return 0
   fi
 
+  if HISTORY_DIR="$HISTORY_DIR" \
+    refresh-tokens --copy-active "$profile" "$cred_file" >/dev/null 2>&1; then
+    echo "at=info msg=\"recovered active claude credentials from history\" profile=$profile" >&2
+    return 0
+  fi
+
   echo "at=info msg=\"claude token expired, logging in\" profile=$profile" >&2
   CREDENTIALS_DIR="$SETTINGS_DIR" refresh-tokens --login "$profile"
 }
