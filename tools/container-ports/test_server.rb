@@ -65,6 +65,39 @@ class ContainerPortsTest < Minitest::Test
     assert_includes html, '<code class="branch branch-main">main</code>'
   end
 
+  def test_uses_agent_label_before_process_fallback
+    labeled = Container.new(
+      id: "new",
+      labels: { "agent" => "codex" },
+    )
+    legacy = Container.new(id: "old", labels: {})
+    lookups = []
+    detector = Object.new
+    detector.define_singleton_method(:running_agents) do |container_id|
+      lookups << container_id
+      ["Claude"]
+    end
+
+    detector.send(:attach_agents, [labeled, legacy])
+
+    assert_equal ["old"], lookups
+    assert_equal "Codex", labeled.agent
+    assert_equal "Claude", legacy.agent
+  end
+
+  def test_detects_node_based_agents
+    assert_equal(
+      "Gemini",
+      agent_from_command("node /usr/lib/node_modules/@google/gemini-cli/index.js"),
+    )
+  end
+
+  def test_renders_distinct_agent_classes
+    AGENT_CLASSES.each do |agent, css_class|
+      assert_includes render_agent(agent), "agent #{css_class}"
+    end
+  end
+
   def test_renders_image_below_name
     container = Container.new(
       id: "abc123",
@@ -73,16 +106,18 @@ class ContainerPortsTest < Minitest::Test
       status: "Up",
       ports: [],
       labels: { "cwd" => "~/example" },
+      agent: "Claude",
     )
 
     html = render_row(container)
 
     assert_match(
-      %r{<code>example</code>\s*<span class="image">ai:latest</span>},
+      %r{<code>example</code>.*<span class="image">ai:latest</span>}m,
       html,
     )
     assert_includes html, '<td data-sort-value="example">'
     assert_includes html, '<td data-sort-value="~/example">'
+    assert_includes html, '<span class="agent agent-claude">Claude</span>'
   end
 
   def test_renders_sortable_headers
@@ -91,6 +126,10 @@ class ContainerPortsTest < Minitest::Test
     assert_includes(
       html,
       '<button type="button" data-sort-type="text">Cwd</button>',
+    )
+    assert_includes(
+      html,
+      '<button type="button" data-sort-type="text">Agent</button>',
     )
     assert_includes(
       html,

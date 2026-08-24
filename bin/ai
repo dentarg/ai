@@ -139,6 +139,13 @@ fi
 CODEX_ENV=""
 [ -n "$CODEX_AUTO_START" ] && CODEX_ENV="--env CODEX_AUTO_START=1"
 
+AGENT=""
+if [ -n "$CODEX_AUTO_START" ]; then
+  AGENT=codex
+elif [ -n "$PROFILE" ] || [ -n "$RESUME" ]; then
+  AGENT=claude
+fi
+
 # Opt-in remote control; `c` reads AI_REMOTE in the container and enables it.
 REMOTE_ENV=""
 is_true "$REMOTE" && REMOTE_ENV="--env AI_REMOTE=1"
@@ -238,4 +245,5 @@ podman run --rm --interactive --tty \
   --publish ${PORT} \
   ${PUBLISH_PORTS:-} \
   --label cwd="${CWD_LABEL}" \
+  --label agent="${AGENT}" \
   ai:latest

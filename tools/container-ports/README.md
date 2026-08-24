@@ -1,9 +1,9 @@
 # container-ports
 
 Tiny stdlib-only Ruby web app that provides a sortable list of running Podman
-containers, their current Git branches, and links to their host-published TCP
-ports. Auto-refresh is off by default (set `REFRESH` to a positive number of
-seconds to enable it).
+containers, their coding agents and current Git branches, and links to their
+host-published TCP ports. Auto-refresh is off by default (set `REFRESH` to a
+positive number of seconds to enable it).
 
 ## Run
 
@@ -21,3 +21,8 @@ ruby tools/container-ports/server.rb
 Requires the `podman` and `git` CLIs on `PATH`. Only TCP ports with a host
 publish mapping are linked. Git branches are resolved from the host working
 directory stored in each container's `cwd` label.
+
+New containers identify their auto-launched coding agent with an `agent` label.
+For older containers and sessions where the agent was started manually, the
+app falls back to detecting Claude, Codex, Gemini, or Copilot in the live
+process list.

@@ -20,8 +20,23 @@ Container = Struct.new(
   :ports,
   :labels,
   :branch,
+  :agent,
   keyword_init: true,
 )
+
+AGENT_NAMES = {
+  "claude" => "Claude",
+  "codex" => "Codex",
+  "copilot" => "Copilot",
+  "gemini" => "Gemini",
+}.freeze
+
+AGENT_CLASSES = {
+  "Claude" => "agent-claude",
+  "Codex" => "agent-codex",
+  "Copilot" => "agent-copilot",
+  "Gemini" => "agent-gemini",
+}.freeze
 
 # Podman emits Ports as an array of objects like:
 #   {"host_ip": "0.0.0.0", "container_port": 80, "host_port": 8080,
@@ -96,6 +111,44 @@ def attach_git_branches(containers)
     end
 end
 
+def agent_from_command(command)
+  executable = File.basename(command.split.first.to_s).downcase
+  return "Claude" if executable == "claude"
+  return "Codex" if executable == "codex"
+  return "Gemini" if executable == "gemini"
+  return "Copilot" if executable == "copilot"
+
+  return "Codex" if command.include?("@openai/codex")
+  return "Gemini" if command.include?("@google/gemini-cli")
+  return "Copilot" if command.include?("@github/copilot")
+end
+
+def running_agents(container_id)
+  output, status = Open3.capture2(
+    "podman",
+    "top",
+    container_id,
+    "args",
+    err: File::NULL,
+  )
+  return [] unless status.success?
+
+  output.lines.drop(1).filter_map { |command| agent_from_command(command) }.uniq
+rescue SystemCallError
+  []
+end
+
+def attach_agents(containers)
+  containers.each do |container|
+    label = container.labels["agent"].to_s.downcase
+    container.agent = AGENT_NAMES[label]
+    next if container.agent
+
+    agents = running_agents(container.id)
+    container.agent = agents.join(" + ") unless agents.empty?
+  end
+end
+
 def fetch_containers
   out = `podman ps --format json 2>&1`
   unless $?.success?
@@ -115,6 +168,7 @@ def fetch_containers
     )
   end
   attach_git_branches(containers)
+  attach_agents(containers)
   [:ok, containers]
 end
 
@@ -128,6 +182,7 @@ def render_table(containers)
           <th aria-sort="none"><button type="button" data-sort-type="text">Status</button></th>
           <th aria-sort="none"><button type="button" data-sort-type="text">ID</button></th>
           <th aria-sort="none"><button type="button" data-sort-type="text">Cwd</button></th>
+          <th aria-sort="none"><button type="button" data-sort-type="text">Agent</button></th>
           <th aria-sort="none"><button type="button" data-sort-type="number">Ports</button></th>
         </tr>
       </thead>
@@ -171,6 +226,16 @@ def render_html
           --branch-fg: #18794e;
           --main-branch-bg: #f1f3f5;
           --main-branch-fg: #6b7280;
+          --agent-bg: #f1f3f5;
+          --agent-fg: #4b5563;
+          --claude-bg: #fff0e6;
+          --claude-fg: #a4470d;
+          --codex-bg: #e8f5ee;
+          --codex-fg: #18794e;
+          --copilot-bg: #f3e8ff;
+          --copilot-fg: #7e22ce;
+          --gemini-bg: #e8f0ff;
+          --gemini-fg: #2457a6;
           --error: #b00;
         }
         @media (prefers-color-scheme: dark) {
@@ -188,6 +253,16 @@ def render_html
             --branch-fg: #7ee2a8;
             --main-branch-bg: #30343b;
             --main-branch-fg: #9298a1;
+            --agent-bg: #30343b;
+            --agent-fg: #aeb4be;
+            --claude-bg: #4a2b1b;
+            --claude-fg: #f0a56b;
+            --codex-bg: #173b2b;
+            --codex-fg: #7ee2a8;
+            --copilot-bg: #3b2452;
+            --copilot-fg: #d8a7ff;
+            --gemini-bg: #203457;
+            --gemini-fg: #8db8ff;
             --error: #ff8a8a;
           }
         }
@@ -219,6 +294,20 @@ def render_html
           color: var(--faint);
           font-size: 0.75rem;
         }
+        .agent {
+          display: inline-block;
+          width: fit-content;
+          padding: 0.08rem 0.35rem;
+          color: var(--agent-fg);
+          background: var(--agent-bg);
+          border-radius: 3px;
+          font-size: 0.72rem;
+          font-weight: 600;
+        }
+        .agent-claude { color: var(--claude-fg); background: var(--claude-bg); }
+        .agent-codex { color: var(--codex-fg); background: var(--codex-bg); }
+        .agent-copilot { color: var(--copilot-fg); background: var(--copilot-bg); }
+        .agent-gemini { color: var(--gemini-fg); background: var(--gemini-bg); }
         .cwd { white-space: nowrap; }
         .cwd-parent { color: var(--muted); }
         .cwd-name { color: var(--fg); font-weight: 700; }
@@ -304,6 +393,13 @@ def render_cwd(labels, branch)
   html
 end
 
+def render_agent(agent)
+  return "<span class=\"no-ports\">—</span>" if agent.nil? || agent.empty?
+
+  css_class = ["agent", AGENT_CLASSES[agent]].compact.join(" ")
+  "<span class=\"#{css_class}\">#{CGI.escapeHTML(agent)}</span>"
+end
+
 def render_row(c)
   cwd = c.labels["cwd"].to_s
   first_port = c.ports.first
@@ -326,6 +422,7 @@ def render_row(c)
       <td data-sort-value="#{CGI.escapeHTML(c.status)}">#{CGI.escapeHTML(c.status)}</td>
       <td data-sort-value="#{CGI.escapeHTML(c.id)}"><code>#{CGI.escapeHTML(c.id)}</code></td>
       <td data-sort-value="#{CGI.escapeHTML(cwd)}">#{render_cwd(c.labels, c.branch)}</td>
+      <td data-sort-value="#{CGI.escapeHTML(c.agent.to_s)}">#{render_agent(c.agent)}</td>
       <td data-sort-value="#{first_port && first_port[:host_port]}">#{ports_html}</td>
     </tr>
   ROW
