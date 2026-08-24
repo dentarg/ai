@@ -11,7 +11,7 @@ require "open3"
 PORT             = (ENV["PORT"] || 4567).to_i
 BIND             = ENV["BIND"] || "127.0.0.1"
 REFRESH_SECONDS  = (ENV["REFRESH"] || 0).to_i
-AGENT_WORKERS    = [(ENV["AGENT_LOOKUP_WORKERS"] || 8).to_i, 1].max
+LOOKUP_WORKERS   = [(ENV["LOOKUP_WORKERS"] || 8).to_i, 1].max
 
 Container = Struct.new(
   :id,
@@ -102,14 +102,32 @@ rescue SystemCallError
   nil
 end
 
-def attach_git_branches(containers)
-  containers.group_by { |container| resolve_cwd(container.labels["cwd"]) }
-    .each do |path, matching_containers|
-      next if path.nil?
+def each_concurrently(items, workers:)
+  queue = Queue.new
+  items.each { |item| queue << item }
 
-      branch = current_git_branch(path)
-      matching_containers.each { |container| container.branch = branch }
+  threads = Array.new([workers, items.length].min) do
+    Thread.new do
+      loop do
+        yield queue.pop(true)
+      end
+    rescue ThreadError
+      nil
     end
+  end
+  threads.each(&:value)
+end
+
+def attach_git_branches(containers)
+  groups = containers.group_by do |container|
+    resolve_cwd(container.labels["cwd"])
+  end
+  groups.delete(nil)
+
+  each_concurrently(groups.to_a, workers: LOOKUP_WORKERS) do |path, matching|
+    branch = current_git_branch(path)
+    matching.each { |container| container.branch = branch }
+  end
 end
 
 def agent_from_command(command)
@@ -139,22 +157,6 @@ rescue SystemCallError
   []
 end
 
-def each_concurrently(items, workers:)
-  queue = Queue.new
-  items.each { |item| queue << item }
-
-  threads = Array.new([workers, items.length].min) do
-    Thread.new do
-      loop do
-        yield queue.pop(true)
-      end
-    rescue ThreadError
-      nil
-    end
-  end
-  threads.each(&:value)
-end
-
 def attach_agents(containers)
   fallbacks = []
   containers.each do |container|
@@ -163,7 +165,7 @@ def attach_agents(containers)
     fallbacks << container unless container.agent
   end
 
-  each_concurrently(fallbacks, workers: AGENT_WORKERS) do |container|
+  each_concurrently(fallbacks, workers: LOOKUP_WORKERS) do |container|
     agents = running_agents(container.id)
     container.agent = agents.join(" + ") unless agents.empty?
   end

@@ -39,6 +39,31 @@ class ContainerPortsTest < Minitest::Test
     assert_equal ["feature/current", "feature/current"], containers.map(&:branch)
   end
 
+  def test_bounds_concurrent_branch_lookups
+    containers = 12.times.map do |index|
+      Container.new(labels: { "cwd" => "/repo/#{index}" })
+    end
+    mutex = Mutex.new
+    active = 0
+    maximum = 0
+    reader = Object.new
+    reader.define_singleton_method(:current_git_branch) do |_path|
+      mutex.synchronize do
+        active += 1
+        maximum = [maximum, active].max
+      end
+      sleep 0.01
+      "main"
+    ensure
+      mutex.synchronize { active -= 1 }
+    end
+
+    reader.send(:attach_git_branches, containers)
+
+    assert_operator maximum, :>, 1
+    assert_operator maximum, :<=, LOOKUP_WORKERS
+  end
+
   def test_expands_home_relative_cwd
     original_home = ENV["HOME"]
     ENV["HOME"] = @tmpdir
@@ -107,7 +132,7 @@ class ContainerPortsTest < Minitest::Test
     detector.send(:attach_agents, containers)
 
     assert_operator maximum, :>, 1
-    assert_operator maximum, :<=, AGENT_WORKERS
+    assert_operator maximum, :<=, LOOKUP_WORKERS
   end
 
   def test_detects_node_based_agents
