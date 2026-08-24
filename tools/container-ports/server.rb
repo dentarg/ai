@@ -11,6 +11,7 @@ require "open3"
 PORT             = (ENV["PORT"] || 4567).to_i
 BIND             = ENV["BIND"] || "127.0.0.1"
 REFRESH_SECONDS  = (ENV["REFRESH"] || 0).to_i
+AGENT_WORKERS    = [(ENV["AGENT_LOOKUP_WORKERS"] || 8).to_i, 1].max
 
 Container = Struct.new(
   :id,
@@ -138,12 +139,31 @@ rescue SystemCallError
   []
 end
 
+def each_concurrently(items, workers:)
+  queue = Queue.new
+  items.each { |item| queue << item }
+
+  threads = Array.new([workers, items.length].min) do
+    Thread.new do
+      loop do
+        yield queue.pop(true)
+      end
+    rescue ThreadError
+      nil
+    end
+  end
+  threads.each(&:value)
+end
+
 def attach_agents(containers)
+  fallbacks = []
   containers.each do |container|
     label = container.labels["agent"].to_s.downcase
     container.agent = AGENT_NAMES[label]
-    next if container.agent
+    fallbacks << container unless container.agent
+  end
 
+  each_concurrently(fallbacks, workers: AGENT_WORKERS) do |container|
     agents = running_agents(container.id)
     container.agent = agents.join(" + ") unless agents.empty?
   end

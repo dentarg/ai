@@ -17,6 +17,7 @@ ruby tools/container-ports/server.rb
 - `PORT` — listen port (default `4567`)
 - `BIND` — bind address (default `127.0.0.1`)
 - `REFRESH` — page refresh interval in seconds (default `0`, disabled; set a positive value to enable)
+- `AGENT_LOOKUP_WORKERS` — concurrent legacy agent lookups (default `8`)
 
 Requires the `podman` and `git` CLIs on `PATH`. Only TCP ports with a host
 publish mapping are linked. Git branches are resolved from the host working
