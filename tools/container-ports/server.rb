@@ -193,8 +193,19 @@ def render_table(containers)
   HTML
 end
 
+def container_count_label(status, data)
+  return "Container count unavailable" if status == :error
+
+  count = data.length
+  noun = count == 1 ? "container" : "containers"
+  "#{count} #{noun} running"
+end
+
 def render_html
   status, data = fetch_containers
+  count_label = container_count_label(status, data)
+  refresh_label = REFRESH_SECONDS > 0 ? "Refreshing every #{REFRESH_SECONDS}s" : "Auto-refresh off"
+  rendered_at = Time.now.strftime("%H:%M:%S")
   body =
     if status == :error
       "<p class=\"error\">docker error: #{CGI.escapeHTML(data)}</p>"
@@ -335,7 +346,7 @@ def render_html
     </head>
     <body>
       <h1>Running containers</h1>
-      <div class="meta">#{REFRESH_SECONDS > 0 ? "Refreshing every #{REFRESH_SECONDS}s" : "Auto-refresh off"} · #{Time.now.strftime('%H:%M:%S')}</div>
+      <div class="meta">#{count_label} · #{refresh_label} · #{rendered_at}</div>
       #{body}
       <script>
         const collator = new Intl.Collator(undefined, {

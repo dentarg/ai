@@ -136,4 +136,11 @@ class ContainerPortsTest < Minitest::Test
       '<button type="button" data-sort-type="number">Ports</button>',
     )
   end
+
+  def test_formats_running_container_count
+    assert_equal "0 containers running", container_count_label(:ok, [])
+    assert_equal "1 container running", container_count_label(:ok, [Object.new])
+    assert_equal "2 containers running", container_count_label(:ok, [Object.new, Object.new])
+    assert_equal "Container count unavailable", container_count_label(:error, "failure")
+  end
 end
