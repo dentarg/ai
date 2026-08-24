@@ -6,12 +6,22 @@
 require "socket"
 require "json"
 require "cgi"
+require "open3"
 
 PORT             = (ENV["PORT"] || 4567).to_i
 BIND             = ENV["BIND"] || "127.0.0.1"
 REFRESH_SECONDS  = (ENV["REFRESH"] || 0).to_i
 
-Container = Struct.new(:id, :name, :image, :status, :ports, :labels, keyword_init: true)
+Container = Struct.new(
+  :id,
+  :name,
+  :image,
+  :status,
+  :ports,
+  :labels,
+  :branch,
+  keyword_init: true,
+)
 
 # Podman emits Ports as an array of objects like:
 #   {"host_ip": "0.0.0.0", "container_port": 80, "host_port": 8080,
@@ -38,6 +48,54 @@ def parse_ports(ports)
   seen.values.sort_by { |p| p[:host_port] }
 end
 
+def resolve_cwd(cwd)
+  return if cwd.nil? || cwd.empty?
+
+  path =
+    if cwd == "~"
+      Dir.home
+    elsif cwd.start_with?("~/")
+      File.join(Dir.home, cwd.delete_prefix("~/"))
+    else
+      cwd
+    end
+
+  File.expand_path(path)
+rescue ArgumentError
+  nil
+end
+
+def current_git_branch(path)
+  return unless File.directory?(path)
+
+  branch, status = Open3.capture2(
+    "git",
+    "-C",
+    path,
+    "symbolic-ref",
+    "--quiet",
+    "--short",
+    "HEAD",
+    err: File::NULL,
+  )
+  return unless status.success?
+
+  branch = branch.strip
+  branch unless branch.empty?
+rescue SystemCallError
+  nil
+end
+
+def attach_git_branches(containers)
+  containers.group_by { |container| resolve_cwd(container.labels["cwd"]) }
+    .each do |path, matching_containers|
+      next if path.nil?
+
+      branch = current_git_branch(path)
+      matching_containers.each { |container| container.branch = branch }
+    end
+end
+
 def fetch_containers
   out = `podman ps --format json 2>&1`
   unless $?.success?
@@ -56,7 +114,28 @@ def fetch_containers
       labels: j["Labels"] || {},
     )
   end
+  attach_git_branches(containers)
   [:ok, containers]
+end
+
+def render_table(containers)
+  rows = containers.map { |container| render_row(container) }.join("\n")
+  <<~HTML
+    <table>
+      <thead>
+        <tr>
+          <th aria-sort="none"><button type="button" data-sort-type="text">Name</button></th>
+          <th aria-sort="none"><button type="button" data-sort-type="text">Status</button></th>
+          <th aria-sort="none"><button type="button" data-sort-type="text">ID</button></th>
+          <th aria-sort="none"><button type="button" data-sort-type="text">Cwd</button></th>
+          <th aria-sort="none"><button type="button" data-sort-type="number">Ports</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        #{rows}
+      </tbody>
+    </table>
+  HTML
 end
 
 def render_html
@@ -67,17 +146,7 @@ def render_html
     elsif data.empty?
       "<p class=\"empty\">No running containers.</p>"
     else
-      rows = data.map { |c| render_row(c) }.join("\n")
-      <<~HTML
-        <table>
-          <thead>
-            <tr><th>Name</th><th>Image</th><th>Status</th><th>ID</th><th>Cwd</th><th>Ports</th></tr>
-          </thead>
-          <tbody>
-            #{rows}
-          </tbody>
-        </table>
-      HTML
+      render_table(data)
     end
 
   <<~HTML
@@ -98,6 +167,10 @@ def render_html
           --row-hover: #fcfcfc;
           --link: #0366d6;
           --port-bg: #eef4ff;
+          --branch-bg: #e8f5ee;
+          --branch-fg: #18794e;
+          --main-branch-bg: #f1f3f5;
+          --main-branch-fg: #6b7280;
           --error: #b00;
         }
         @media (prefers-color-scheme: dark) {
@@ -111,6 +184,10 @@ def render_html
             --row-hover: #2a2e34;
             --link: #79b8ff;
             --port-bg: #2a3142;
+            --branch-bg: #173b2b;
+            --branch-fg: #7ee2a8;
+            --main-branch-bg: #30343b;
+            --main-branch-fg: #9298a1;
             --error: #ff8a8a;
           }
         }
@@ -120,10 +197,47 @@ def render_html
         table { border-collapse: collapse; width: 100%; }
         th, td { text-align: left; padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
         th { background: var(--th-bg); font-weight: 600; }
+        th button {
+          padding: 0;
+          border: 0;
+          color: inherit;
+          background: transparent;
+          font: inherit;
+          cursor: pointer;
+        }
+        th button::after { content: " ↕"; color: var(--faint); }
+        th[aria-sort="ascending"] button::after { content: " ↑"; color: var(--fg); }
+        th[aria-sort="descending"] button::after { content: " ↓"; color: var(--fg); }
+        th button:focus-visible { outline: 2px solid var(--link); outline-offset: 3px; }
         tr:hover td { background: var(--row-hover); }
         a { color: var(--link); text-decoration: none; }
         a:hover { text-decoration: underline; }
         .port { display: block; width: fit-content; margin: 0 0 0.25rem; padding: 0.1rem 0.4rem; background: var(--port-bg); border-radius: 3px; font-size: 0.85rem; }
+        .image {
+          display: block;
+          margin-top: 0.2rem;
+          color: var(--faint);
+          font-size: 0.75rem;
+        }
+        .cwd { white-space: nowrap; }
+        .cwd-parent { color: var(--muted); }
+        .cwd-name { color: var(--fg); font-weight: 700; }
+        .branch {
+          display: block;
+          width: fit-content;
+          margin-top: 0.3rem;
+          padding: 0.1rem 0.4rem;
+          color: var(--branch-fg);
+          background: var(--branch-bg);
+          border-radius: 999px;
+          font-size: 0.78rem;
+          font-weight: 600;
+        }
+        .branch-main {
+          color: var(--main-branch-fg);
+          background: var(--main-branch-bg);
+          font-weight: 500;
+        }
         .no-ports { color: var(--faint); font-size: 0.85rem; }
         .error { color: var(--error); }
         .empty { color: var(--muted); }
@@ -134,18 +248,65 @@ def render_html
       <h1>Running containers</h1>
       <div class="meta">#{REFRESH_SECONDS > 0 ? "Refreshing every #{REFRESH_SECONDS}s" : "Auto-refresh off"} · #{Time.now.strftime('%H:%M:%S')}</div>
       #{body}
+      <script>
+        const collator = new Intl.Collator(undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+
+        document.querySelectorAll("th button[data-sort-type]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const header = button.closest("th");
+            const table = header.closest("table");
+            const headers = Array.from(header.parentElement.children);
+            const column = headers.indexOf(header);
+            const ascending = header.getAttribute("aria-sort") !== "ascending";
+            const rows = Array.from(table.tBodies[0].rows);
+
+            rows.sort((left, right) => {
+              const leftValue = left.cells[column].dataset.sortValue || "";
+              const rightValue = right.cells[column].dataset.sortValue || "";
+              if (!leftValue || !rightValue) {
+                if (!leftValue && !rightValue) return 0;
+                return leftValue ? -1 : 1;
+              }
+
+              const comparison = button.dataset.sortType === "number"
+                ? Number(leftValue) - Number(rightValue)
+                : collator.compare(leftValue, rightValue);
+              return ascending ? comparison : -comparison;
+            });
+
+            headers.forEach((item) => item.setAttribute("aria-sort", "none"));
+            header.setAttribute("aria-sort", ascending ? "ascending" : "descending");
+            rows.forEach((row) => table.tBodies[0].appendChild(row));
+          });
+        });
+      </script>
     </body>
     </html>
   HTML
 end
 
-def render_cwd(labels)
+def render_cwd(labels, branch)
   cwd = labels && labels["cwd"]
   return "<span class=\"no-ports\">—</span>" if cwd.nil? || cwd.empty?
-  "<code>#{CGI.escapeHTML(cwd)}</code>"
+
+  cwd_name = File.basename(cwd)
+  cwd_parent = cwd.delete_suffix(cwd_name)
+  html = '<code class="cwd">'
+  html += "<span class=\"cwd-parent\">#{CGI.escapeHTML(cwd_parent)}</span>"
+  html += "<span class=\"cwd-name\">#{CGI.escapeHTML(cwd_name)}</span></code>"
+  if branch && !branch.empty?
+    branch_class = branch == "main" ? "branch branch-main" : "branch"
+    html += "<code class=\"#{branch_class}\">#{CGI.escapeHTML(branch)}</code>"
+  end
+  html
 end
 
 def render_row(c)
+  cwd = c.labels["cwd"].to_s
+  first_port = c.ports.first
   ports_html =
     if c.ports.empty?
       "<span class=\"no-ports\">—</span>"
@@ -158,12 +319,14 @@ def render_row(c)
 
   <<~ROW
     <tr>
-      <td><code>#{CGI.escapeHTML(c.name)}</code></td>
-      <td>#{CGI.escapeHTML(c.image)}</td>
-      <td>#{CGI.escapeHTML(c.status)}</td>
-      <td><code>#{CGI.escapeHTML(c.id)}</code></td>
-      <td>#{render_cwd(c.labels)}</td>
-      <td>#{ports_html}</td>
+      <td data-sort-value="#{CGI.escapeHTML(c.name)}">
+        <code>#{CGI.escapeHTML(c.name)}</code>
+        <span class="image">#{CGI.escapeHTML(c.image)}</span>
+      </td>
+      <td data-sort-value="#{CGI.escapeHTML(c.status)}">#{CGI.escapeHTML(c.status)}</td>
+      <td data-sort-value="#{CGI.escapeHTML(c.id)}"><code>#{CGI.escapeHTML(c.id)}</code></td>
+      <td data-sort-value="#{CGI.escapeHTML(cwd)}">#{render_cwd(c.labels, c.branch)}</td>
+      <td data-sort-value="#{first_port && first_port[:host_port]}">#{ports_html}</td>
     </tr>
   ROW
 end
@@ -192,13 +355,17 @@ ensure
   client.close rescue nil
 end
 
-server = TCPServer.new(BIND, PORT)
-puts "container-ports listening on http://#{BIND}:#{PORT} (refresh #{REFRESH_SECONDS > 0 ? "#{REFRESH_SECONDS}s" : "off"})"
+def run_server
+  server = TCPServer.new(BIND, PORT)
+  puts "container-ports listening on http://#{BIND}:#{PORT} (refresh #{REFRESH_SECONDS > 0 ? "#{REFRESH_SECONDS}s" : "off"})"
 
-trap("INT")  { puts "\nshutting down"; exit 0 }
-trap("TERM") { exit 0 }
+  trap("INT")  { puts "\nshutting down"; exit 0 }
+  trap("TERM") { exit 0 }
 
-loop do
-  client = server.accept
-  Thread.new(client) { |c| handle(c) }
+  loop do
+    client = server.accept
+    Thread.new(client) { |connection| handle(connection) }
+  end
 end
+
+run_server if $PROGRAM_NAME == __FILE__
