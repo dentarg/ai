@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
      file \
      gcc \
      git \
+     git-lfs \
      gpg \
      gpg-agent \
      htop \
@@ -340,6 +341,8 @@ COPY ./tools/claude-hook.sh /usr/local/bin/claude-hook
 COPY ./tools/claude-login.sh /usr/local/bin/claude-login
 COPY dot.bashrc $HOME/.bashrc
 COPY .gitconfig /etc/gitconfig
+RUN git lfs install --system \
+    && test "$(git config --system --get filter.lfs.process)" = "git-lfs filter-process"
 COPY gitignore-global /etc/gitignore
 COPY bin/codex-login /usr/local/bin/codex-login
 COPY bin/refresh-tokens /usr/local/bin/refresh-tokens
