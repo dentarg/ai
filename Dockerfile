@@ -265,7 +265,7 @@ After=multi-user.target
 [Service]
 Type=simple
 Environment=HOME=$HOME
-PassEnvironment=HOST_DIR PORT CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_RESUME AI_REMOTE AI_FAST
+PassEnvironment=HOST_DIR PORT CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_RESUME AI_REMOTE AI_FAST OP_BRIDGE_URL OP_BRIDGE_TOKEN OP_BRIDGE_CA
 ExecStart=/bin/bash
 WorkingDirectory=/app
 StandardInput=tty
@@ -337,6 +337,7 @@ COPY ./tools/gemini.sh /usr/local/bin/g
 COPY ./tools/codex.sh /usr/local/bin/cx
 COPY ./tools/exit.sh /usr/local/bin/x
 COPY ./tools/loki.sh /usr/local/bin/loki
+COPY ./tools/op-read.sh /usr/local/bin/op-read
 COPY ./tools/claude-hook.sh /usr/local/bin/claude-hook
 COPY ./tools/claude-login.sh /usr/local/bin/claude-login
 COPY dot.bashrc $HOME/.bashrc
@@ -353,6 +354,7 @@ RUN chmod +x /usr/local/bin/start.sh \
              /usr/local/bin/cx \
              /usr/local/bin/x \
              /usr/local/bin/loki \
+             /usr/local/bin/op-read \
              /usr/local/bin/claude-hook \
              /usr/local/bin/claude-login \
              /usr/local/bin/codex-login \

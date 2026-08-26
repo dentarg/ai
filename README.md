@@ -32,6 +32,9 @@ Optionally, add `sentry.token` to `$HOME/ai/settings` to enable the
 # start podman and share the current working directory
 bin/ai
 
+# allow this session to request approved, allowlisted 1Password secrets
+bin/ai --1password
+
 # start podman and auto-launch "c <profile>" once the container is up.
 # before launching, the shared "~/ai/settings" token for <profile> is
 # refreshed on the host. If it has expired, recent Claude session history is
@@ -102,10 +105,12 @@ reuses the original Codex home before launching `codex resume <id>`.
 
 ## Prerequisites
 
-Your Anthropic API key in 1Password.
+Podman is required. The optional 1Password bridge also requires 1Password 8
+and 1Password CLI on the host.
 
 ```shell
 brew install podman
+brew install 1password-cli # optional
 
 # init the VM, enable zram swap, set kernel.keys quotas
 bin/setup-vm
@@ -124,6 +129,61 @@ bin/setup-vm
 # rebuild all layers and pull latest base image
 ./build_image --force
 ```
+
+## 1Password bridge
+
+The optional bridge lets a container resolve individual secrets through the
+macOS 1Password app without giving the container access to `op` or its desktop
+session. Every retrieval must match the host-side project allowlist and is
+confirmed with a macOS dialog. The first `op` use in a terminal session may
+also require 1Password biometric authorization.
+
+First enable **Settings > Developer > Integrate with 1Password CLI** in the
+1Password app. Verify the host integration with `op vault list`.
+
+Create `$HOME/ai/1password-bridge.json` on the host:
+
+```json
+{
+  "projects": {
+    "/Users/me/src/example": {
+      "account": "my.1password.com",
+      "secrets": {
+        "github-token": "op://Agent/GitHub/token",
+        "anthropic-api-key": "op://Agent/Anthropic/credential"
+      }
+    }
+  }
+}
+```
+
+Project paths must be absolute and canonical; run `pwd -P` in the project to
+get the exact value. Secret aliases may contain lowercase letters, digits,
+dots, underscores, and hyphens. Protect the policy from modification:
+
+```shell
+chmod 600 "$HOME/ai/1password-bridge.json"
+```
+
+The policy deliberately lives outside directories mounted into containers.
+Start an enabled session, then request a configured alias inside it:
+
+```shell
+bin/ai --1password
+
+# inside the container; prints the value after host approval
+op-read github-token
+```
+
+The broker starts with the container and stops when it exits. It loads the
+project policy once, accepts only fixed aliases over an authenticated ephemeral
+TLS connection, and never accepts arbitrary `op` arguments or `op://`
+references from the container. Audit events, without secret values or
+references, are appended to `$HOME/ai/logs/1password-bridge.log`.
+
+Any value returned by `op-read` is visible to the container and can be retained
+by the agent. The bridge limits which secrets can be requested and requires
+approval when they are requested; it cannot protect a secret after release.
 
 ## OAuth Login
 

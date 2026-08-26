@@ -31,12 +31,14 @@ profile or Codex with "cx".
 Options:
   -r, --resume <id>   Resume a prior Claude or Codex session
       --ports <list>  Publish comma-separated PORT or HOST:CONTAINER ports
+      --1password     Enable approved, allowlisted 1Password reads
       --remote        Enable Claude Code remote control
       --fast          Enable Claude Code fast mode
   -h, --help          Show this help
 
 Environment:
   AI_DIR              Directory for persistent AI data (default: \$HOME/ai)
+  AI_1PASSWORD        Enable the 1Password bridge when truthy
   AI_REMOTE           Enable remote control when set to 1, true, yes, or on
   AI_FAST             Enable fast mode when set to 1, true, yes, or on
   PORT                Primary published port (default: 1337)
@@ -58,6 +60,7 @@ is_true() {
 #                        Claude works with or without a profile (`c` auto-detects it).
 #   --ports <list>       extra ports to publish, comma-separated. Each entry is
 #                        "PORT" (host==container) or "SRC:DST" (host:container).
+#   --1password          start the approved, allowlisted 1Password bridge.
 #   --remote             enable Claude Code remote control; passed to `c --remote`.
 #                        Also enabled when AI_REMOTE is truthy (1/true/yes/on).
 #   --fast               enable fast mode; passed to `c --fast`.
@@ -69,6 +72,7 @@ PORTS=""
 CODEX_AUTO_START=""
 REMOTE=${AI_REMOTE:-}
 FAST=${AI_FAST:-}
+ONEPASSWORD=${AI_1PASSWORD:-}
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help)
@@ -95,6 +99,9 @@ while [ $# -gt 0 ]; do
       ;;
     --ports=*)
       PORTS=${1#--ports=}
+      ;;
+    --1password)
+      ONEPASSWORD=1
       ;;
     --remote)
       REMOTE=1
@@ -186,6 +193,94 @@ mkdir -p $REPOS_DIR
 mkdir -p $SETTINGS_DIR/dotfiles
 mkdir -p $SHARE_DIR
 
+BROKER_PID=""
+BROKER_SESSION_DIR=""
+ONEPASSWORD_ENV=""
+ONEPASSWORD_VOLUME=""
+
+cleanup_onepassword_bridge() {
+  if [ -n "$BROKER_PID" ]; then
+    kill "$BROKER_PID" 2>/dev/null || true
+    wait "$BROKER_PID" 2>/dev/null || true
+  fi
+  if [ -n "$BROKER_SESSION_DIR" ] && [ -d "$BROKER_SESSION_DIR" ]; then
+    rm -rf "$BROKER_SESSION_DIR"
+  fi
+}
+
+start_onepassword_bridge() {
+  if [ "$(uname -s)" != "Darwin" ]; then
+    echo 'at=fatal msg="the 1Password bridge requires a macOS host"' >&2
+    exit 1
+  fi
+
+  policy_path="${AI_DIR}/1password-bridge.json"
+  if [ ! -f "$policy_path" ]; then
+    echo "at=fatal msg=\"1Password bridge policy not found\" path=\"$policy_path\"" >&2
+    exit 1
+  fi
+
+  for command_name in op osascript ruby; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+      echo "at=fatal msg=\"required command not found\" command=$command_name" >&2
+      exit 1
+    fi
+  done
+
+  run_dir="${AI_DIR}/run"
+  log_dir="${AI_DIR}/logs"
+  mkdir -p "$run_dir" "$log_dir"
+  chmod 700 "$run_dir" "$log_dir"
+  BROKER_SESSION_DIR=$(mktemp -d "${run_dir}/onepassword.XXXXXX")
+  chmod 700 "$BROKER_SESSION_DIR"
+
+  OP_BRIDGE_TOKEN=$(ruby -rsecurerandom -e 'print SecureRandom.hex(32)')
+  OP_BRIDGE_PROJECT=$(pwd -P)
+  OP_BRIDGE_POLICY=$policy_path
+  OP_BRIDGE_OP_BIN=$(command -v op)
+  OP_BRIDGE_CA_FILE="${BROKER_SESSION_DIR}/ca.pem"
+  OP_BRIDGE_PORT_FILE="${BROKER_SESSION_DIR}/port"
+  export OP_BRIDGE_TOKEN OP_BRIDGE_PROJECT OP_BRIDGE_POLICY OP_BRIDGE_OP_BIN
+  export OP_BRIDGE_CA_FILE OP_BRIDGE_PORT_FILE
+
+  broker_log="${log_dir}/1password-bridge.log"
+  ruby "${REPO_DIR}/tools/onepassword-bridge/server.rb" >> "$broker_log" 2>&1 &
+  BROKER_PID=$!
+  trap cleanup_onepassword_bridge EXIT
+
+  attempts=0
+  while [ ! -s "$OP_BRIDGE_PORT_FILE" ]; do
+    if ! kill -0 "$BROKER_PID" 2>/dev/null; then
+      echo "at=fatal msg=\"1Password bridge failed to start\" log=\"$broker_log\"" >&2
+      tail -20 "$broker_log" >&2
+      exit 1
+    fi
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge 100 ]; then
+      echo "at=fatal msg=\"timed out starting 1Password bridge\" log=\"$broker_log\"" >&2
+      exit 1
+    fi
+    sleep 0.05
+  done
+
+  bridge_port=$(cat "$OP_BRIDGE_PORT_FILE")
+  case "$bridge_port" in
+    ''|*[!0-9]*)
+      echo 'at=fatal msg="1Password bridge returned an invalid port"' >&2
+      exit 1
+      ;;
+  esac
+
+  OP_BRIDGE_URL="https://host.containers.internal:${bridge_port}"
+  OP_BRIDGE_CA=/run/1password-bridge/ca.pem
+  export OP_BRIDGE_URL OP_BRIDGE_CA
+  ONEPASSWORD_ENV="--env OP_BRIDGE_URL --env OP_BRIDGE_TOKEN --env OP_BRIDGE_CA"
+  ONEPASSWORD_VOLUME="--volume ${BROKER_SESSION_DIR}:/run/1password-bridge:ro"
+  echo "at=info msg=\"1Password bridge ready\" project=\"$OP_BRIDGE_PROJECT\"" >&2
+}
+
+is_true "$ONEPASSWORD" && start_onepassword_bridge
+
 # Keep the shared OAuth token fresh on the host before launching, so every
 # container session reuses it instead of re-authenticating. Silently refresh
 # via the stored refresh token; only fall back to interactive login when that
@@ -233,12 +328,14 @@ podman run --rm --interactive --tty \
   ${CODEX_ENV:-} \
   ${REMOTE_ENV:-} \
   ${FAST_ENV:-} \
+  ${ONEPASSWORD_ENV:-} \
   --volume ${BUNDLE_DIR}:/bundle \
   --volume ${COMMAND_HISTORY_DIR}:/commandhistory \
   --volume ${HISTORY_DIR}:/history \
   --volume ${REPOS_DIR}:/repos \
   --volume ${SETTINGS_DIR}:/settings \
   --volume ${SHARE_DIR}:/share \
+  ${ONEPASSWORD_VOLUME:-} \
   --volume ${REPO_DIR}/claude:/claude:ro \
   --volume $(pwd):/app \
   --workdir /app \
