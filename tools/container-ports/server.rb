@@ -195,7 +195,11 @@ def fetch_containers
 end
 
 def render_table(containers)
-  rows = containers.map { |container| render_row(container) }.join("\n")
+  sorted_containers = containers.sort_by do |container|
+    cwd = container.labels["cwd"].to_s
+    [cwd.empty? ? 1 : 0, cwd.downcase, cwd, container.name.to_s]
+  end
+  rows = sorted_containers.map { |container| render_row(container) }.join("\n")
   <<~HTML
     <table>
       <thead>
@@ -203,7 +207,7 @@ def render_table(containers)
           <th aria-sort="none"><button type="button" data-sort-type="text">Name</button></th>
           <th aria-sort="none"><button type="button" data-sort-type="text">Status</button></th>
           <th aria-sort="none"><button type="button" data-sort-type="text">ID</button></th>
-          <th aria-sort="none"><button type="button" data-sort-type="text">Cwd</button></th>
+          <th aria-sort="ascending"><button type="button" data-sort-type="text">Cwd</button></th>
           <th aria-sort="none"><button type="button" data-sort-type="text">Agent</button></th>
           <th aria-sort="none"><button type="button" data-sort-type="number">Ports</button></th>
         </tr>

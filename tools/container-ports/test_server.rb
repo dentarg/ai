@@ -187,6 +187,35 @@ class ContainerPortsTest < Minitest::Test
     )
   end
 
+  def test_sorts_by_cwd_by_default
+    containers = [
+      Container.new(
+        id: "second",
+        name: "second",
+        image: "ai:latest",
+        status: "Up",
+        ports: [],
+        labels: { "cwd" => "/repo/zebra" },
+      ),
+      Container.new(
+        id: "first",
+        name: "first",
+        image: "ai:latest",
+        status: "Up",
+        ports: [],
+        labels: { "cwd" => "/repo/alpha" },
+      ),
+    ]
+
+    html = render_table(containers)
+
+    assert_operator html.index("/repo/alpha"), :<, html.index("/repo/zebra")
+    assert_includes(
+      html,
+      '<th aria-sort="ascending"><button type="button" data-sort-type="text">Cwd</button></th>',
+    )
+  end
+
   def test_formats_running_container_count
     assert_equal "0 containers running", container_count_label(:ok, [])
     assert_equal "1 container running", container_count_label(:ok, [Object.new])

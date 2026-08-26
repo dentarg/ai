@@ -2,8 +2,9 @@
 
 Tiny stdlib-only Ruby web app that provides a sortable list of running Podman
 containers, their coding agents and current Git branches, and links to their
-host-published TCP ports. Auto-refresh is off by default (set `REFRESH` to a
-positive number of seconds to enable it).
+host-published TCP ports. Containers are sorted by working directory by
+default. Auto-refresh is off by default (set `REFRESH` to a positive number of
+seconds to enable it).
 
 ## Run
 
