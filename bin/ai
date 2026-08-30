@@ -33,6 +33,9 @@ Options:
       --ports <list>  Publish comma-separated PORT or HOST:CONTAINER ports
       --vm            Use an ephemeral Lima VM instead of a Podman container
       --keep-vm       Keep the Lima VM after exit (implies --vm)
+      --nested-virt   Enable nested virtualization in the Lima VM
+      --cpus <count>  Override CPU count for the Lima VM
+      --memory <GiB>  Override memory in GiB for the Lima VM
       --1password     Enable approved, allowlisted 1Password reads
       --remote        Enable Claude Code remote control
       --fast          Enable Claude Code fast mode
@@ -64,6 +67,11 @@ is_true() {
 #                        Claude works with or without a profile (`c` auto-detects it).
 #   --ports <list>       extra ports to publish, comma-separated. Each entry is
 #                        "PORT" (host==container) or "SRC:DST" (host:container).
+#   --vm                 use an ephemeral Lima VM instead of Podman.
+#   --keep-vm            retain the Lima VM after exit; implies --vm.
+#   --nested-virt        expose KVM inside the Lima VM.
+#   --cpus <count>       override the cloned Lima VM's CPU count.
+#   --memory <GiB>       override the cloned Lima VM's memory.
 #   --1password          start the approved, allowlisted 1Password bridge.
 #   --remote             enable Claude Code remote control; passed to `c --remote`.
 #                        Also enabled when AI_REMOTE is truthy (1/true/yes/on).
@@ -79,6 +87,9 @@ FAST=${AI_FAST:-}
 ONEPASSWORD=${AI_1PASSWORD:-}
 VM_BACKEND=0
 KEEP_VM=0
+NESTED_VIRT=0
+VM_CPUS=""
+VM_MEMORY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help)
@@ -113,6 +124,27 @@ while [ $# -gt 0 ]; do
       VM_BACKEND=1
       KEEP_VM=1
       ;;
+    --nested-virt)
+      NESTED_VIRT=1
+      ;;
+    --cpus)
+      shift
+      [ $# -gt 0 ] || { echo 'at=fatal msg="--cpus requires a count"' >&2; exit 1; }
+      VM_CPUS=$1
+      ;;
+    --cpus=*)
+      VM_CPUS=${1#--cpus=}
+      [ -n "$VM_CPUS" ] || { echo 'at=fatal msg="--cpus requires a count"' >&2; exit 1; }
+      ;;
+    --memory)
+      shift
+      [ $# -gt 0 ] || { echo 'at=fatal msg="--memory requires GiB"' >&2; exit 1; }
+      VM_MEMORY=$1
+      ;;
+    --memory=*)
+      VM_MEMORY=${1#--memory=}
+      [ -n "$VM_MEMORY" ] || { echo 'at=fatal msg="--memory requires GiB"' >&2; exit 1; }
+      ;;
     --1password)
       ONEPASSWORD=1
       ;;
@@ -134,6 +166,27 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+if [ "$NESTED_VIRT" -eq 1 ] || [ -n "$VM_CPUS" ] || [ -n "$VM_MEMORY" ]; then
+  if [ "$VM_BACKEND" -ne 1 ]; then
+    echo 'at=fatal msg="--nested-virt, --cpus, and --memory require --vm"' >&2
+    exit 1
+  fi
+fi
+case "$VM_CPUS" in
+  '') ;;
+  0|*[!0-9]*)
+    echo 'at=fatal msg="--cpus must be a positive integer"' >&2
+    exit 1
+    ;;
+esac
+case "$VM_MEMORY" in
+  '') ;;
+  0|*[!0-9]*)
+    echo 'at=fatal msg="--memory must be a positive integer in GiB"' >&2
+    exit 1
+    ;;
+esac
 
 # Optional claude profile; when given, the container auto-launches `c <profile>`.
 PROFILE_ENV=""
@@ -461,7 +514,12 @@ run_lima_vm() {
   fi
 
   config_expression=".mounts = ${mounts_json} | .portForwards = ${forwards_json} | .timezone = \"UTC\""
-  limactl clone --tty=false --set "$config_expression" "$base_name" "$VM_NAME"
+  set -- clone --tty=false
+  [ "$NESTED_VIRT" -eq 1 ] && set -- "$@" --nested-virt
+  [ -n "$VM_CPUS" ] && set -- "$@" --cpus "$VM_CPUS"
+  [ -n "$VM_MEMORY" ] && set -- "$@" --memory "$VM_MEMORY"
+  set -- "$@" --set "$config_expression" "$base_name" "$VM_NAME"
+  limactl "$@"
   limactl start "$VM_NAME"
   limactl shell --workdir /app "$VM_NAME" sudo hostnamectl set-hostname "$VM_NAME"
 

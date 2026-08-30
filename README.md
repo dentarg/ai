@@ -40,6 +40,9 @@ bin/ai --vm
 # keep the VM running after exit so it can be inspected with limactl shell
 bin/ai --keep-vm
 
+# enable nested virtualization and give the outer VM additional resources
+bin/ai --vm --nested-virt --cpus 8 --memory 16
+
 # allow this session to request approved, allowlisted 1Password secrets
 bin/ai --1password
 
@@ -171,8 +174,14 @@ Guests use UTC, matching the container backend.
 Ubuntu's `docker.io`, `docker-buildx`, and `docker-compose-v2` packages provide
 a rootful Docker stack inside the guest. The normal Lima user belongs to the
 `docker` group and has passwordless `sudo`, so tests can exercise a realistic
-Docker host without exposing the host Docker or Podman socket. Nested
-virtualization is not enabled.
+Docker host without exposing the host Docker or Podman socket. Docker itself
+does not require nested virtualization.
+
+Use `--nested-virt` to expose KVM to software that starts another VM inside the
+Lima guest. Lima supports this with the `vz` driver on Apple M3 or newer Macs;
+the inner VM must use the native architecture. For QEMU, use `-accel kvm -cpu
+host`. The option is disabled by default. `--cpus` and `--memory` override the
+cloned VM's resources for workloads that need more than the base VM allocation.
 
 The primary guest port still comes from `PORT` (1337 by default), but the VM
 launcher chooses a free loopback host port and prints it when the VM is ready.

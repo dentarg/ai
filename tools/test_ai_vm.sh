@@ -46,6 +46,10 @@ chmod +x "${fake_bin}/limactl"
 
 grep -F '<clone>' "$log" >/dev/null
 grep -F '<clone> <--tty=false>' "$log" >/dev/null
+if grep -F '<--nested-virt>' "$log" >/dev/null; then
+  echo 'at=fatal msg="Lima launcher enabled nested virtualization by default"' >&2
+  exit 1
+fi
 grep -F '<ai-base> <ai-00-project-with-spaces>' "$log" >/dev/null
 grep -F '.timezone = "UTC"' "$log" >/dev/null
 grep -F '<shell> <--workdir> </app> <ai-00-project-with-spaces> <sudo> <hostnamectl> <set-hostname> <ai-00-project-with-spaces>' "$log" >/dev/null
@@ -77,6 +81,25 @@ grep -F '<delete> <--force>' "$log" >/dev/null
 
 if grep -F '<delete>' "$log" >/dev/null; then
   echo 'at=fatal msg="--keep-vm deleted the Lima VM"' >&2
+  exit 1
+fi
+
+: > "$log"
+(
+  cd "$project"
+  HOME="${tmpdir}/home" \
+  AI_DIR="$ai_dir" \
+  AI_VM_HOST_PORT=45557 \
+  LIMACTL_LOG="$log" \
+  PATH="${fake_bin}:${PATH}" \
+    "$REPO_DIR/bin/ai" --vm --nested-virt --cpus 8 --memory=16 >/dev/null 2>&1
+)
+
+grep -F '<clone> <--tty=false> <--nested-virt> <--cpus> <8> <--memory> <16>' "$log" >/dev/null
+
+if HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:${PATH}" \
+  "$REPO_DIR/bin/ai" --nested-virt >/dev/null 2>&1; then
+  echo 'at=fatal msg="--nested-virt worked without --vm"' >&2
   exit 1
 fi
 
