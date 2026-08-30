@@ -1,0 +1,117 @@
+#!/bin/sh
+
+set -eu
+
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+REPO_DIR=$SCRIPT_DIR
+# shellcheck source=tools/build-common.sh
+. "${REPO_DIR}/tools/build-common.sh"
+
+BASE_NAME=${AI_VM_BASE:-ai-base}
+VM_CPUS=${AI_VM_CPUS:-4}
+VM_MEMORY=${AI_VM_MEMORY:-8}
+VM_DISK=${AI_VM_DISK:-100}
+VM_BUILD_TIMEOUT=${AI_VM_BUILD_TIMEOUT:-60m}
+ASSET_MANIFEST=${REPO_DIR}/lima/assets/manifest.txt
+FORCE=0
+UPDATE_CLAUDE=0
+UPDATE_CODEX=0
+
+BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/ai-vm-build.XXXXXX")
+cleanup() {
+  rm -rf "$BUILD_DIR"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+
+usage () {
+  echo "Usage: ./build_vm [--force] [--update-claude] [--update-codex]" >&2
+  echo "       ./build_vm [--force] --update-agents" >&2
+  exit "${1:-1}"
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --force) FORCE=1 ;;
+    --update-claude) UPDATE_CLAUDE=1 ;;
+    --update-codex) UPDATE_CODEX=1 ;;
+    --update-agents) UPDATE_CLAUDE=1; UPDATE_CODEX=1 ;;
+    -h|--help) usage 0 ;;
+    *) echo "at=fatal msg=\"unknown option\" option=\"$1\"" >&2; usage ;;
+  esac
+  shift
+done
+
+command -v limactl >/dev/null 2>&1 || {
+  echo 'at=fatal msg="limactl is required; install Lima first"' >&2
+  exit 1
+}
+
+[ "$UPDATE_CLAUDE" -eq 1 ] && update_claude_version
+[ "$UPDATE_CODEX" -eq 1 ] && update_codex_version
+
+ASSET_DIR=${BUILD_DIR}/assets
+INSTALLERS_TAR=${BUILD_DIR}/ai-build-installers.tar.gz
+PROJECT_TAR=${BUILD_DIR}/ai-build-project.tar.gz
+INSTALLERS_ARCHIVE=${INSTALLERS_TAR}.b64
+PROJECT_ARCHIVE=${PROJECT_TAR}.b64
+VM_TEMPLATE=${BUILD_DIR}/ai.lima.yaml
+mkdir -p "${ASSET_DIR}/installers" "${ASSET_DIR}/project"
+while read -r destination source archive; do
+  case "$destination" in
+    ''|'#'*) continue ;;
+  esac
+  cp "${REPO_DIR}/${source}" "${ASSET_DIR}/${archive}/${destination}"
+done < "$ASSET_MANIFEST"
+# macOS tar otherwise records com.apple.* extended attributes that GNU tar in
+# the guest reports as unknown LIBARCHIVE headers.
+COPYFILE_DISABLE=1 tar -czf "$INSTALLERS_TAR" -C "${ASSET_DIR}/installers" .
+COPYFILE_DISABLE=1 tar -czf "$PROJECT_TAR" -C "${ASSET_DIR}/project" .
+base64 < "$INSTALLERS_TAR" > "$INSTALLERS_ARCHIVE"
+base64 < "$PROJECT_TAR" > "$PROJECT_ARCHIVE"
+for archive in "$INSTALLERS_ARCHIVE" "$PROJECT_ARCHIVE"; do
+  if [ "$(wc -c < "$archive")" -gt 60000 ]; then
+    echo "at=fatal msg=\"VM asset archive exceeds Lima's safe embedding size\" archive=$archive" >&2
+    exit 1
+  fi
+done
+sed \
+  -e "s|@AI_BUILD_INSTALLERS_ARCHIVE@|${INSTALLERS_ARCHIVE}|" \
+  -e "s|@AI_BUILD_PROJECT_ARCHIVE@|${PROJECT_ARCHIVE}|" \
+  "${REPO_DIR}/ai.lima.yaml" > "$VM_TEMPLATE"
+
+exists=0
+limactl list --format '{{.Name}}' 2>/dev/null | grep -Fx "$BASE_NAME" >/dev/null 2>&1 && exists=1
+if [ "$exists" -eq 1 ] && [ "$FORCE" -ne 1 ]; then
+  echo "at=fatal msg=\"base VM already exists; use --force to rebuild\" vm=$BASE_NAME" >&2
+  exit 1
+fi
+
+if [ "$exists" -eq 1 ]; then
+  limactl unprotect "$BASE_NAME" >/dev/null 2>&1 || true
+  limactl delete --force "$BASE_NAME"
+fi
+
+limactl validate "$VM_TEMPLATE"
+limactl create --yes \
+  --name "$BASE_NAME" \
+  --cpus "$VM_CPUS" \
+  --memory "$VM_MEMORY" \
+  --disk "$VM_DISK" \
+  "$VM_TEMPLATE"
+limactl start --progress --timeout "$VM_BUILD_TIMEOUT" "$BASE_NAME"
+limactl shell "$BASE_NAME" sudo env HOME=/workspace BASH_ENV=/workspace/.bash_profile \
+  bash -lc '
+    if ! test -f /var/lib/ai-base-provisioned; then
+      echo "at=fatal msg=\"VM provisioning did not complete; inspect the cloud-init output above\"" >&2
+      exit 1
+    fi
+    docker info >/dev/null
+    docker buildx version
+    docker compose version
+    command -v codex
+    command -v claude
+  '
+limactl stop "$BASE_NAME"
+limactl protect "$BASE_NAME"
+echo "at=info msg=\"base VM ready\" vm=$BASE_NAME"

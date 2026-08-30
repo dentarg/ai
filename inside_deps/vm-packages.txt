@@ -1,0 +1,3 @@
+docker-buildx
+docker-compose-v2
+docker.io

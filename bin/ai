@@ -25,12 +25,14 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [profile | cx] [options]
 
-Start the AI development container, optionally launching Claude Code with a
-profile or Codex with "cx".
+Start the AI development environment, optionally launching Claude Code with a
+profile or Codex with "cx". Podman is the default; --vm uses an ephemeral Lima VM.
 
 Options:
   -r, --resume <id>   Resume a prior Claude or Codex session
       --ports <list>  Publish comma-separated PORT or HOST:CONTAINER ports
+      --vm            Use an ephemeral Lima VM instead of a Podman container
+      --keep-vm       Keep the Lima VM after exit (implies --vm)
       --1password     Enable approved, allowlisted 1Password reads
       --remote        Enable Claude Code remote control
       --fast          Enable Claude Code fast mode
@@ -42,6 +44,8 @@ Environment:
   AI_REMOTE           Enable remote control when set to 1, true, yes, or on
   AI_FAST             Enable fast mode when set to 1, true, yes, or on
   PORT                Primary published port (default: 1337)
+  AI_VM_BASE          Lima base instance to clone (default: ai-base)
+  AI_VM_HOST_PORT     Primary host port (default: choose a free port)
 EOF
 }
 
@@ -73,6 +77,8 @@ CODEX_AUTO_START=""
 REMOTE=${AI_REMOTE:-}
 FAST=${AI_FAST:-}
 ONEPASSWORD=${AI_1PASSWORD:-}
+VM_BACKEND=0
+KEEP_VM=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help)
@@ -99,6 +105,13 @@ while [ $# -gt 0 ]; do
       ;;
     --ports=*)
       PORTS=${1#--ports=}
+      ;;
+    --vm)
+      VM_BACKEND=1
+      ;;
+    --keep-vm)
+      VM_BACKEND=1
+      KEEP_VM=1
       ;;
     --1password)
       ONEPASSWORD=1
@@ -197,6 +210,7 @@ BROKER_PID=""
 BROKER_SESSION_DIR=""
 ONEPASSWORD_ENV=""
 ONEPASSWORD_VOLUME=""
+VM_NAME=""
 
 cleanup_onepassword_bridge() {
   if [ -n "$BROKER_PID" ]; then
@@ -207,6 +221,26 @@ cleanup_onepassword_bridge() {
     rm -rf "$BROKER_SESSION_DIR"
   fi
 }
+
+cleanup_vm() {
+  [ -n "$VM_NAME" ] || return 0
+  if [ "$KEEP_VM" -eq 1 ]; then
+    echo "at=info msg=\"keeping Lima VM\" vm=$VM_NAME" >&2
+    return 0
+  fi
+  limactl stop "$VM_NAME" >/dev/null 2>&1 || true
+  limactl delete --force "$VM_NAME" >/dev/null 2>&1 || true
+}
+
+cleanup() {
+  cleanup_vm
+  cleanup_onepassword_bridge
+}
+
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 start_onepassword_bridge() {
   if [ "$(uname -s)" != "Darwin" ]; then
@@ -246,8 +280,6 @@ start_onepassword_bridge() {
   broker_log="${log_dir}/1password-bridge.log"
   ruby "${REPO_DIR}/tools/onepassword-bridge/server.rb" >> "$broker_log" 2>&1 &
   BROKER_PID=$!
-  trap cleanup_onepassword_bridge EXIT
-
   attempts=0
   while [ ! -s "$OP_BRIDGE_PORT_FILE" ]; do
     if ! kill -0 "$BROKER_PID" 2>/dev/null; then
@@ -271,7 +303,11 @@ start_onepassword_bridge() {
       ;;
   esac
 
-  OP_BRIDGE_URL="https://host.containers.internal:${bridge_port}"
+  if [ "$VM_BACKEND" -eq 1 ]; then
+    OP_BRIDGE_URL="https://host.lima.internal:${bridge_port}"
+  else
+    OP_BRIDGE_URL="https://host.containers.internal:${bridge_port}"
+  fi
   OP_BRIDGE_CA=/run/1password-bridge/ca.pem
   export OP_BRIDGE_URL OP_BRIDGE_CA
   ONEPASSWORD_ENV="--env OP_BRIDGE_URL --env OP_BRIDGE_TOKEN --env OP_BRIDGE_CA"
@@ -312,6 +348,173 @@ refresh_claude_token() {
 }
 
 [ -n "$PROFILE" ] && refresh_claude_token "$PROFILE"
+
+free_host_port() {
+  if [ -n "${AI_VM_HOST_PORT:-}" ]; then
+    case "$AI_VM_HOST_PORT" in
+      ''|*[!0-9]*) echo 'at=fatal msg="AI_VM_HOST_PORT must be numeric"' >&2; exit 1 ;;
+    esac
+    printf '%s\n' "$AI_VM_HOST_PORT"
+  elif command -v ruby >/dev/null 2>&1; then
+    ruby -rsocket -e 's = TCPServer.new("127.0.0.1", 0); print s.addr[1]; s.close'
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'
+  else
+    echo 'at=fatal msg="ruby or python3 is required to allocate a Lima host port"' >&2
+    exit 1
+  fi
+}
+
+next_vm_name() {
+  project_name=$(basename "$(pwd -P)" | tr '[:upper:]' '[:lower:]')
+  project_name=$(printf '%s' "$project_name" | sed \
+    -e 's/[^a-z0-9-]/-/g' \
+    -e 's/--*/-/g' \
+    -e 's/^-//' \
+    -e 's/-$//' | cut -c1-57)
+  project_name=${project_name%-}
+  [ -n "$project_name" ] || project_name=workspace
+
+  existing_names=$(limactl list --format '{{.Name}}' 2>/dev/null)
+  index=0
+  while [ "$index" -lt 100 ]; do
+    candidate=$(printf 'ai-%02d-%s' "$index" "$project_name")
+    if ! printf '%s\n' "$existing_names" | grep -Fx "$candidate" >/dev/null 2>&1; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    index=$((index + 1))
+  done
+
+  echo "at=fatal msg=\"no available Lima VM name\" project=$project_name" >&2
+  return 1
+}
+
+run_lima_vm() {
+  command -v limactl >/dev/null 2>&1 || {
+    echo 'at=fatal msg="limactl is required for --vm; install Lima first"' >&2
+    exit 1
+  }
+  command -v jq >/dev/null 2>&1 || {
+    echo 'at=fatal msg="jq is required for --vm"' >&2
+    exit 1
+  }
+  case "$PORT" in
+    ''|*[!0-9]*) echo 'at=fatal msg="PORT must be numeric for --vm"' >&2; exit 1 ;;
+  esac
+
+  base_name=${AI_VM_BASE:-ai-base}
+  if ! limactl list --format '{{.Name}}' | grep -Fx "$base_name" >/dev/null 2>&1; then
+    echo "at=fatal msg=\"Lima base VM not found; run ./build_vm first\" vm=$base_name" >&2
+    exit 1
+  fi
+
+  VM_NAME=$(next_vm_name)
+  primary_host_port=$(free_host_port)
+
+  mounts_json=$(jq -cn \
+    --arg bundle "$BUNDLE_DIR" \
+    --arg commands "$COMMAND_HISTORY_DIR" \
+    --arg history "$HISTORY_DIR" \
+    --arg repos "$REPOS_DIR" \
+    --arg settings "$SETTINGS_DIR" \
+    --arg share "$SHARE_DIR" \
+    --arg claude "${REPO_DIR}/claude" \
+    --arg app "$(pwd -P)" \
+    '[
+      {location:$bundle, mountPoint:"/bundle", writable:true},
+      {location:$commands, mountPoint:"/commandhistory", writable:true},
+      {location:$history, mountPoint:"/history", writable:true},
+      {location:$repos, mountPoint:"/repos", writable:true},
+      {location:$settings, mountPoint:"/settings", writable:true},
+      {location:$share, mountPoint:"/share", writable:true},
+      {location:$claude, mountPoint:"/claude", writable:false},
+      {location:$app, mountPoint:"/app", writable:true}
+    ]')
+
+  if [ -n "$BROKER_SESSION_DIR" ]; then
+    mounts_json=$(printf '%s' "$mounts_json" | jq -c \
+      --arg location "$BROKER_SESSION_DIR" \
+      '. + [{location:$location, mountPoint:"/run/1password-bridge", writable:false}]')
+  fi
+
+  forwards_json=$(jq -cn \
+    --argjson guest "$PORT" \
+    --argjson host "$primary_host_port" \
+    '[{guestPort:$guest, hostPort:$host, guestIP:"127.0.0.1", hostIP:"127.0.0.1", static:true}]')
+
+  if [ -n "$PORTS" ]; then
+    OLD_IFS=$IFS
+    IFS=,
+    for spec in $PORTS; do
+      IFS=$OLD_IFS
+      case "$spec" in
+        *:*) src=${spec%%:*}; dst=${spec##*:} ;;
+        *) src=$spec; dst=$spec ;;
+      esac
+      forwards_json=$(printf '%s' "$forwards_json" | jq -c \
+        --argjson src "$src" --argjson dst "$dst" \
+        '. + [{guestPort:$dst, hostPort:$src, guestIP:"127.0.0.1", hostIP:"127.0.0.1", static:true}]')
+      IFS=,
+    done
+    IFS=$OLD_IFS
+  fi
+
+  config_expression=".mounts = ${mounts_json} | .portForwards = ${forwards_json} | .timezone = \"UTC\""
+  limactl clone --tty=false --set "$config_expression" "$base_name" "$VM_NAME"
+  limactl start "$VM_NAME"
+  limactl shell --workdir /app "$VM_NAME" sudo hostnamectl set-hostname "$VM_NAME"
+
+  if [ -n "$BROKER_SESSION_DIR" ]; then
+    # Keep the token out of process arguments and Lima configuration/logs.
+    printf '%s' "$OP_BRIDGE_TOKEN" | \
+      limactl shell --workdir /app "$VM_NAME" sh -c 'umask 077; cat > /workspace/.ai-op-token'
+  fi
+
+  echo "at=info msg=\"Lima VM ready\" vm=$VM_NAME port=$primary_host_port guest_port=$PORT" >&2
+
+  set -- env \
+    HOME=/workspace \
+    BASH_ENV=/workspace/.bash_profile \
+    HOST_DIR="$(basename "$(pwd)")" \
+    PORT="$PORT" \
+    AI_AUTO_LAUNCH=1
+  [ -n "$PROFILE" ] && set -- "$@" CLAUDE_PROFILE="$PROFILE"
+  if [ -n "$RESUME" ]; then
+    if [ -n "$CODEX_AUTO_START" ]; then
+      set -- "$@" CODEX_RESUME="$RESUME"
+    else
+      set -- "$@" CLAUDE_RESUME="$RESUME"
+    fi
+  fi
+  [ -n "$CODEX_AUTO_START" ] && set -- "$@" CODEX_AUTO_START=1
+  is_true "$REMOTE" && set -- "$@" AI_REMOTE=1
+  is_true "$FAST" && set -- "$@" AI_FAST=1
+  if [ -n "$BROKER_SESSION_DIR" ]; then
+    set -- "$@" \
+      OP_BRIDGE_URL="$OP_BRIDGE_URL" \
+      OP_BRIDGE_CA=/run/1password-bridge/ca.pem \
+      OP_BRIDGE_TOKEN_FILE=/workspace/.ai-op-token
+  fi
+  set -- "$@" bash -c '
+    if [ -n "${OP_BRIDGE_TOKEN_FILE:-}" ]; then
+      export OP_BRIDGE_TOKEN=$(cat "$OP_BRIDGE_TOKEN_FILE")
+    fi
+    cd /app
+    exec bash --rcfile /workspace/.bashrc -i
+  '
+  session_status=0
+  limactl shell --workdir /app "$VM_NAME" "$@" || session_status=$?
+  if [ -n "$BROKER_SESSION_DIR" ]; then
+    limactl shell --workdir /app "$VM_NAME" sh -c 'rm -f /workspace/.ai-op-token' >/dev/null 2>&1 || true
+  fi
+  return "$session_status"
+}
+
+if [ "$VM_BACKEND" -eq 1 ]; then
+  run_lima_vm
+  exit $?
+fi
 
 # NET_ADMIN  tcpdump
 # NET_RAW    ping

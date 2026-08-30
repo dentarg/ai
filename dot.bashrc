@@ -110,12 +110,13 @@ if [[ -n "${CLAUDE_PROFILE:-}" || -n "${CLAUDE_RESUME:-}" || -n "${CODEX_AUTO_ST
   auto_launch_requested=true
 fi
 
-if [[ $- == *i* && "$auto_launch_requested" == true && "$(tty)" == "$(readlink -f /dev/console)" ]]; then
+if [[ $- == *i* && "$auto_launch_requested" == true ]] && \
+   { [[ "${AI_AUTO_LAUNCH:-}" == 1 ]] || [[ "$(tty)" == "$(readlink -f /dev/console)" ]]; }; then
   profile="${CLAUDE_PROFILE:-}"
   resume="${CLAUDE_RESUME:-}"
   codex_auto_start="${CODEX_AUTO_START:-}"
   codex_resume="${CODEX_RESUME:-}"
-  unset CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_RESUME
+  unset AI_AUTO_LAUNCH CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_RESUME
 
   if [[ -n "$codex_auto_start" || -n "$codex_resume" ]]; then
     start.sh || true

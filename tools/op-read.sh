@@ -15,6 +15,9 @@ case "$alias_name" in
 esac
 
 : "${OP_BRIDGE_URL:?op-read is unavailable; launch bin/ai with --1password}"
+if [ -z "${OP_BRIDGE_TOKEN:-}" ] && [ -n "${OP_BRIDGE_TOKEN_FILE:-}" ]; then
+  OP_BRIDGE_TOKEN=$(cat "$OP_BRIDGE_TOKEN_FILE")
+fi
 : "${OP_BRIDGE_TOKEN:?OP_BRIDGE_TOKEN is not set}"
 : "${OP_BRIDGE_CA:?OP_BRIDGE_CA is not set}"
 

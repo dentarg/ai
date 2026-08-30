@@ -1,0 +1,63 @@
+minimumLimaVersion: 2.0.0
+
+images:
+  - location: https://cloud-images.ubuntu.com/releases/26.04/release/ubuntu-26.04-server-cloudimg-amd64.img
+    arch: x86_64
+  - location: https://cloud-images.ubuntu.com/releases/26.04/release/ubuntu-26.04-server-cloudimg-arm64.img
+    arch: aarch64
+
+cpus: 4
+memory: 8GiB
+disk: 100GiB
+timezone: UTC
+
+user:
+  home: /workspace
+
+# Runtime mounts are added to clones by bin/ai. In particular, do not expose
+# the host home directory implicitly.
+mounts: []
+containerd:
+  system: false
+  user: false
+
+# The base VM needs no host-facing ports while it is being provisioned. Runtime
+# clones replace this list with the explicit static forwards assembled by bin/ai.
+portForwards:
+  - guestIP: "0.0.0.0"
+    guestIPMustBeZero: false
+    guestPortRange: [1, 65535]
+    proto: any
+    ignore: true
+
+# Ubuntu 26.04 can fail to rename Lima's already-up slirp interface to eth0 on
+# first boot. Networking still works, but wait-online otherwise delays cloud-init
+# by two minutes. This parameter is consumed by Lima's generated netplan config.
+param:
+  internal_netplanOptional: "true"
+
+hostResolver:
+  hosts:
+    host.docker.internal: host.lima.internal
+
+provision:
+  # build_vm replaces these placeholders with base64-encoded gzip archives.
+  # Base64 avoids both Lima 2.2's lossy YAML round trip for backslash-containing
+  # text and its attempt to interpret raw binary data as a guest template.
+  - mode: data
+    path: /tmp/ai-build-installers.tar.gz.b64
+    file: "@AI_BUILD_INSTALLERS_ARCHIVE@"
+  - mode: data
+    path: /tmp/ai-build-project.tar.gz.b64
+    file: "@AI_BUILD_PROJECT_ARCHIVE@"
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      mkdir -p /tmp/ai-build
+      base64 --decode /tmp/ai-build-installers.tar.gz.b64 | tar -xzf - -C /tmp/ai-build
+      base64 --decode /tmp/ai-build-project.tar.gz.b64 | tar -xzf - -C /tmp/ai-build
+      AI_VM_USER="{{.User}}" exec bash /tmp/ai-build/provision.sh
+
+message: |
+  AI base VM {{.Name}} is ready. build_vm will stop it after verification.

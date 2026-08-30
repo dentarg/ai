@@ -82,6 +82,9 @@ class OnePasswordBridgeTest < Minitest::Test
       OnePasswordBridge::Response.new(200, "resolved-secret")
     end
     certificate, private_key = OnePasswordBridge.certificate
+    subject_alt_name = certificate.extensions.find { |extension| extension.oid == "subjectAltName" }
+    assert_includes subject_alt_name.value, "DNS:host.containers.internal"
+    assert_includes subject_alt_name.value, "DNS:host.lima.internal"
     server = OnePasswordBridge::Server.new(
       broker: broker,
       certificate: certificate,
