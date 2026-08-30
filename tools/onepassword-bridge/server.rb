@@ -261,7 +261,7 @@ module OnePasswordBridge
     certificate.add_extension(
       extensions.create_extension(
         "subjectAltName",
-        "DNS:host.containers.internal,IP:127.0.0.1",
+        "DNS:host.containers.internal,DNS:host.lima.internal,IP:127.0.0.1",
         false,
       ),
     )

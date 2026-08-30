@@ -1,6 +1,6 @@
-# `ai` image
+# `ai` sandbox
 
-A containerized sandbox for running coding agents (Claude Code, Gemini CLI, OpenAI Codex, GitHub Copilot) with `--dangerously-skip-permissions` / `--dangerously-bypass-approvals-and-sandbox` enabled by default.
+A disposable Podman container or Lima virtual machine for running coding agents (Claude Code, Gemini CLI, OpenAI Codex, GitHub Copilot) with `--dangerously-skip-permissions` / `--dangerously-bypass-approvals-and-sandbox` enabled by default.
 
 ## Why
 
@@ -12,6 +12,8 @@ Agents work best when they can freely run shell commands, edit files, install pa
 - Shell history, agent session history, cloned repos, and installed gems persisted on the host across container restarts.
 - A shared directory mounted at `/share` (from `~/ai/share`) for passing files between the host and containers.
 - `mitmproxy` available for inspecting what the agent actually sends over the wire.
+- An optional real Linux VM with rootful Docker for testing Compose, systemd,
+  networking, image builds, and other host-level behavior.
 
 ## Setup
 
@@ -31,6 +33,12 @@ Optionally, add `sentry.token` to `$HOME/ai/settings` to enable the
 ```shell
 # start podman and share the current working directory
 bin/ai
+
+# instead, clone an ephemeral Lima VM from ai-base; it is deleted on exit
+bin/ai --vm
+
+# keep the VM running after exit so it can be inspected with limactl shell
+bin/ai --keep-vm
 
 # allow this session to request approved, allowlisted 1Password secrets
 bin/ai --1password
@@ -57,6 +65,9 @@ bin/ai cx --resume <session-id>
 bin/ai --ports 9999             # host 9999 -> container 9999
 bin/ai --ports 8888:7777        # host 8888 -> container 7777
 bin/ai <profile> --ports 9999,8888:7777
+
+# all launch/profile/resume/port options also work with the VM backend
+bin/ai --vm cx --ports 9999
 
 # enable Claude Code remote control for the session (off by default).
 # equivalently set AI_REMOTE=1 in your shell. see "Remote control" below.
@@ -91,7 +102,7 @@ cx
 # resume a prior Codex session (searches /history for the session id; a prefix is enough).
 cx --resume <session-id>
 
-# exit the container
+# exit the container or VM session
 x
 ```
 
@@ -105,14 +116,16 @@ reuses the original Codex home before launching `codex resume <id>`.
 
 ## Prerequisites
 
-Podman is required. The optional 1Password bridge also requires 1Password 8
-and 1Password CLI on the host.
+Podman is required for the default backend. Lima and `jq` are required for
+`--vm`. The optional 1Password bridge also requires 1Password 8 and 1Password
+CLI on the host.
 
 ```shell
 brew install podman
+brew install lima jq           # for --vm
 brew install 1password-cli # optional
 
-# init the VM, enable zram swap, set kernel.keys quotas
+# init the Podman machine, enable zram swap, set kernel.keys quotas
 bin/setup-vm
 
 # normal builds use the pinned agent versions in "versions/" and do not
@@ -129,6 +142,52 @@ bin/setup-vm
 
 # rebuild all layers and pull latest base image
 ./build_image --force
+
+# build the stopped ai-base Lima instance used by bin/ai --vm
+./build_vm
+
+# replace an existing base VM; accepts the same agent update flags
+./build_vm --force
+./build_vm --force --update-agents
+```
+
+### Lima VM backend
+
+`build_vm` provisions the expensive language runtimes and development tools
+once, verifies Docker and the coding agents, stops the resulting `ai-base`
+instance, and protects it from accidental deletion. `bin/ai --vm` clones that
+base for each session, adds the same `/app`, `/settings`, `/history`, `/share`,
+and other mounts used by the Podman backend, then deletes the clone when the
+interactive shell exits. The image and VM builds share the Chromium, system
+tool, language-runtime, coding-agent, and token-refresh service recipes under
+`inside_deps/`; only backend-specific setup remains in their provisioners.
+The initial build may take a while; `AI_VM_BUILD_TIMEOUT` controls its Lima
+startup timeout and defaults to `60m`.
+
+Runtime instances and guest hostnames use `ai-XX-<project>`, where `XX` is the
+first available two-digit suffix and `project` is the current directory name.
+Guests use UTC, matching the container backend.
+
+Ubuntu's `docker.io`, `docker-buildx`, and `docker-compose-v2` packages provide
+a rootful Docker stack inside the guest. The normal Lima user belongs to the
+`docker` group and has passwordless `sudo`, so tests can exercise a realistic
+Docker host without exposing the host Docker or Podman socket. Nested
+virtualization is not enabled.
+
+The primary guest port still comes from `PORT` (1337 by default), but the VM
+launcher chooses a free loopback host port and prints it when the VM is ready.
+Set `AI_VM_HOST_PORT` to request a fixed primary host port. Explicit `--ports`
+mappings remain fixed. Resource defaults for `build_vm` can be changed with
+`AI_VM_CPUS`, `AI_VM_MEMORY` (GiB), and `AI_VM_DISK` (GiB); `AI_VM_BASE`
+changes the base instance name for both building and launching.
+
+Use `--keep-vm` when diagnosing a guest problem. The launcher prints the
+instance name, which can then be opened or removed manually:
+
+```shell
+limactl shell <instance>
+limactl stop <instance>
+limactl delete <instance>
 ```
 
 ## 1Password bridge
