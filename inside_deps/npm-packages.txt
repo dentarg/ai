@@ -1,0 +1,4 @@
+npm@11
+@github/copilot
+@google/gemini-cli
+puppeteer-core
