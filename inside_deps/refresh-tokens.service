@@ -1,0 +1,13 @@
+[Unit]
+Description=Claude OAuth Token Refresh
+After=network.target
+
+[Service]
+Type=simple
+Environment=HOME=/workspace
+ExecStart=/usr/local/bin/refresh-tokens --daemon
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
