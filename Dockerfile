@@ -319,12 +319,25 @@ COPY inside_deps/_claude.sh ./
 COPY versions/claude-code /tmp/claude-version
 RUN bash _claude.sh "$(cat /tmp/claude-version)" \
     && rm _claude.sh /tmp/claude-version
-# created by claude native installer
-RUN rm -rf $HOME/.claude
 
-# Claude Code plugins
-# RUN bash -c "claude plugin marketplace add https://github.com/anthropics/claude-code"
-# RUN bash -c "claude plugin install ralph-wiggum@claude-code-plugins"
+# Claude Code plugins — every marketplace pinned in versions/claude-plugins is
+# cloned in and its plugins exposed under /opt/claude-plugins/enabled, which
+# tools/claude.sh links into each session's ~/.claude/skills/. They then load in
+# every project with no marketplace registration and no per-project config.
+#
+# Deliberately not "claude plugin install": ~/.claude is a fresh per-session
+# directory (see tools/claude.sh), and an install writes marketplace and install
+# records full of absolute paths into it — all discarded on the next launch.
+COPY inside_deps/_claude_plugins.sh ./
+COPY versions/claude-plugins /tmp/claude-plugins
+RUN bash _claude_plugins.sh /tmp/claude-plugins /opt/claude-plugins \
+    && rm _claude_plugins.sh /tmp/claude-plugins
+
+# created by claude native installer and by the plugin validation above
+RUN rm -rf $HOME/.claude $HOME/.claude.json
+
+# last, so editing the blocklist doesn't re-clone the marketplaces above
+COPY claude/plugins.blocklist /opt/claude-plugins/blocklist
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8

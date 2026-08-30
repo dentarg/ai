@@ -1,0 +1,13 @@
+# Claude Code plugin marketplaces baked into the image, one per line:
+#
+#   <name>  <git url>  <commit>
+#
+# <name>    directory name under /opt/claude-plugins/marketplaces
+# <commit>  pinned; refresh every line with ./build_image --update-plugins
+#
+# Every plugin a marketplace declares with an in-repo source is exposed and
+# loads enabled in every session. To keep one off by default, name it in
+# claude/plugins.blocklist. Plugins sourced from another repo are skipped —
+# vendor them by adding that repo here as its own marketplace.
+
+84codes  https://github.com/84codes/claude-plugins.git  d53b78057d53c79bebd7aecca24e4e9be920abf1

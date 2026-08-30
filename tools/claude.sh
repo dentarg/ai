@@ -3,6 +3,8 @@
 set -e
 
 HISTORY_ROOT=${HISTORY_ROOT:-/history}
+PLUGIN_ROOT=${PLUGIN_ROOT:-/opt/claude-plugins/enabled}
+PLUGIN_BLOCKLIST=${PLUGIN_BLOCKLIST:-/opt/claude-plugins/blocklist}
 
 is_true () {
   case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
@@ -34,6 +36,70 @@ history_dir () {
   day_time=$(date +%d_%a_%H-%M)
 
   echo "${HISTORY_ROOT}/${year}/${month}/${day_time}_${tool}"
+}
+
+# Symlink every plugin baked into the image (see inside_deps/_claude_plugins.sh)
+# into the session's ~/.claude/skills/, where Claude Code auto-loads each one as
+# <name>@skills-dir. No marketplace registration, no install records and no
+# per-project settings — they are simply present, in every project. Symlinks
+# rather than copies, so a rebuilt image reaches resumed sessions too.
+link_image_plugins () {
+  local claude_home=$1
+  local plugin
+  local target
+
+  [[ -d "$PLUGIN_ROOT" ]] || return 0
+  mkdir -p "$claude_home/skills"
+
+  # Resuming into a session built against an older image can leave links to
+  # plugins that are no longer baked in. A dangling link can't load, so drop it;
+  # real directories (e.g. from "claude plugin init") are untouched.
+  for plugin in "$claude_home"/skills/*; do
+    if [[ -L "$plugin" && ! -e "$plugin" ]]; then
+      rm -f "$plugin"
+    fi
+  done
+
+  for plugin in "$PLUGIN_ROOT"/*; do
+    target=$(readlink -f "$plugin") || continue
+    [[ -f "$target/.claude-plugin/plugin.json" ]] || continue
+    ln -sfn "$target" "$claude_home/skills/$(basename "$plugin")"
+  done
+}
+
+# Read plugin names out of a blocklist file: one per line, '#' starts a comment,
+# and anything that isn't a plugin-name character is dropped so the names are
+# safe to interpolate into the jq filter below.
+read_blocklist () {
+  local file=$1
+
+  [[ -f "$file" ]] || return 0
+  sed -e 's/#.*//' -e 's/[^A-Za-z0-9._-]//g' "$file" | grep -v '^$' || true
+}
+
+# Plugins named in a blocklist start disabled: still installed and still listed
+# by /plugin, just not loaded until enabled for a session. The image ships
+# claude/plugins.blocklist; /settings/plugins.blocklist adds to it host-side,
+# without a rebuild.
+block_image_plugins () {
+  local settings=$1
+  local filter=""
+  local file
+  local plugin
+
+  for file in "$PLUGIN_BLOCKLIST" /settings/plugins.blocklist; do
+    while read -r plugin; do
+      if [[ ! -e "$PLUGIN_ROOT/$plugin" ]]; then
+        echo "warning: ${file}: no baked-in plugin named '${plugin}'" >&2
+        continue
+      fi
+      filter="${filter}${filter:+ | }.enabledPlugins[\"${plugin}@skills-dir\"] = false"
+    done < <(read_blocklist "$file")
+  done
+
+  if [[ -n "$filter" ]]; then
+    enable_setting "$settings" "$filter"
+  fi
 }
 
 find_resume_jsonl () {
@@ -188,6 +254,8 @@ main () {
 
   [[ -f /settings/AGENTS.md ]] && cp -f /settings/AGENTS.md "$HOME/.claude/CLAUDE.md"
 
+  link_image_plugins "$settings_claude_home"
+
   # claude/claude.json -> ~/.claude.json (preserve existing one when resuming)
   if [[ -f /claude/claude.json ]]; then
     if [[ -z "$resume_id" || ! -f "$settings_claude_home/claude.json" ]]; then
@@ -223,6 +291,8 @@ main () {
   fi
 
   settings_file="$settings_claude_home/settings.json"
+
+  block_image_plugins "$settings_file"
 
   # Opt-in Claude Code remote control (--remote or AI_REMOTE truthy). Off by
   # default: it exposes this session to claude.ai/the mobile app behind only

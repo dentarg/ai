@@ -1,0 +1,9 @@
+# Plugins baked into the image (see versions/claude-plugins) that should NOT
+# load by default. One plugin name per line; '#' starts a comment.
+#
+# A blocked plugin is still installed and still listed by /plugin — it just
+# starts disabled, so `claude plugin enable <name>@skills-dir` or /plugin turns
+# it back on for a session.
+#
+# A host-side list at ~/ai/settings/plugins.blocklist is merged with this one,
+# so you can block a plugin without rebuilding the image.

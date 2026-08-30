@@ -14,9 +14,10 @@ set -u
 FORCE=0
 UPDATE_CLAUDE=0
 UPDATE_CODEX=0
+UPDATE_PLUGINS=0
 
 usage () {
-  echo "Usage: ./build_image [--force] [--update-claude] [--update-codex]" >&2
+  echo "Usage: ./build_image [--force] [--update-claude] [--update-codex] [--update-plugins]" >&2
   echo "       ./build_image [--force] --update-agents" >&2
   exit 1
 }
@@ -52,6 +53,44 @@ update_codex_version () {
   printf '%s\n' "$version" > versions/codex
 }
 
+# Re-pin every marketplace in versions/claude-plugins to its remote HEAD,
+# leaving comments, blank lines and the marketplace list itself untouched.
+update_plugins_version () {
+  file=versions/claude-plugins
+  tmp=$(mktemp)
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ''|'#'*)
+        printf '%s\n' "$line" >> "$tmp"
+        continue
+        ;;
+    esac
+
+    # shellcheck disable=SC2086 # deliberate word splitting into name/url/commit
+    set -- $line
+    if [ "$#" -ne 3 ]; then
+      echo "at=fatal msg=\"expected '<name> <git url> <commit>'\" line=\"$line\"" >&2
+      rm -f "$tmp"
+      exit 1
+    fi
+
+    sha=$(git ls-remote "$2" HEAD | cut -f1)
+    case "$sha" in
+      ????????????????????????????????????????) ;;
+      *)
+        echo "at=fatal msg=\"invalid marketplace commit\" name=\"$1\" url=\"$2\" sha=\"$sha\"" >&2
+        rm -f "$tmp"
+        exit 1
+        ;;
+    esac
+
+    printf '%s  %s  %s\n' "$1" "$2" "$sha" >> "$tmp"
+  done < "$file"
+
+  mv "$tmp" "$file"
+}
+
 for arg in "$@"; do
   case "$arg" in
     --force)
@@ -63,9 +102,13 @@ for arg in "$@"; do
     --update-codex)
       UPDATE_CODEX=1
       ;;
+    --update-plugins)
+      UPDATE_PLUGINS=1
+      ;;
     --update-agents)
       UPDATE_CLAUDE=1
       UPDATE_CODEX=1
+      UPDATE_PLUGINS=1
       ;;
     -h|--help)
       usage
@@ -79,6 +122,7 @@ done
 
 [ "$UPDATE_CLAUDE" -eq 1 ] && update_claude_version
 [ "$UPDATE_CODEX" -eq 1 ] && update_codex_version
+[ "$UPDATE_PLUGINS" -eq 1 ] && update_plugins_version
 
 set -x
 set -- build

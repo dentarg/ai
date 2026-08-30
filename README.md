@@ -119,12 +119,13 @@ bin/setup-vm
 # check upstream "latest" endpoints.
 ./build_image
 
-# update pinned Claude Code and Codex version files, then rebuild
+# update pinned Claude Code, Codex and plugin marketplace versions, then rebuild
 ./build_image --update-agents
 
-# update only one pinned agent version file
+# update only one pinned version file
 ./build_image --update-claude
 ./build_image --update-codex
+./build_image --update-plugins
 
 # rebuild all layers and pull latest base image
 ./build_image --force
@@ -259,6 +260,70 @@ Environment variables:
 | `REFRESH_BEFORE` | `3600` | Seconds before expiry to trigger refresh |
 | `HISTORY_DIR` | `~/ai/history` | Claude session history to search |
 | `HISTORY_DAYS` | `2` | Recent file-age window to search |
+
+## Claude Code plugins
+
+Plugin marketplaces are baked into the image, so their commands are there in
+every session and every project with no per-project configuration. List one per
+line in `versions/claude-plugins`:
+
+```
+# <name>  <git url>  <commit>
+84codes  https://github.com/84codes/claude-plugins.git  d53b7805…
+```
+
+At build time each is cloned to `/opt/claude-plugins/marketplaces/<name>`,
+validated, and every plugin it declares with an in-repo source is symlinked
+into `/opt/claude-plugins/enabled/`. On launch, `c` links those into the
+session's `~/.claude/skills/`, where Claude Code auto-loads each as
+`<name>@skills-dir`, enabled by default. Today that gives you `/gem:bump`.
+
+Plugins a marketplace sources from *another* repo are skipped, with a count in
+the build log — add that repo as its own line to vendor them. Two marketplaces
+providing the same plugin name is a build error rather than a coin flip.
+
+```shell
+# re-pin every marketplace to its remote HEAD, then rebuild
+./build_image --update-plugins
+```
+
+### Blocking a plugin
+
+Everything baked in loads by default. To keep one off, name it in
+`claude/plugins.blocklist` (version controlled, ships in the image) or in
+`~/ai/settings/plugins.blocklist` on the host (no rebuild needed) — the two are
+merged:
+
+```
+# one plugin name per line
+code-simplifier
+```
+
+Blocked plugins are still installed and still listed by `/plugin`; they just
+start disabled, so you can turn one on for a single session:
+
+```shell
+claude plugin list
+#   ❯ gem@skills-dir            ✔ loaded
+#   ❯ code-simplifier@skills-dir  ✘ disabled
+
+claude plugin enable code-simplifier@skills-dir
+```
+
+`c` rewrites the session's `settings.json` from `claude/settings.json` on every
+launch, so removing a name from the blocklist re-enables it next time — nothing
+to undo.
+
+### Why not `claude plugin install`
+
+`~/.claude` is a fresh per-session directory under `/history` (see
+`tools/claude.sh`). A real install writes `known_marketplaces.json`,
+`installed_plugins.json` and `enabledPlugins` into it, all carrying absolute
+paths into that throwaway directory, so it would be discarded on every launch.
+`extraKnownMarketplaces` in settings doesn't help either: it is only acted on by
+the interactive trust dialog. Symlinking into `~/.claude/skills/` sidesteps all
+of it — and because they're symlinks into the image, a rebuild reaches resumed
+sessions too.
 
 ## MCP Servers
 
