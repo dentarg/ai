@@ -7,13 +7,13 @@ REPO_DIR=$SCRIPT_DIR
 # shellcheck source=tools/build-common.sh
 . "${REPO_DIR}/tools/build-common.sh"
 
-BASE_NAME=${AI_VM_BASE:-ai-base}
 VM_CPUS=${AI_VM_CPUS:-4}
 VM_MEMORY=${AI_VM_MEMORY:-8}
 VM_DISK=${AI_VM_DISK:-100}
 VM_BUILD_TIMEOUT=${AI_VM_BUILD_TIMEOUT:-60m}
 ASSET_MANIFEST=${REPO_DIR}/lima/assets/manifest.txt
 FORCE=0
+GPU=0
 UPDATE_CLAUDE=0
 UPDATE_CODEX=0
 
@@ -25,14 +25,15 @@ trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
 usage () {
-  echo "Usage: ./build_vm [--force] [--update-claude] [--update-codex]" >&2
-  echo "       ./build_vm [--force] --update-agents" >&2
+  echo "Usage: ./build_vm [--force] [--gpu] [--update-claude] [--update-codex]" >&2
+  echo "       ./build_vm [--force] [--gpu] --update-agents" >&2
   exit "${1:-1}"
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --force) FORCE=1 ;;
+    --gpu) GPU=1 ;;
     --update-claude) UPDATE_CLAUDE=1 ;;
     --update-codex) UPDATE_CODEX=1 ;;
     --update-agents) UPDATE_CLAUDE=1; UPDATE_CODEX=1 ;;
@@ -42,10 +43,30 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+if [ "$GPU" -eq 1 ]; then
+  BASE_NAME=${AI_VM_BASE:-ai-base-gpu}
+else
+  BASE_NAME=${AI_VM_BASE:-ai-base}
+fi
+
 command -v limactl >/dev/null 2>&1 || {
   echo 'at=fatal msg="limactl is required; install Lima first"' >&2
   exit 1
 }
+if [ "$GPU" -eq 1 ]; then
+  command -v jq >/dev/null 2>&1 || {
+    echo 'at=fatal msg="jq is required to build the GPU VM"' >&2
+    exit 1
+  }
+  command -v krunkit >/dev/null 2>&1 || {
+    echo 'at=fatal msg="krunkit is required to build the GPU VM"' >&2
+    exit 1
+  }
+  if ! limactl info | jq -e '.vmTypesEx.krunkit.location // empty' >/dev/null; then
+    echo 'at=fatal msg="Lima krunkit driver is not available"' >&2
+    exit 1
+  fi
+fi
 
 [ "$UPDATE_CLAUDE" -eq 1 ] && update_claude_version
 [ "$UPDATE_CODEX" -eq 1 ] && update_codex_version
@@ -93,14 +114,18 @@ if [ "$exists" -eq 1 ]; then
 fi
 
 limactl validate "$VM_TEMPLATE"
-limactl create --yes \
+set -- create --tty=false
+[ "$GPU" -eq 1 ] && set -- "$@" --vm-type krunkit
+set -- "$@" \
   --name "$BASE_NAME" \
   --cpus "$VM_CPUS" \
   --memory "$VM_MEMORY" \
   --disk "$VM_DISK" \
   "$VM_TEMPLATE"
+limactl "$@"
 limactl start --progress --timeout "$VM_BUILD_TIMEOUT" "$BASE_NAME"
-limactl shell "$BASE_NAME" sudo env HOME=/workspace BASH_ENV=/workspace/.bash_profile \
+limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" \
+  HOME=/workspace BASH_ENV=/workspace/.bash_profile \
   bash -lc '
     if ! test -f /var/lib/ai-base-provisioned; then
       echo "at=fatal msg=\"VM provisioning did not complete; inspect the cloud-init output above\"" >&2
@@ -111,7 +136,28 @@ limactl shell "$BASE_NAME" sudo env HOME=/workspace BASH_ENV=/workspace/.bash_pr
     docker compose version
     command -v codex
     command -v claude
+    test -s /workspace/.bashrc
+    test -s /usr/local/bin/cx
+    test -s /usr/local/bin/x
+    grep -F "alias x=exit" /workspace/.bashrc >/dev/null
+    if [ "$AI_VM_GPU" -eq 1 ]; then
+      test -c /dev/dri/renderD128
+    fi
+    # The external krunkit driver stops by terminating its process. Flush late
+    # provisioning writes before Lima stops the base and clones its raw disk.
+    sync
   '
+limactl stop "$BASE_NAME"
+# Reopen the disk once before protecting it. This catches krunkit shutdowns
+# that retained file metadata but lost recently written file contents.
+limactl start --timeout "$VM_BUILD_TIMEOUT" "$BASE_NAME"
+limactl shell "$BASE_NAME" sudo bash -lc '
+  test -s /workspace/.bashrc
+  test -s /usr/local/bin/cx
+  test -s /usr/local/bin/x
+  grep -F "alias x=exit" /workspace/.bashrc >/dev/null
+  sync
+'
 limactl stop "$BASE_NAME"
 limactl protect "$BASE_NAME"
 echo "at=info msg=\"base VM ready\" vm=$BASE_NAME"

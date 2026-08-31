@@ -21,6 +21,9 @@ printf '\n' >> "$LIMACTL_LOG"
 if [[ "${1:-}" == list && "${BASE_EXISTS:-0}" == 1 ]]; then
   printf '%s\n' ai-base
 fi
+if [[ "${1:-}" == info ]]; then
+  printf '%s\n' '{"vmTypesEx":{"krunkit":{"location":"/fake/krunkit"}}}'
+fi
 if [[ "${1:-}" == validate ]]; then
   cp "$2" "$CAPTURED_TEMPLATE"
   while IFS= read -r archive; do
@@ -29,11 +32,16 @@ if [[ "${1:-}" == validate ]]; then
 fi
 EOF
 chmod +x "${fake_bin}/limactl"
+cat > "${fake_bin}/krunkit" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "${fake_bin}/krunkit"
 
 CAPTURED_TEMPLATE="$captured_template" CAPTURED_ARCHIVES="$captured_archives" \
   LIMACTL_LOG="$log" PATH="${fake_bin}:${PATH}" "$REPO_DIR/build_vm" >/dev/null
 grep -F '<validate><' "$log" >/dev/null
-grep -F '<create><--yes><--name><ai-base><--cpus><4><--memory><8><--disk><100>' "$log" >/dev/null
+grep -F '<create><--tty=false><--name><ai-base><--cpus><4><--memory><8><--disk><100>' "$log" >/dev/null
 grep -F '<start><--progress><--timeout><60m><ai-base>' "$log" >/dev/null
 grep -F '<stop><ai-base>' "$log" >/dev/null
 grep -F '<protect><ai-base>' "$log" >/dev/null
@@ -80,5 +88,30 @@ AI_VM_BUILD_TIMEOUT=90m CAPTURED_TEMPLATE="$captured_template" CAPTURED_ARCHIVES
   LIMACTL_LOG="$log" PATH="${fake_bin}:${PATH}" \
   "$REPO_DIR/build_vm" >/dev/null
 grep -F '<start><--progress><--timeout><90m><ai-base>' "$log" >/dev/null
+
+: > "$log"
+CAPTURED_TEMPLATE="$captured_template" CAPTURED_ARCHIVES="$captured_archives" \
+  LIMACTL_LOG="$log" PATH="${fake_bin}:${PATH}" \
+  "$REPO_DIR/build_vm" --gpu >/dev/null
+grep -F '<info>' "$log" >/dev/null
+grep -F '<create><--tty=false><--vm-type><krunkit><--name><ai-base-gpu>' "$log" >/dev/null
+grep -F '<start><--progress><--timeout><60m><ai-base-gpu>' "$log" >/dev/null
+grep -F '<stop><ai-base-gpu>' "$log" >/dev/null
+grep -F '<protect><ai-base-gpu>' "$log" >/dev/null
+grep -F '<AI_VM_GPU=1>' "$log" >/dev/null
+grep -F 'test -c /dev/dri/renderD128' "$log" >/dev/null
+grep -F 'test -s /workspace/.bashrc' "$log" >/dev/null
+grep -F 'test -s /usr/local/bin/cx' "$log" >/dev/null
+grep -F 'test -s /usr/local/bin/x' "$log" >/dev/null
+grep -F 'alias x=exit' "$log" >/dev/null
+grep -F 'sync' "$log" >/dev/null
+if [[ $(grep -Fc '<start><--timeout><60m><ai-base-gpu>' "$log") -ne 1 ]]; then
+  echo 'at=fatal msg="build_vm did not restart the GPU base for persistence verification"' >&2
+  exit 1
+fi
+if [[ $(grep -Fc '<stop><ai-base-gpu>' "$log") -ne 2 ]]; then
+  echo 'at=fatal msg="build_vm did not stop the GPU base after persistence verification"' >&2
+  exit 1
+fi
 
 echo 'at=info msg="build_vm tests passed"'

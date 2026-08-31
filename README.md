@@ -43,6 +43,9 @@ bin/ai --keep-vm
 # enable nested virtualization and give the outer VM additional resources
 bin/ai --vm --nested-virt --cpus 8 --memory 16
 
+# use the GPU-enabled krunkit base VM
+bin/ai --vm --gpu
+
 # allow this session to request approved, allowlisted 1Password secrets
 bin/ai --1password
 
@@ -126,6 +129,9 @@ CLI on the host.
 ```shell
 brew install podman
 brew install lima jq           # for --vm
+brew tap libkrun/krun          # for --vm --gpu
+brew trust libkrun/krun
+brew install krunkit
 brew install 1password-cli # optional
 
 # init the Podman machine, enable zram swap, set kernel.keys quotas
@@ -152,6 +158,10 @@ bin/setup-vm
 # replace an existing base VM; accepts the same agent update flags
 ./build_vm --force
 ./build_vm --force --update-agents
+
+# build the separate ai-base-gpu instance with Lima's krunkit driver
+./build_vm --gpu
+./build_vm --gpu --force
 ```
 
 ### Lima VM backend
@@ -182,6 +192,27 @@ Lima guest. Lima supports this with the `vz` driver on Apple M3 or newer Macs;
 the inner VM must use the native architecture. For QEMU, use `-accel kvm -cpu
 host`. The option is disabled by default. `--cpus` and `--memory` override the
 cloned VM's resources for workloads that need more than the base VM allocation.
+
+GPU acceleration uses a separate `ai-base-gpu` instance because Lima selects
+the VM driver when an instance is created. `build_vm --gpu` uses Lima's
+experimental `krunkit` driver and verifies that `/dev/dri/renderD128` exists;
+`bin/ai --vm --gpu` clones that base. This requires Apple Silicon, macOS 14 or
+newer, and krunkit installed on the host.
+
+The guest receives a paravirtualized Vulkan device rather than direct hardware
+passthrough. Vulkan commands travel through Mesa Venus and MoltenVK to the
+Apple GPU. Container images therefore need compatible Vulkan userspace drivers
+and must receive the device explicitly. Verify the path with the patched Fedora
+Mesa image recommended for krunkit:
+
+```shell
+docker run --rm --device /dev/dri --env XDG_RUNTIME_DIR=/tmp --entrypoint vulkaninfo quay.io/slopezpa/fedora-vgpu --summary
+```
+
+Ubuntu's Mesa packages are not installed in the guest because their Venus
+protocol is incompatible with krunkit's host-side virglrenderer. GPU workloads
+should carry compatible Mesa libraries in their container image, using the
+patched Fedora image above as a base when appropriate.
 
 The primary guest port still comes from `PORT` (1337 by default), but the VM
 launcher chooses a free loopback host port and prints it when the VM is ready.

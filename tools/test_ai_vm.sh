@@ -24,7 +24,7 @@ cat > "${fake_bin}/limactl" <<'EOF'
 } >> "$LIMACTL_LOG"
 
 case "${1:-}" in
-  list) printf '%s\n' ai-base ;;
+  list) printf '%s\n' ai-base ai-base-gpu ;;
   shell)
     case "$*" in
       *'/workspace/.ai-op-token'*) cat >/dev/null ;;
@@ -65,6 +65,7 @@ grep -F '"guestPort":7777,"hostPort":8888' "$log" >/dev/null
 grep -F '<AI_AUTO_LAUNCH=1>' "$log" >/dev/null
 grep -F '<CODEX_AUTO_START=1>' "$log" >/dev/null
 grep -F '<shell> <--workdir> </app>' "$log" >/dev/null
+grep -F 'Lima clone is missing the provisioned shell or tools' "$log" >/dev/null
 grep -F '<stop>' "$log" >/dev/null
 grep -F '<delete> <--force>' "$log" >/dev/null
 
@@ -100,6 +101,26 @@ grep -F '<clone> <--tty=false> <--nested-virt> <--cpus> <8> <--memory> <16>' "$l
 if HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:${PATH}" \
   "$REPO_DIR/bin/ai" --nested-virt >/dev/null 2>&1; then
   echo 'at=fatal msg="--nested-virt worked without --vm"' >&2
+  exit 1
+fi
+
+: > "$log"
+(
+  cd "$project"
+  HOME="${tmpdir}/home" \
+  AI_DIR="$ai_dir" \
+  AI_VM_HOST_PORT=45558 \
+  LIMACTL_LOG="$log" \
+  PATH="${fake_bin}:${PATH}" \
+    "$REPO_DIR/bin/ai" --vm --gpu >/dev/null 2>&1
+)
+
+grep -F '<clone> <--tty=false>' "$log" | \
+  grep -F '<ai-base-gpu> <ai-00-project-with-spaces>' >/dev/null
+
+if HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:${PATH}" \
+  "$REPO_DIR/bin/ai" --gpu >/dev/null 2>&1; then
+  echo 'at=fatal msg="--gpu worked without --vm"' >&2
   exit 1
 fi
 

@@ -33,6 +33,7 @@ Options:
       --ports <list>  Publish comma-separated PORT or HOST:CONTAINER ports
       --vm            Use an ephemeral Lima VM instead of a Podman container
       --keep-vm       Keep the Lima VM after exit (implies --vm)
+      --gpu           Use the GPU-enabled Lima base VM
       --nested-virt   Enable nested virtualization in the Lima VM
       --cpus <count>  Override CPU count for the Lima VM
       --memory <GiB>  Override memory in GiB for the Lima VM
@@ -47,7 +48,7 @@ Environment:
   AI_REMOTE           Enable remote control when set to 1, true, yes, or on
   AI_FAST             Enable fast mode when set to 1, true, yes, or on
   PORT                Primary published port (default: 1337)
-  AI_VM_BASE          Lima base instance to clone (default: ai-base)
+  AI_VM_BASE          Lima base instance to clone (ai-base or ai-base-gpu)
   AI_VM_HOST_PORT     Primary host port (default: choose a free port)
 EOF
 }
@@ -69,6 +70,7 @@ is_true() {
 #                        "PORT" (host==container) or "SRC:DST" (host:container).
 #   --vm                 use an ephemeral Lima VM instead of Podman.
 #   --keep-vm            retain the Lima VM after exit; implies --vm.
+#   --gpu                use the GPU-enabled Lima base VM.
 #   --nested-virt        expose KVM inside the Lima VM.
 #   --cpus <count>       override the cloned Lima VM's CPU count.
 #   --memory <GiB>       override the cloned Lima VM's memory.
@@ -87,6 +89,7 @@ FAST=${AI_FAST:-}
 ONEPASSWORD=${AI_1PASSWORD:-}
 VM_BACKEND=0
 KEEP_VM=0
+GPU=0
 NESTED_VIRT=0
 VM_CPUS=""
 VM_MEMORY=""
@@ -123,6 +126,9 @@ while [ $# -gt 0 ]; do
     --keep-vm)
       VM_BACKEND=1
       KEEP_VM=1
+      ;;
+    --gpu)
+      GPU=1
       ;;
     --nested-virt)
       NESTED_VIRT=1
@@ -167,9 +173,10 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-if [ "$NESTED_VIRT" -eq 1 ] || [ -n "$VM_CPUS" ] || [ -n "$VM_MEMORY" ]; then
+if [ "$GPU" -eq 1 ] || [ "$NESTED_VIRT" -eq 1 ] || \
+  [ -n "$VM_CPUS" ] || [ -n "$VM_MEMORY" ]; then
   if [ "$VM_BACKEND" -ne 1 ]; then
-    echo 'at=fatal msg="--nested-virt, --cpus, and --memory require --vm"' >&2
+    echo 'at=fatal msg="--gpu, --nested-virt, --cpus, and --memory require --vm"' >&2
     exit 1
   fi
 fi
@@ -456,7 +463,11 @@ run_lima_vm() {
     ''|*[!0-9]*) echo 'at=fatal msg="PORT must be numeric for --vm"' >&2; exit 1 ;;
   esac
 
-  base_name=${AI_VM_BASE:-ai-base}
+  if [ "$GPU" -eq 1 ]; then
+    base_name=${AI_VM_BASE:-ai-base-gpu}
+  else
+    base_name=${AI_VM_BASE:-ai-base}
+  fi
   if ! limactl list --format '{{.Name}}' | grep -Fx "$base_name" >/dev/null 2>&1; then
     echo "at=fatal msg=\"Lima base VM not found; run ./build_vm first\" vm=$base_name" >&2
     exit 1
@@ -555,6 +566,12 @@ run_lima_vm() {
       OP_BRIDGE_TOKEN_FILE=/workspace/.ai-op-token
   fi
   set -- "$@" bash -c '
+    if [ ! -s /workspace/.bashrc ] || [ ! -s /usr/local/bin/cx ] || \
+      [ ! -s /usr/local/bin/x ] || \
+      ! grep -F "alias x=exit" /workspace/.bashrc >/dev/null; then
+      echo "at=fatal msg=\"Lima clone is missing the provisioned shell or tools\"" >&2
+      exit 1
+    fi
     if [ -n "${OP_BRIDGE_TOKEN_FILE:-}" ]; then
       export OP_BRIDGE_TOKEN=$(cat "$OP_BRIDGE_TOKEN_FILE")
     fi
