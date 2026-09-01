@@ -221,8 +221,14 @@ mappings remain fixed. Resource defaults for `build_vm` can be changed with
 `AI_VM_CPUS`, `AI_VM_MEMORY` (GiB), and `AI_VM_DISK` (GiB); `AI_VM_BASE`
 changes the base instance name for both building and launching.
 
+Lima bases enable zram swap sized to half of guest RAM, using zstd compression.
+This absorbs temporary memory spikes from compilers and container builds before
+the guest has to invoke the OOM killer.
+
 Use `--keep-vm` when diagnosing a guest problem. The launcher prints the
-instance name, which can then be opened or removed manually:
+instance name, which can then be opened or removed manually. The launcher also
+keeps the VM automatically when its console exits nonzero, preserving guest
+logs and Docker build cache for diagnosis.
 
 ```shell
 limactl shell <instance>

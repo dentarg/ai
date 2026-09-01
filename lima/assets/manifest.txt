@@ -5,6 +5,7 @@ install-utils.sh inside_deps/install-utils.sh project
 install-chromium.sh inside_deps/install-chromium.sh project
 install-system-tools.sh inside_deps/install-system-tools.sh project
 vm-packages.txt inside_deps/vm-packages.txt project
+zram-generator.conf lima/zram-generator.conf project
 _brew.sh lima/assets/brew.sh installers
 _mise.sh lima/assets/mise.sh installers
 _nvm.sh lima/assets/nvm.sh installers

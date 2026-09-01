@@ -271,6 +271,7 @@ BROKER_SESSION_DIR=""
 ONEPASSWORD_ENV=""
 ONEPASSWORD_VOLUME=""
 VM_NAME=""
+VM_SESSION_STATUS=0
 
 cleanup_onepassword_bridge() {
   if [ -n "$BROKER_PID" ]; then
@@ -285,7 +286,12 @@ cleanup_onepassword_bridge() {
 cleanup_vm() {
   [ -n "$VM_NAME" ] || return 0
   if [ "$KEEP_VM" -eq 1 ]; then
-    echo "at=info msg=\"keeping Lima VM\" vm=$VM_NAME" >&2
+    if [ "$VM_SESSION_STATUS" -ne 0 ]; then
+      echo "at=warn msg=\"keeping Lima VM after abnormal console exit\" vm=$VM_NAME status=$VM_SESSION_STATUS" >&2
+    else
+      echo "at=info msg=\"keeping Lima VM\" vm=$VM_NAME" >&2
+    fi
+    echo "at=info msg=\"delete retained Lima VM when finished\" command=\"limactl delete --force $VM_NAME\"" >&2
     return 0
   fi
   limactl stop "$VM_NAME" >/dev/null 2>&1 || true
@@ -580,6 +586,10 @@ run_lima_vm() {
   '
   session_status=0
   limactl shell --workdir /app "$VM_NAME" "$@" || session_status=$?
+  if [ "$session_status" -ne 0 ]; then
+    VM_SESSION_STATUS=$session_status
+    KEEP_VM=1
+  fi
   if [ -n "$BROKER_SESSION_DIR" ]; then
     limactl shell --workdir /app "$VM_NAME" sh -c 'rm -f /workspace/.ai-op-token' >/dev/null 2>&1 || true
   fi

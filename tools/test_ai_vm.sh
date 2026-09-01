@@ -29,6 +29,9 @@ case "${1:-}" in
     case "$*" in
       *'/workspace/.ai-op-token'*) cat >/dev/null ;;
     esac
+    if [[ "$*" == *AI_AUTO_LAUNCH=1* && "${SHELL_STATUS:-0}" -ne 0 ]]; then
+      exit "$SHELL_STATUS"
+    fi
     ;;
 esac
 EOF
@@ -68,6 +71,29 @@ grep -F '<shell> <--workdir> </app>' "$log" >/dev/null
 grep -F 'Lima clone is missing the provisioned shell or tools' "$log" >/dev/null
 grep -F '<stop>' "$log" >/dev/null
 grep -F '<delete> <--force>' "$log" >/dev/null
+
+: > "$log"
+failure_output="${tmpdir}/failure-output"
+if (
+  cd "$project"
+  HOME="${tmpdir}/home" \
+  AI_DIR="$ai_dir" \
+  AI_VM_HOST_PORT=45559 \
+  LIMACTL_LOG="$log" \
+  SHELL_STATUS=137 \
+  PATH="${fake_bin}:${PATH}" \
+    "$REPO_DIR/bin/ai" --vm >"$failure_output" 2>&1
+); then
+  echo 'at=fatal msg="failed Lima console returned success"' >&2
+  exit 1
+fi
+if grep -F '<stop>' "$log" >/dev/null || grep -F '<delete>' "$log" >/dev/null; then
+  echo 'at=fatal msg="failed Lima console was not retained"' >&2
+  exit 1
+fi
+grep -F 'keeping Lima VM after abnormal console exit' "$failure_output" >/dev/null
+grep -F 'status=137' "$failure_output" >/dev/null
+grep -F 'limactl delete --force ai-00-project-with-spaces' "$failure_output" >/dev/null
 
 : > "$log"
 (

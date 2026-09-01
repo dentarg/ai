@@ -31,6 +31,8 @@ yes | unminimize || true
 # VM-only packages. Use Ubuntu's maintained Docker stack instead of executing
 # the mutable convenience installer from get.docker.com.
 xargs apt-get install -y --no-install-recommends < /tmp/ai-build/vm-packages.txt
+install -m 644 /tmp/ai-build/zram-generator.conf /etc/systemd/zram-generator.conf
+systemctl daemon-reload
 systemctl enable --now docker
 
 bash /tmp/ai-build/install-chromium.sh /tmp/ai-build/chromium-packages.txt

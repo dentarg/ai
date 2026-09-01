@@ -156,6 +156,7 @@ limactl shell "$BASE_NAME" sudo bash -lc '
   test -s /usr/local/bin/cx
   test -s /usr/local/bin/x
   grep -F "alias x=exit" /workspace/.bashrc >/dev/null
+  swapon --show=NAME --noheadings | grep -Fx /dev/zram0 >/dev/null
   sync
 '
 limactl stop "$BASE_NAME"

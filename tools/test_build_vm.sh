@@ -104,6 +104,7 @@ grep -F 'test -s /workspace/.bashrc' "$log" >/dev/null
 grep -F 'test -s /usr/local/bin/cx' "$log" >/dev/null
 grep -F 'test -s /usr/local/bin/x' "$log" >/dev/null
 grep -F 'alias x=exit' "$log" >/dev/null
+grep -F 'swapon --show=NAME --noheadings' "$log" >/dev/null
 grep -F 'sync' "$log" >/dev/null
 if [[ $(grep -Fc '<start><--timeout><60m><ai-base-gpu>' "$log") -ne 1 ]]; then
   echo 'at=fatal msg="build_vm did not restart the GPU base for persistence verification"' >&2
