@@ -18,6 +18,7 @@ case "$PWD" in
       --env XDG_RUNTIME_DIR=/tmp \
       --network host \
       --user "$(id -u):$(id -g)" \
+      --volume /usr/local/share/ai:/usr/local/share/ai:ro \
       --volume /share:/share \
       --workdir "$PWD" \
       ai-llama.cpp \
@@ -32,6 +33,7 @@ case "$PWD" in
       --env XDG_RUNTIME_DIR=/tmp \
       --network host \
       --user "$(id -u):$(id -g)" \
+      --volume /usr/local/share/ai:/usr/local/share/ai:ro \
       --volume /share:/share \
       --volume "$PWD:$PWD" \
       --workdir "$PWD" \

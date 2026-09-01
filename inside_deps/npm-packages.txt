@@ -1,4 +1,5 @@
 npm@11
 @github/copilot
 @google/gemini-cli
+@earendil-works/pi-coding-agent@0.84.4
 puppeteer-core

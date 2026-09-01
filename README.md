@@ -247,6 +247,32 @@ GGML_VK_DISABLE_F16=1 llama-cli \
 `llama-server` uses host networking, so its default port is directly available
 through the VM's configured forwards.
 
+The GPU base also installs Pi as a filesystem-aware coding harness.
+`local-code` starts an OpenAI-compatible llama.cpp server for the local model,
+waits for it to become ready, and connects Pi to it. It defaults to the
+Qwen3.8-27B IQ4_XS model under `/share/models` and uses a pinned agent-safe Qwen
+chat template:
+
+```shell
+curl -L -o /share/models/Qwen3.8-27B-UD-IQ4_XS.gguf \
+  https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-IQ4_XS.gguf
+local-code
+```
+
+Pi gives the model `read`, `write`, `edit`, and `bash` tools, so prompts can
+inspect and modify the current project. Use `LOCAL_CODE_MODEL` to select another
+GGUF. Non-Qwen models use their embedded chat template; setting
+`LOCAL_CODE_CHAT_TEMPLATE` overrides that choice. `LOCAL_CODE_CONTEXT`,
+`LOCAL_CODE_GPU_LAYERS`, and `LOCAL_CODE_PORT` control server sizing. For
+example, download and run Gemma 4 with:
+
+```shell
+curl -L -o /share/models/gemma-4-26B_q4_0-it.gguf \
+  https://huggingface.co/google/gemma-4-26B-A4B-it-qat-q4_0-gguf/resolve/main/gemma-4-26B_q4_0-it.gguf
+LOCAL_CODE_MODEL=/share/models/gemma-4-26B_q4_0-it.gguf \
+  LOCAL_CODE_GPU_LAYERS=20 local-code
+```
+
 The primary guest port still comes from `PORT` (1337 by default), but the VM
 launcher chooses a free loopback host port and prints it when the VM is ready.
 Set `AI_VM_HOST_PORT` to request a fixed primary host port. Explicit `--ports`

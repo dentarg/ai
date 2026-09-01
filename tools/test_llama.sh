@@ -31,6 +31,7 @@ grep -Fx '<GGML_VK_DISABLE_F16>' "$log" >/dev/null
 grep -Fx '<--network>' "$log" >/dev/null
 grep -Fx '<host>' "$log" >/dev/null
 grep -Fx '<--user>' "$log" >/dev/null
+grep -Fx '</usr/local/share/ai:/usr/local/share/ai:ro>' "$log" >/dev/null
 grep -Fx "<${work_dir}:${work_dir}>" "$log" >/dev/null
 grep -Fx '<ai-llama.cpp>' "$log" >/dev/null
 grep -Fx '<llama-cli>' "$log" >/dev/null
@@ -40,8 +41,8 @@ grep -Fx '<--version>' "$log" >/dev/null
   cd /share
   DOCKER_LOG="$log" PATH="${fake_bin}:${PATH}" llama-server --version
 )
-if [[ $(grep -Fc '<--volume>' "$log") -ne 1 ]]; then
-  echo 'at=fatal msg="llama wrapper mounted /share more than once"' >&2
+if [[ $(grep -Fc '</share:/share>' "$log") -ne 1 ]]; then
+  echo 'at=fatal msg="llama wrapper did not mount /share exactly once"' >&2
   exit 1
 fi
 grep -Fx '<llama-server>' "$log" >/dev/null

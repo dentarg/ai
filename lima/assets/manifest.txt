@@ -7,6 +7,8 @@ install-system-tools.sh inside_deps/install-system-tools.sh project
 llama.cpp.Dockerfile inside_deps/llama.cpp.Dockerfile project
 llama.cpp.sh tools/llama.cpp.sh project
 llama.cpp-version versions/llama.cpp project
+local-code.sh tools/local-code.sh project
+qwen-chat-template-version versions/qwen-chat-template project
 vm-packages.txt inside_deps/vm-packages.txt project
 zram-generator.conf lima/zram-generator.conf project
 _brew.sh lima/assets/brew.sh installers

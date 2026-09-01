@@ -46,6 +46,13 @@ if [[ -c /dev/dri/renderD128 ]]; then
     /usr/local/libexec/llama.cpp
   ln -s /usr/local/libexec/llama.cpp /usr/local/bin/llama-cli
   ln -s /usr/local/libexec/llama.cpp /usr/local/bin/llama-server
+  install -D -m 755 /tmp/ai-build/local-code.sh /usr/local/bin/local-code
+  qwen_template_version=$(cat /tmp/ai-build/qwen-chat-template-version)
+  curl --fail --location --silent --show-error \
+    "https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates/resolve/${qwen_template_version}/chat_template.jinja" \
+    --output /tmp/qwen-chat-template.jinja
+  install -D -m 644 /tmp/qwen-chat-template.jinja \
+    /usr/local/share/ai/qwen-chat-template.jinja
 fi
 
 bash /tmp/ai-build/install-chromium.sh /tmp/ai-build/chromium-packages.txt
