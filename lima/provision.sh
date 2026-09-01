@@ -35,6 +35,19 @@ install -m 644 /tmp/ai-build/zram-generator.conf /etc/systemd/zram-generator.con
 systemctl daemon-reload
 systemctl enable --now docker
 
+if [[ -c /dev/dri/renderD128 ]]; then
+  docker build \
+    --build-arg LLAMA_CPP_VERSION="$(cat /tmp/ai-build/llama.cpp-version)" \
+    --file /tmp/ai-build/llama.cpp.Dockerfile \
+    --tag ai-llama.cpp \
+    /tmp/ai-build
+  docker builder prune --force
+  install -D -m 755 /tmp/ai-build/llama.cpp.sh \
+    /usr/local/libexec/llama.cpp
+  ln -s /usr/local/libexec/llama.cpp /usr/local/bin/llama-cli
+  ln -s /usr/local/libexec/llama.cpp /usr/local/bin/llama-server
+fi
+
 bash /tmp/ai-build/install-chromium.sh /tmp/ai-build/chromium-packages.txt
 
 mkdir -p /workspace "$RUBIES_DIR"

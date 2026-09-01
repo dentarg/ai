@@ -214,6 +214,24 @@ protocol is incompatible with krunkit's host-side virglrenderer. GPU workloads
 should carry compatible Mesa libraries in their container image, using the
 patched Fedora image above as a base when appropriate.
 
+The GPU base includes a pinned llama.cpp build with Vulkan support. The
+`llama-cli` and `llama-server` commands run it in the compatible Fedora image,
+pass through `/dev/dri`, and mount both the current directory and `/share`.
+Models are deliberately not baked into the ephemeral VM; keep GGUF files under
+`/share` so they survive VM rebuilds. For example:
+
+```shell
+mkdir -p /share/models
+curl -L -o /share/models/qwen2.5-0.5b-instruct-q4_k_m.gguf \
+  https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf
+llama-cli \
+  --model /share/models/qwen2.5-0.5b-instruct-q4_k_m.gguf \
+  --gpu-layers 99
+```
+
+`llama-server` uses host networking, so its default port is directly available
+through the VM's configured forwards.
+
 The primary guest port still comes from `PORT` (1337 by default), but the VM
 launcher chooses a free loopback host port and prints it when the VM is ready.
 Set `AI_VM_HOST_PORT` to request a fixed primary host port. Explicit `--ports`

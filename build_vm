@@ -142,6 +142,9 @@ limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" \
     grep -F "alias x=exit" /workspace/.bashrc >/dev/null
     if [ "$AI_VM_GPU" -eq 1 ]; then
       test -c /dev/dri/renderD128
+      command -v llama-cli
+      command -v llama-server
+      llama-cli --list-devices | grep -F "Vulkan0:"
     fi
     # The external krunkit driver stops by terminating its process. Flush late
     # provisioning writes before Lima stops the base and clones its raw disk.
@@ -151,12 +154,17 @@ limactl stop "$BASE_NAME"
 # Reopen the disk once before protecting it. This catches krunkit shutdowns
 # that retained file metadata but lost recently written file contents.
 limactl start --timeout "$VM_BUILD_TIMEOUT" "$BASE_NAME"
-limactl shell "$BASE_NAME" sudo bash -lc '
+limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" bash -lc '
   test -s /workspace/.bashrc
   test -s /usr/local/bin/cx
   test -s /usr/local/bin/x
   grep -F "alias x=exit" /workspace/.bashrc >/dev/null
   swapon --show=NAME --noheadings | grep -Fx /dev/zram0 >/dev/null
+  if [ "$AI_VM_GPU" -eq 1 ]; then
+    docker image inspect ai-llama.cpp >/dev/null
+    test -L /usr/local/bin/llama-cli
+    test -L /usr/local/bin/llama-server
+  fi
   sync
 '
 limactl stop "$BASE_NAME"

@@ -4,6 +4,9 @@ chromium-packages.txt inside_deps/chromium-packages.txt project
 install-utils.sh inside_deps/install-utils.sh project
 install-chromium.sh inside_deps/install-chromium.sh project
 install-system-tools.sh inside_deps/install-system-tools.sh project
+llama.cpp.Dockerfile inside_deps/llama.cpp.Dockerfile project
+llama.cpp.sh tools/llama.cpp.sh project
+llama.cpp-version versions/llama.cpp project
 vm-packages.txt inside_deps/vm-packages.txt project
 zram-generator.conf lima/zram-generator.conf project
 _brew.sh lima/assets/brew.sh installers

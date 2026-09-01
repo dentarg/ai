@@ -100,6 +100,12 @@ grep -F '<stop><ai-base-gpu>' "$log" >/dev/null
 grep -F '<protect><ai-base-gpu>' "$log" >/dev/null
 grep -F '<AI_VM_GPU=1>' "$log" >/dev/null
 grep -F 'test -c /dev/dri/renderD128' "$log" >/dev/null
+grep -F 'command -v llama-cli' "$log" >/dev/null
+grep -F 'command -v llama-server' "$log" >/dev/null
+grep -F 'llama-cli --list-devices' "$log" >/dev/null
+grep -F 'docker image inspect ai-llama.cpp' "$log" >/dev/null
+grep -F 'test -L /usr/local/bin/llama-cli' "$log" >/dev/null
+grep -F 'test -L /usr/local/bin/llama-server' "$log" >/dev/null
 grep -F 'test -s /workspace/.bashrc' "$log" >/dev/null
 grep -F 'test -s /usr/local/bin/cx' "$log" >/dev/null
 grep -F 'test -s /usr/local/bin/x' "$log" >/dev/null
