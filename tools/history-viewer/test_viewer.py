@@ -62,6 +62,38 @@ class SummarizeCodexSession(unittest.TestCase):
         self.assertAlmostEqual(s["cost"], 0.0092, places=6)
         self.assertEqual(s["costByModel"], {"gpt-5.5": 0.0092})
 
+    def test_current_response_item_schema(self):
+        events = [
+            {"timestamp": "2026-09-01T00:00:00Z", "type": "session_meta",
+             "payload": {"session_id": "current-123",
+                         "cwd": "/tmp/codex-host-cwd.test/docker-image",
+                         "cli_version": "0.151.0"}},
+            {"timestamp": "2026-09-01T00:00:01Z", "type": "turn_context",
+             "payload": {"model": "gpt-5.6-luna"}},
+            {"timestamp": "2026-09-01T00:00:02Z", "type": "response_item",
+             "payload": {"type": "message", "role": "user",
+                         "content": [{"type": "input_text",
+                                      "text": "# AGENTS.md instructions\ninternal context"}]}},
+            {"timestamp": "2026-09-01T00:00:03Z", "type": "response_item",
+             "payload": {"type": "message", "role": "user",
+                         "content": [{"type": "input_text", "text": "fix the viewer"}]}},
+            {"timestamp": "2026-09-01T00:00:04Z", "type": "response_item",
+             "payload": {"type": "message", "role": "assistant",
+                         "content": [{"type": "output_text", "text": "done"}]}},
+        ]
+        path = write_rollout(events)
+        try:
+            s = viewer.summarize_codex_session(path)
+        finally:
+            path.unlink()
+
+        self.assertEqual(s["sessionId"], "current-123")
+        self.assertEqual(s["cwd"], "/tmp/codex-host-cwd.test/docker-image")
+        self.assertEqual(s["name"], "docker-image")
+        self.assertEqual(s["firstPrompt"], "fix the viewer")
+        self.assertEqual((s["userMessages"], s["assistantMessages"], s["messages"]),
+                         (1, 1, 2))
+
 
 class CodexToTranscript(unittest.TestCase):
     def test_turn_grouping(self):
@@ -117,6 +149,35 @@ class CodexToTranscript(unittest.TestCase):
         # The dropped context strings never appear in any rendered block.
         self.assertNotIn("instructions", json.dumps(ev))
         self.assertNotIn("env", json.dumps(ev))
+
+    def test_current_response_item_messages(self):
+        raw = [
+            {"type": "response_item", "payload": {"type": "message", "role": "user",
+                                                      "content": [{"type": "input_text",
+                                                                   "text": "# AGENTS.md instructions\ncontext"}]}},
+            {"type": "response_item", "payload": {"type": "message", "role": "user",
+                                                      "content": [{"type": "input_text",
+                                                                   "text": "show the prompt"}]}},
+            {"type": "response_item", "payload": {"type": "message", "role": "assistant",
+                                                      "content": [{"type": "output_text",
+                                                                   "text": "here it is"}]}},
+            {"type": "response_item", "payload": {"type": "custom_tool_call",
+                                                      "name": "exec", "input": "ls"}},
+            {"type": "response_item", "payload": {"type": "custom_tool_call_output",
+                                                      "output": "file.txt"}},
+        ]
+        ev = viewer.codex_to_transcript(raw)
+
+        users = [e for e in ev if e["type"] == "user"]
+        prompts = [e["message"]["content"] for e in users
+                   if isinstance(e["message"]["content"], str)]
+        self.assertEqual(prompts, ["show the prompt"])
+        assistant = next(e for e in ev if e["type"] == "assistant")
+        self.assertEqual([b["type"] for b in assistant["message"]["content"]],
+                         ["text", "tool_use"])
+        self.assertEqual(assistant["message"]["content"][1]["name"], "exec")
+        result = next(e for e in users if isinstance(e["message"]["content"], list))
+        self.assertEqual(result["message"]["content"][0]["content"], "file.txt")
 
 
 class ManifestSorting(unittest.TestCase):

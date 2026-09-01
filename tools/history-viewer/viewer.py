@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Browse Claude Code session history in a local web viewer.
+"""Browse Claude Code and Codex session history in a local web viewer.
 
 Serves a static HTML SPA plus a small JSON API over a directory of
-archived ~/.claude snapshots (default: /history).
+archived agent snapshots (default: /history).
 """
 from __future__ import annotations
 
@@ -205,6 +205,37 @@ def is_meta_user_text(text: str) -> bool:
     return any(s.startswith(p) for p in META_PREFIXES)
 
 
+CODEX_CONTEXT_PREFIXES = (
+    "# AGENTS.md instructions",
+    "<environment_context>",
+)
+
+
+def codex_text(content) -> str:
+    """Extract visible text from a Codex message content value."""
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    texts = []
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") not in {
+            "input_text", "output_text", "text",
+        }:
+            continue
+        text = block.get("text")
+        if isinstance(text, str) and text:
+            texts.append(text)
+    return "\n\n".join(texts)
+
+
+def is_codex_meta_user_text(text: str) -> bool:
+    if is_meta_user_text(text):
+        return True
+    s = text.lstrip()
+    return any(s.startswith(p) for p in CODEX_CONTEXT_PREFIXES)
+
+
 def summarize_session(path: Path) -> dict:
     """Read a jsonl once and extract summary metadata."""
     sid = None
@@ -341,8 +372,10 @@ def summarize_codex_session(path: Path) -> dict:
     repo_url = None
     version = None
     first_prompt = ""
-    user_msgs = 0
-    assistant_msgs = 0
+    response_user_msgs = 0
+    legacy_user_msgs = 0
+    response_assistant_msgs = 0
+    legacy_assistant_msgs = 0
     models: set[str] = set()
     primary_model = None
     last_usage: dict = {}
@@ -368,29 +401,42 @@ def summarize_codex_session(path: Path) -> dict:
             payload = evt.get("payload") or {}
             ptype = payload.get("type")
             if etype == "session_meta":
-                sid = sid or payload.get("id")
+                sid = sid or payload.get("id") or payload.get("session_id")
                 cwd = cwd or payload.get("cwd")
                 version = version or payload.get("cli_version")
                 git = payload.get("git") or {}
                 branch = branch or git.get("branch")
                 repo_url = repo_url or git.get("repository_url")
             elif etype == "turn_context":
+                cwd = cwd or payload.get("cwd")
                 model = payload.get("model")
                 if model:
                     models.add(model)
                     primary_model = model
             elif etype == "event_msg" and ptype == "user_message":
-                user_msgs += 1
-                if not first_prompt:
-                    text = (payload.get("message") or "").strip()
-                    if text:
-                        first_prompt = text[:300]
+                legacy_user_msgs += 1
+                text = (payload.get("message") or "").strip()
+                if not first_prompt and not is_codex_meta_user_text(text):
+                    first_prompt = text[:300]
             elif etype == "event_msg" and ptype == "agent_message":
-                assistant_msgs += 1
+                legacy_assistant_msgs += 1
             elif etype == "event_msg" and ptype == "token_count":
                 usage = (payload.get("info") or {}).get("total_token_usage")
                 if usage:
                     last_usage = usage
+            elif etype == "response_item" and ptype == "message":
+                role = payload.get("role")
+                text = codex_text(payload.get("content"))
+                if role == "user":
+                    if not is_codex_meta_user_text(text):
+                        response_user_msgs += 1
+                        if not first_prompt and text.strip():
+                            first_prompt = text.strip()[:300]
+                elif role == "assistant":
+                    response_assistant_msgs += 1
+
+    user_msgs = response_user_msgs or legacy_user_msgs
+    assistant_msgs = response_assistant_msgs or legacy_assistant_msgs
 
     input_total = last_usage.get("input_tokens", 0) or 0
     cached = last_usage.get("cached_input_tokens", 0) or 0
@@ -422,7 +468,7 @@ def summarize_codex_session(path: Path) -> dict:
         "repo": _codex_repo(cwd, repo_url),
         "gitBranch": branch,
         "version": version,
-        "name": None,
+        "name": Path(cwd).name if cwd else None,
         "firstPrompt": first_prompt,
         "events": line_count,
         "messages": user_msgs + assistant_msgs,
@@ -459,6 +505,11 @@ def codex_to_transcript(raw_events: list[dict]) -> list[dict]:
     result_ts = None
     current_model = None
     counter = 0
+    has_legacy_user_messages = any(
+        evt.get("type") == "event_msg"
+        and (evt.get("payload") or {}).get("type") == "user_message"
+        for evt in raw_events
+    )
 
     def next_uuid(prefix: str) -> str:
         nonlocal counter
@@ -515,6 +566,20 @@ def codex_to_transcript(raw_events: list[dict]) -> list[dict]:
             })
             continue
 
+        if etype == "response_item" and ptype == "message" and payload.get("role") == "user":
+            text = codex_text(payload.get("content")).strip()
+            if has_legacy_user_messages or is_codex_meta_user_text(text):
+                continue
+            flush_results()
+            flush_assistant()
+            out.append({
+                "type": "user",
+                "uuid": next_uuid("u"),
+                "timestamp": ts,
+                "message": {"content": text},
+            })
+            continue
+
         if etype == "turn_context":
             model = payload.get("model")
             if model:
@@ -534,16 +599,15 @@ def codex_to_transcript(raw_events: list[dict]) -> list[dict]:
             continue
 
         if etype == "response_item" and ptype == "message" and payload.get("role") == "assistant":
-            text = "".join(
-                b.get("text", "") for b in (payload.get("content") or [])
-                if isinstance(b, dict) and b.get("type") == "output_text"
-            )
+            text = codex_text(payload.get("content"))
             if text.strip():
                 add_assistant_block({"type": "text", "text": text}, ts)
             continue
 
-        if etype == "response_item" and ptype == "function_call":
+        if etype == "response_item" and ptype in ("function_call", "custom_tool_call"):
             args = payload.get("arguments")
+            if args is None:
+                args = payload.get("input")
             if isinstance(args, str):
                 try:
                     args = json.loads(args)
@@ -555,14 +619,14 @@ def codex_to_transcript(raw_events: list[dict]) -> list[dict]:
             )
             continue
 
-        if etype == "response_item" and ptype == "function_call_output":
+        if etype == "response_item" and ptype in ("function_call_output", "custom_tool_call_output"):
             flush_assistant()
             if result_ts is None:
                 result_ts = ts
             pending_results.append({
                 "type": "tool_result",
                 "content": payload.get("output", ""),
-                "is_error": False,
+                "is_error": payload.get("is_error", False),
             })
             continue
 
