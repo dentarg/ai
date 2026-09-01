@@ -14,6 +14,7 @@ case "$PWD" in
     exec docker run $runtime_args \
       --device /dev/dri \
       --env HOME=/tmp \
+      --env GGML_VK_DISABLE_F16 \
       --env XDG_RUNTIME_DIR=/tmp \
       --network host \
       --user "$(id -u):$(id -g)" \
@@ -27,6 +28,7 @@ case "$PWD" in
     exec docker run $runtime_args \
       --device /dev/dri \
       --env HOME=/tmp \
+      --env GGML_VK_DISABLE_F16 \
       --env XDG_RUNTIME_DIR=/tmp \
       --network host \
       --user "$(id -u):$(id -g)" \

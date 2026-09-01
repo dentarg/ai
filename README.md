@@ -229,6 +229,21 @@ llama-cli \
   --gpu-layers 99
 ```
 
+The wrapper passes `GGML_VK_DISABLE_F16` through when it is set. Hybrid
+DeltaNet models such as Qwen3.6 need this Vulkan workaround on the
+paravirtualized Apple GPU. Qwen3.6-27B Q5_K_M runs reliably with 36 layers
+offloaded, CPU-side KV cache, and reduced batch sizes:
+
+```shell
+GGML_VK_DISABLE_F16=1 llama-cli \
+  --model /share/models/Qwen3.6-27B-Q5_K_M.gguf \
+  --gpu-layers 36 \
+  --no-kv-offload \
+  --ctx-size 8192 \
+  --batch-size 64 \
+  --ubatch-size 32
+```
+
 `llama-server` uses host networking, so its default port is directly available
 through the VM's configured forwards.
 

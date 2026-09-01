@@ -21,11 +21,13 @@ ln -s "${SCRIPT_DIR}/llama.cpp.sh" "${fake_bin}/llama-server"
 
 (
   cd "$work_dir"
-  DOCKER_LOG="$log" PATH="${fake_bin}:${PATH}" llama-cli --version
+  DOCKER_LOG="$log" GGML_VK_DISABLE_F16=1 \
+    PATH="${fake_bin}:${PATH}" llama-cli --version
 )
 grep -Fx '<--device>' "$log" >/dev/null
 grep -Fx '</dev/dri>' "$log" >/dev/null
 grep -Fx '<HOME=/tmp>' "$log" >/dev/null
+grep -Fx '<GGML_VK_DISABLE_F16>' "$log" >/dev/null
 grep -Fx '<--network>' "$log" >/dev/null
 grep -Fx '<host>' "$log" >/dev/null
 grep -Fx '<--user>' "$log" >/dev/null
