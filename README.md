@@ -249,7 +249,14 @@ keeps the VM automatically when its console exits nonzero, preserving guest
 logs and Docker build cache for diagnosis.
 
 ```shell
-limactl shell <instance>
+# attach to a running VM for the current directory with the sandbox shell
+bin/vm
+
+# list instances, select one explicitly, or run a command in one
+bin/vm list
+bin/vm <instance>
+bin/vm <instance> docker ps
+
 limactl stop <instance>
 limactl delete <instance>
 ```

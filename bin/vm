@@ -1,0 +1,113 @@
+#!/bin/sh
+
+set -eu
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: vm [list]
+       vm [<instance>|last] [command ...]
+
+With no arguments, attach to a Lima VM for the current directory, preferring
+one that is already running.
+EOF
+}
+
+project_name() {
+  name=$(basename "$(pwd -P)" | tr '[:upper:]' '[:lower:]')
+  name=$(printf '%s' "$name" | sed \
+    -e 's/[^a-z0-9-]/-/g' \
+    -e 's/--*/-/g' \
+    -e 's/^-//' \
+    -e 's/-$//' | cut -c1-57)
+  name=${name%-}
+  printf '%s\n' "${name:-workspace}"
+}
+
+resolve_current() {
+  project=$(project_name)
+  running=""
+  fallback=""
+
+  while read -r name; do
+    case "$name" in
+      ai-[0-9][0-9]-"$project")
+        fallback=$name
+        status=$(limactl list "$name" --format '{{.Status}}' 2>/dev/null || true)
+        [ "$status" = Running ] && running=$name
+        ;;
+    esac
+  done <<EOF
+$(limactl list --quiet)
+EOF
+
+  instance=${running:-$fallback}
+  if [ -z "$instance" ]; then
+    echo "at=fatal msg=\"no Lima VM found for current directory\" project=$project" >&2
+    exit 1
+  fi
+  printf '%s\n' "$instance"
+}
+
+resolve_last() {
+  running=""
+  fallback=""
+
+  while read -r name; do
+    case "$name" in
+      ai-[0-9][0-9]-*)
+        fallback=$name
+        status=$(limactl list "$name" --format '{{.Status}}' 2>/dev/null || true)
+        [ "$status" = Running ] && running=$name
+        ;;
+    esac
+  done <<EOF
+$(limactl list --quiet)
+EOF
+
+  instance=${running:-$fallback}
+  if [ -z "$instance" ]; then
+    echo 'at=fatal msg="no Lima VM found"' >&2
+    exit 1
+  fi
+  printf '%s\n' "$instance"
+}
+
+command -v limactl >/dev/null 2>&1 || {
+  echo 'at=fatal msg="limactl is required; install Lima first"' >&2
+  exit 1
+}
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  list)
+    exec limactl list
+    ;;
+  '')
+    instance=$(resolve_current)
+    ;;
+  last)
+    instance=$(resolve_last)
+    shift
+    ;;
+  *)
+    instance=$1
+    shift
+    ;;
+esac
+
+status=$(limactl list "$instance" --format '{{.Status}}' 2>/dev/null || true)
+if [ -z "$status" ]; then
+  echo "at=fatal msg=\"Lima VM not found\" vm=$instance" >&2
+  exit 1
+fi
+if [ "$status" != Running ]; then
+  limactl start "$instance"
+fi
+
+if [ $# -eq 0 ]; then
+  set -- bash --rcfile /workspace/.bashrc -i
+fi
+exec limactl shell --workdir /app "$instance" "$@"
