@@ -8,6 +8,10 @@ llama.cpp.Dockerfile inside_deps/llama.cpp.Dockerfile project
 llama.cpp.sh tools/llama.cpp.sh project
 llama.cpp-version versions/llama.cpp project
 local-code.sh tools/local-code.sh project
+local-code-server.sh tools/local-code-server.sh project
+local-code-models.ini lima/local-code-models.ini project
+local-code-server.service lima/local-code-server.service project
+pi-duration.ts tools/pi-duration.ts project
 qwen-chat-template-version versions/qwen-chat-template project
 vm-packages.txt inside_deps/vm-packages.txt project
 zram-generator.conf lima/zram-generator.conf project

@@ -47,6 +47,15 @@ if [[ -c /dev/dri/renderD128 ]]; then
   ln -s /usr/local/libexec/llama.cpp /usr/local/bin/llama-cli
   ln -s /usr/local/libexec/llama.cpp /usr/local/bin/llama-server
   install -D -m 755 /tmp/ai-build/local-code.sh /usr/local/bin/local-code
+  install -D -m 755 /tmp/ai-build/local-code-server.sh \
+    /usr/local/bin/local-code-server
+  install -D -m 644 /tmp/ai-build/local-code-models.ini \
+    /usr/local/share/ai/local-code-models.ini
+  install -D -m 644 /tmp/ai-build/pi-duration.ts \
+    /usr/local/share/ai/pi-duration.ts
+  install -D -m 644 /tmp/ai-build/local-code-server.service \
+    /etc/systemd/system/local-code-server.service
+  systemctl enable local-code-server.service
   qwen_template_version=$(cat /tmp/ai-build/qwen-chat-template-version)
   curl --fail --location --silent --show-error \
     "https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates/resolve/${qwen_template_version}/chat_template.jinja" \

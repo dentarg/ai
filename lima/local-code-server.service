@@ -1,0 +1,15 @@
+[Unit]
+Description=Shared llama.cpp coding server
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+Environment=HOME=/workspace
+WorkingDirectory=/workspace
+ExecStart=/usr/local/bin/local-code-server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
