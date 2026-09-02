@@ -102,7 +102,7 @@ cat >"${runtime_dir}/models.json" <<EOF
           "id": "gemma4",
           "name": "Gemma 4 26B A4B Q4_0",
           "reasoning": true,
-          "contextWindow": 8192,
+          "contextWindow": 16384,
           "maxTokens": 4096
         }
       ]

@@ -53,6 +53,9 @@ grep -F -- "--extension $extension --print create example.rb>" "$log" >/dev/null
 grep -F '"id": "qwen38"' "$models" >/dev/null
 grep -F '"id": "gemma4"' "$models" >/dev/null
 grep -F "\"apiKey\": \"\$LOCAL_CODE_API_KEY\"" "$models" >/dev/null
+jq -e \
+  '.providers["llama-cpp"].models[] | select(.id == "gemma4") | .contextWindow == 16384' \
+  "$models" >/dev/null
 
 if LOCAL_CODE_DURATION_EXTENSION="$extension" PATH="${fake_bin}:${PATH}" \
   "$SCRIPT_DIR/local-code.sh" --model unknown >/dev/null 2>&1; then
@@ -78,5 +81,8 @@ grep -F '[qwen38]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
 grep -F 'n-gpu-layers = 44' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
 grep -F '[gemma4]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
 grep -F 'n-gpu-layers = 20' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
+gemma_preset=$(sed -n '/^\[gemma4\]/,$p' "$SCRIPT_DIR/../lima/local-code-models.ini")
+printf '%s\n' "$gemma_preset" | grep -Fx 'parallel = 1' >/dev/null
+printf '%s\n' "$gemma_preset" | grep -Fx 'kv-unified-per-slot = 16384' >/dev/null
 
 echo 'at=info msg="local code tests passed"'

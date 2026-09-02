@@ -251,7 +251,8 @@ The GPU base runs a shared, authenticated llama.cpp router as
 `local-code-server.service`. Model instances load on demand and unload when a
 different model is selected, so multiple Pi sessions share one model allocation.
 Qwen has one 8K slot because a second slot exceeds the current Vulkan allocation
-limit; Gemma has two 8K slots and can continuously batch two active sessions.
+limit. Gemma has one 16K slot, leaving enough context for Pi's tools and 4K
+response reserve without increasing its previous aggregate KV capacity.
 
 The `local-code` client is available in both the VM and the OCI image. It uses
 Qwen3.8-27B IQ4_XS by default and accepts `qwen38` and `gemma4` aliases:
