@@ -33,7 +33,11 @@ yes | unminimize || true
 xargs apt-get install -y --no-install-recommends < /tmp/ai-build/vm-packages.txt
 install -m 644 /tmp/ai-build/zram-generator.conf /etc/systemd/zram-generator.conf
 systemctl daemon-reload
-systemctl enable --now docker
+# Keep Docker off the regular VM's boot critical path. docker.socket starts the
+# daemon on first use; the GPU server's docker.service dependency still starts
+# it during boot when that service is enabled.
+systemctl disable docker.service
+systemctl enable --now docker.socket
 
 if [[ -c /dev/dri/renderD128 ]]; then
   docker build \

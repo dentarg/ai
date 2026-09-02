@@ -62,6 +62,8 @@ mkdir -p "$archive_dir"
 for archive in "$captured_archives"/*.tar.gz.b64; do
   base64 -d < "$archive" | tar -xzf - -C "$archive_dir"
 done
+grep -F 'systemctl disable docker.service' "$archive_dir/provision.sh" >/dev/null
+grep -F 'systemctl enable --now docker.socket' "$archive_dir/provision.sh" >/dev/null
 while read -r destination source archive; do
   case "$destination" in
     ''|'#'*) continue ;;
@@ -112,6 +114,8 @@ grep -F 'test -s /usr/local/bin/cx' "$log" >/dev/null
 grep -F 'test -s /usr/local/bin/x' "$log" >/dev/null
 grep -F 'alias x=exit' "$log" >/dev/null
 grep -F 'swapon --show=NAME --noheadings' "$log" >/dev/null
+grep -F 'systemctl is-enabled --quiet docker.socket' "$log" >/dev/null
+grep -F '! systemctl is-enabled --quiet docker.service' "$log" >/dev/null
 grep -F 'sync' "$log" >/dev/null
 if [[ $(grep -Fc '<start><--timeout><60m><ai-base-gpu>' "$log") -ne 1 ]]; then
   echo 'at=fatal msg="build_vm did not restart the GPU base for persistence verification"' >&2

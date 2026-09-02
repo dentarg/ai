@@ -161,6 +161,8 @@ limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" bash -lc '
   test -s /usr/local/bin/x
   grep -F "alias x=exit" /workspace/.bashrc >/dev/null
   swapon --show=NAME --noheadings | grep -Fx /dev/zram0 >/dev/null
+  systemctl is-enabled --quiet docker.socket
+  ! systemctl is-enabled --quiet docker.service
   if [ "$AI_VM_GPU" -eq 1 ]; then
     docker image inspect ai-llama.cpp >/dev/null
     test -L /usr/local/bin/llama-cli
