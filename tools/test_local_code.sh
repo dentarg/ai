@@ -13,6 +13,7 @@ fake_bin="${tmpdir}/bin"
 log="${tmpdir}/calls.log"
 models="${tmpdir}/models.json"
 settings="${tmpdir}/settings.json"
+qwen_settings="${tmpdir}/qwen-settings.json"
 extension="${tmpdir}/duration.ts"
 presets="${tmpdir}/models.ini"
 mkdir -p "$fake_bin" "${tmpdir}/home"
@@ -57,11 +58,24 @@ grep -F '"id": "qwen38"' "$models" >/dev/null
 grep -F '"id": "gemma4"' "$models" >/dev/null
 grep -F "\"apiKey\": \"\$LOCAL_CODE_API_KEY\"" "$models" >/dev/null
 jq -e \
-  '.providers["llama-cpp"].models[] | select(.id == "gemma4") | .contextWindow == 16384' \
+  '.providers["llama-cpp"].models[] | select(.id == "gemma4") | .contextWindow == 65536' \
   "$models" >/dev/null
 jq -e \
-  '.compaction == {"enabled": true, "reserveTokens": 4096, "keepRecentTokens": 2048}' \
+  '.compaction == {"enabled": true, "reserveTokens": 4096, "keepRecentTokens": 16384}' \
   "$settings" >/dev/null
+
+HOME="${tmpdir}/home" \
+LOCAL_CODE_TEST_LOG="$log" \
+LOCAL_CODE_TEST_MODELS="$models" \
+LOCAL_CODE_TEST_SETTINGS="$qwen_settings" \
+LOCAL_CODE_DURATION_EXTENSION="$extension" \
+LOCAL_CODE_PORT=18080 \
+PATH="${fake_bin}:${PATH}" \
+  "$SCRIPT_DIR/local-code.sh" --print 'create example.rb'
+
+jq -e \
+  '.compaction == {"enabled": true, "reserveTokens": 4096, "keepRecentTokens": 2048}' \
+  "$qwen_settings" >/dev/null
 
 if LOCAL_CODE_DURATION_EXTENSION="$extension" PATH="${fake_bin}:${PATH}" \
   "$SCRIPT_DIR/local-code.sh" --model unknown >/dev/null 2>&1; then
@@ -89,6 +103,6 @@ grep -F '[gemma4]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
 grep -F 'n-gpu-layers = 20' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
 gemma_preset=$(sed -n '/^\[gemma4\]/,$p' "$SCRIPT_DIR/../lima/local-code-models.ini")
 printf '%s\n' "$gemma_preset" | grep -Fx 'parallel = 1' >/dev/null
-printf '%s\n' "$gemma_preset" | grep -Fx 'kv-unified-per-slot = 16384' >/dev/null
+printf '%s\n' "$gemma_preset" | grep -Fx 'kv-unified-per-slot = 65536' >/dev/null
 
 echo 'at=info msg="local code tests passed"'

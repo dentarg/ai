@@ -33,7 +33,8 @@ case "${1:-}" in
 esac
 
 case "$model" in
-  qwen38|gemma4) ;;
+  qwen38) keep_recent_tokens=2048 ;;
+  gemma4) keep_recent_tokens=16384 ;;
   *)
     echo "at=fatal msg=\"unknown local model\" model=\"$model\"" >&2
     exit 1
@@ -102,7 +103,7 @@ cat >"${runtime_dir}/models.json" <<EOF
           "id": "gemma4",
           "name": "Gemma 4 26B A4B Q4_0",
           "reasoning": true,
-          "contextWindow": 16384,
+          "contextWindow": 65536,
           "maxTokens": 4096
         }
       ]
@@ -111,12 +112,12 @@ cat >"${runtime_dir}/models.json" <<EOF
 }
 EOF
 
-cat >"${runtime_dir}/settings.json" <<'EOF'
+cat >"${runtime_dir}/settings.json" <<EOF
 {
   "compaction": {
     "enabled": true,
     "reserveTokens": 4096,
-    "keepRecentTokens": 2048
+    "keepRecentTokens": ${keep_recent_tokens}
   }
 }
 EOF
