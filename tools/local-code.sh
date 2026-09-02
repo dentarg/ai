@@ -111,6 +111,16 @@ cat >"${runtime_dir}/models.json" <<EOF
 }
 EOF
 
+cat >"${runtime_dir}/settings.json" <<'EOF'
+{
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 4096,
+    "keepRecentTokens": 2048
+  }
+}
+EOF
+
 LOCAL_CODE_API_KEY=$api_key
 LOCAL_CODE_PRINT_MODE=0
 for argument in "$@"; do

@@ -271,6 +271,9 @@ prints a `Cooked for` duration and completion time. Host-networked Docker
 containers in the GPU VM can reach the same server at `127.0.0.1:8080`; set
 `LOCAL_CODE_BASE_URL` when using a different address. The API key defaults to
 `local` and can be changed with `LOCAL_CODE_API_KEY` on the service and clients.
+The client compacts older tool traffic while retaining the newest 2K tokens and
+reserving 4K tokens for each response, preventing long tasks from exhausting
+Pi's output budget.
 
 The model presets use 44 GPU layers for `qwen38` and 20 for `gemma4`. To
 override the selected profile, stop the service and run the server directly:

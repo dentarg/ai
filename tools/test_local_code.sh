@@ -12,6 +12,7 @@ trap cleanup EXIT
 fake_bin="${tmpdir}/bin"
 log="${tmpdir}/calls.log"
 models="${tmpdir}/models.json"
+settings="${tmpdir}/settings.json"
 extension="${tmpdir}/duration.ts"
 presets="${tmpdir}/models.ini"
 mkdir -p "$fake_bin" "${tmpdir}/home"
@@ -28,6 +29,7 @@ printf 'pi config=<%s> key=<%s> print=<%s> args=<%s>\n' \
   "$PI_CODING_AGENT_DIR" "$LOCAL_CODE_API_KEY" \
   "$LOCAL_CODE_PRINT_MODE" "$*" >> "$LOCAL_CODE_TEST_LOG"
 cp "$PI_CODING_AGENT_DIR/models.json" "$LOCAL_CODE_TEST_MODELS"
+cp "$PI_CODING_AGENT_DIR/settings.json" "$LOCAL_CODE_TEST_SETTINGS"
 EOF
 cat > "${fake_bin}/llama-server" <<'EOF'
 #!/bin/sh
@@ -39,6 +41,7 @@ chmod +x "${fake_bin}/curl" "${fake_bin}/pi" "${fake_bin}/llama-server"
 HOME="${tmpdir}/home" \
 LOCAL_CODE_TEST_LOG="$log" \
 LOCAL_CODE_TEST_MODELS="$models" \
+LOCAL_CODE_TEST_SETTINGS="$settings" \
 LOCAL_CODE_DURATION_EXTENSION="$extension" \
 LOCAL_CODE_PORT=18080 \
 PATH="${fake_bin}:${PATH}" \
@@ -56,6 +59,9 @@ grep -F "\"apiKey\": \"\$LOCAL_CODE_API_KEY\"" "$models" >/dev/null
 jq -e \
   '.providers["llama-cpp"].models[] | select(.id == "gemma4") | .contextWindow == 16384' \
   "$models" >/dev/null
+jq -e \
+  '.compaction == {"enabled": true, "reserveTokens": 4096, "keepRecentTokens": 2048}' \
+  "$settings" >/dev/null
 
 if LOCAL_CODE_DURATION_EXTENSION="$extension" PATH="${fake_bin}:${PATH}" \
   "$SCRIPT_DIR/local-code.sh" --model unknown >/dev/null 2>&1; then
