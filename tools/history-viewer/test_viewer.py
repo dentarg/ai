@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the history-viewer Codex support.
+"""Tests for the history-viewer agent session support.
 
 Run from this directory:
 
@@ -21,6 +21,11 @@ def write_rollout(events: list[dict]) -> Path:
         tmp.write(json.dumps(e) + "\n")
     tmp.close()
     return Path(tmp.name)
+
+
+def write_pi_session(events: list[dict]) -> Path:
+    """Write events as a Pi session jsonl to a temporary file."""
+    return write_rollout(events)
 
 
 class SummarizeCodexSession(unittest.TestCase):
@@ -178,6 +183,93 @@ class CodexToTranscript(unittest.TestCase):
         self.assertEqual(assistant["message"]["content"][1]["name"], "exec")
         result = next(e for e in users if isinstance(e["message"]["content"], list))
         self.assertEqual(result["message"]["content"][0]["content"], "file.txt")
+
+
+class PiSession(unittest.TestCase):
+    def setUp(self):
+        self.events = [
+            {"type": "session", "version": 3, "id": "pi-session",
+             "timestamp": "2026-09-02T20:00:00Z", "cwd": "/app/widgets"},
+            {"type": "message", "id": "u1", "parentId": None,
+             "timestamp": "2026-09-02T20:00:01Z",
+             "message": {"role": "user", "content": "build the widget"}},
+            {"type": "message", "id": "a1", "parentId": "u1",
+             "timestamp": "2026-09-02T20:00:02Z",
+             "message": {
+                 "role": "assistant", "provider": "llama-cpp",
+                 "model": "gemma4", "stopReason": "toolUse",
+                 "content": [
+                     {"type": "thinking", "thinking": "inspect first"},
+                     {"type": "toolCall", "id": "call-1", "name": "bash",
+                      "arguments": {"command": "ls"}},
+                 ],
+                 "usage": {
+                     "input": 100, "output": 20, "cacheRead": 10,
+                     "cacheWrite": 5, "totalTokens": 135,
+                     "cost": {"total": 0},
+                 },
+             }},
+            {"type": "message", "id": "r1", "parentId": "a1",
+             "timestamp": "2026-09-02T20:00:03Z",
+             "message": {"role": "toolResult", "toolCallId": "call-1",
+                         "toolName": "bash", "content": [
+                             {"type": "text", "text": "README.md"}],
+                         "isError": False}},
+            {"type": "message", "id": "abandoned", "parentId": "r1",
+             "timestamp": "2026-09-02T20:00:03Z",
+             "message": {"role": "user", "content": "abandoned branch"}},
+            {"type": "session_info", "id": "n1", "parentId": "r1",
+             "timestamp": "2026-09-02T20:00:04Z", "name": "Widget work"},
+        ]
+
+    def test_summary_and_transcript(self):
+        path = write_pi_session(self.events)
+        try:
+            summary = viewer.summarize_pi_session(path)
+            transcript = viewer.pi_to_transcript(self.events)
+        finally:
+            path.unlink()
+
+        self.assertEqual(summary["sessionId"], "pi-session")
+        self.assertEqual(summary["name"], "Widget work")
+        self.assertEqual(summary["repo"], "widgets")
+        self.assertEqual(summary["firstPrompt"], "build the widget")
+        self.assertEqual(summary["models"], ["gemma4"])
+        self.assertEqual(summary["tokens"]["input_tokens"], 100)
+        self.assertEqual(summary["tokens"]["cache_read_tokens"], 10)
+        self.assertEqual(summary["tokens"]["cache_creation_tokens"], 5)
+
+        self.assertEqual([event["type"] for event in transcript],
+                         ["user", "assistant", "user", "session_info"])
+        assistant = transcript[1]
+        self.assertEqual([block["type"] for block in
+                          assistant["message"]["content"]],
+                         ["thinking", "tool_use"])
+        self.assertEqual(assistant["message"]["content"][1]["input"],
+                         {"command": "ls"})
+        result = transcript[2]["message"]["content"][0]
+        self.assertEqual(result["type"], "tool_result")
+        self.assertEqual(result["content"][0]["text"], "README.md")
+        self.assertNotIn("abandoned branch", json.dumps(transcript))
+
+    def test_manifest_discovers_pi_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            session_dir = root / "pi" / "--app-widgets--"
+            session_dir.mkdir(parents=True)
+            session = session_dir / "2026-09-02T20-00-00_pi-session.jsonl"
+            session.write_text(
+                "".join(json.dumps(event) + "\n" for event in self.events),
+                encoding="utf-8")
+
+            sessions = viewer.build_manifest(root)
+            resolved = viewer.ViewerState(root).resolve_session_path(
+                session.relative_to(root).as_posix())
+
+        self.assertEqual(len(sessions), 1)
+        self.assertEqual(sessions[0]["tool"], "pi")
+        self.assertEqual(sessions[0]["project"], "widgets")
+        self.assertEqual(resolved, session.resolve())
 
 
 class ManifestSorting(unittest.TestCase):

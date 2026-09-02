@@ -51,7 +51,7 @@ grep -F 'curl args=<--fail --silent --show-error --header Authorization: Bearer 
   "$log" >/dev/null
 grep -F 'key=<local> print=<1>' "$log" >/dev/null
 grep -F 'args=<--offline --provider llama-cpp --model gemma4' "$log" >/dev/null
-grep -F -- "--session-dir ${tmpdir}/home/.pi/agent/sessions" "$log" >/dev/null
+grep -F -- '--session-dir /history/pi' "$log" >/dev/null
 grep -F -- "--extension $extension --print create example.rb>" "$log" >/dev/null
 grep -F '"id": "qwen38"' "$models" >/dev/null
 grep -F '"id": "gemma4"' "$models" >/dev/null

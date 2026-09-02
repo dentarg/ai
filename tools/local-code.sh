@@ -44,7 +44,7 @@ port=${LOCAL_CODE_PORT:-8080}
 base_url=${LOCAL_CODE_BASE_URL:-http://127.0.0.1:${port}/v1}
 api_key=${LOCAL_CODE_API_KEY:-local}
 extension=${LOCAL_CODE_DURATION_EXTENSION:-/usr/local/share/ai/pi-duration.ts}
-session_dir=${PI_CODING_AGENT_SESSION_DIR:-${HOME}/.pi/agent/sessions}
+session_dir=${PI_CODING_AGENT_SESSION_DIR:-/history/pi}
 
 if [ ! -f "$extension" ]; then
   echo "at=fatal msg=\"Pi duration extension not found\" path=\"$extension\"" >&2

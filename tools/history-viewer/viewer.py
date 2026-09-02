@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Browse Claude Code and Codex session history in a local web viewer.
+"""Browse Claude Code, Codex, and Pi session history in a local web viewer.
 
 Serves a static HTML SPA plus a small JSON API over a directory of
 archived agent snapshots (default: /history).
@@ -484,6 +484,158 @@ def summarize_codex_session(path: Path) -> dict:
     }
 
 
+def pi_active_entries(raw_events: list[dict]) -> list[dict]:
+    """Return the entries on Pi's current branch, oldest first."""
+    entries = [event for event in raw_events
+               if event.get("type") != "session" and event.get("id")]
+    if not entries:
+        return []
+    by_id = {event["id"]: event for event in entries}
+    active = []
+    current = entries[-1]
+    seen = set()
+    while current and current["id"] not in seen:
+        active.append(current)
+        seen.add(current["id"])
+        current = by_id.get(current.get("parentId"))
+    active.reverse()
+    return active
+
+
+def summarize_pi_session(path: Path) -> dict:
+    """Summarize a Pi session JSONL into the common manifest shape."""
+    raw_events = []
+    with path.open("r", encoding="utf-8", errors="replace") as stream:
+        for line in stream:
+            try:
+                raw_events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    header = next((event for event in raw_events
+                   if event.get("type") == "session"), {})
+    active = pi_active_entries(raw_events)
+    cwd = header.get("cwd")
+    first_prompt = ""
+    name = None
+    user_msgs = 0
+    assistant_msgs = 0
+    models: set[str] = set()
+    totals = {"input_tokens": 0, "output_tokens": 0,
+              "cache_read_tokens": 0, "cache_creation_tokens": 0,
+              "cache_5m_tokens": 0, "cache_1h_tokens": 0}
+    by_model: dict[str, dict[str, int]] = {}
+    cost = 0.0
+    cost_by_model: dict[str, float] = {}
+
+    for event in active:
+        if event.get("type") == "session_info" and event.get("name"):
+            name = event["name"]
+            continue
+        if event.get("type") != "message":
+            continue
+        message = event.get("message") or {}
+        role = message.get("role")
+        if role == "user":
+            user_msgs += 1
+            text = first_text(message.get("content"))
+            if not first_prompt and text and not is_meta_user_text(text):
+                first_prompt = text[:300]
+            continue
+        if role != "assistant":
+            continue
+        assistant_msgs += 1
+        model = message.get("model") or ""
+        if model:
+            models.add(model)
+        usage = message.get("usage") or {}
+        input_tokens = usage.get("input", 0) or 0
+        output_tokens = usage.get("output", 0) or 0
+        cache_read = usage.get("cacheRead", 0) or 0
+        cache_write = usage.get("cacheWrite", 0) or 0
+        totals["input_tokens"] += input_tokens
+        totals["output_tokens"] += output_tokens
+        totals["cache_read_tokens"] += cache_read
+        totals["cache_creation_tokens"] += cache_write
+        totals["cache_5m_tokens"] += cache_write
+        event_cost = (usage.get("cost") or {}).get("total", 0) or 0
+        cost += event_cost
+        if model:
+            bucket = by_model.setdefault(model, {
+                "input_tokens": 0, "output_tokens": 0,
+                "cache_read_tokens": 0, "cache_creation_tokens": 0,
+            })
+            bucket["input_tokens"] += input_tokens
+            bucket["output_tokens"] += output_tokens
+            bucket["cache_read_tokens"] += cache_read
+            bucket["cache_creation_tokens"] += cache_write
+            cost_by_model[model] = cost_by_model.get(model, 0.0) + event_cost
+
+    last_ts = active[-1].get("timestamp") if active else header.get("timestamp")
+    return {
+        "sessionId": header.get("id"),
+        "cwd": cwd,
+        "repo": Path(cwd).name if cwd else None,
+        "gitBranch": None,
+        "version": header.get("version"),
+        "name": name,
+        "firstPrompt": first_prompt,
+        "events": len(raw_events),
+        "messages": user_msgs + assistant_msgs,
+        "userMessages": user_msgs,
+        "assistantMessages": assistant_msgs,
+        "models": sorted(models),
+        "tokens": totals,
+        "tokensByModel": by_model,
+        "cost": round(cost, 4),
+        "costByModel": {model: round(value, 4)
+                        for model, value in cost_by_model.items()},
+        "startedAt": header.get("timestamp"),
+        "endedAt": last_ts,
+    }
+
+
+def pi_to_transcript(raw_events: list[dict]) -> list[dict]:
+    """Normalize Pi's active branch into the viewer's event shape."""
+    transcript = []
+    for entry in pi_active_entries(raw_events):
+        if entry.get("type") == "compaction":
+            transcript.append({**entry, "type": "summary"})
+            continue
+        if entry.get("type") != "message":
+            transcript.append(entry)
+            continue
+        message = entry.get("message") or {}
+        role = message.get("role")
+        event = {"uuid": entry.get("id"),
+                 "timestamp": entry.get("timestamp")}
+        if role == "user":
+            transcript.append({**event, "type": "user", "message": message})
+        elif role == "assistant":
+            content = []
+            for block in message.get("content") or []:
+                if block.get("type") == "toolCall":
+                    content.append({"type": "tool_use", "id": block.get("id"),
+                                    "name": block.get("name"),
+                                    "input": block.get("arguments") or {}})
+                else:
+                    content.append(block)
+            transcript.append({**event, "type": "assistant",
+                               "message": {**message, "content": content}})
+        elif role == "toolResult":
+            result = {
+                "type": "tool_result",
+                "tool_use_id": message.get("toolCallId"),
+                "content": message.get("content") or [],
+                "is_error": message.get("isError", False),
+            }
+            transcript.append({**event, "type": "user",
+                               "message": {"content": [result]}})
+        else:
+            transcript.append(entry)
+    return transcript
+
+
 CODEX_REASONING_PLACEHOLDER = "⋯ reasoning hidden (encrypted, not stored)"
 
 
@@ -649,8 +801,8 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
     """Walk each run dir and summarize its session transcripts.
 
     Claude/Gemini runs store `<run>/projects/<slug>/*.jsonl`; Codex runs store
-    `<run>/sessions/YYYY/MM/DD/rollout-*.jsonl`. Both are summarized into the
-    same entry shape, tagged with the run's `tool`.
+    `<run>/sessions/YYYY/MM/DD/rollout-*.jsonl`; Pi stores sessions below
+    `<history>/pi/`. All are summarized into the same entry shape.
 
     `cache` maps relative path → {"sig": (size, mtime_ns), "entry": dict}.
     Files whose signature is unchanged reuse the cached summary; new and
@@ -688,6 +840,8 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
             "project": project,
             **summary,
         }
+        if not entry["project"]:
+            entry["project"] = entry.get("repo") or jsonl.parent.name
         if not entry.get("name") and fallback_name:
             entry["name"] = fallback_name
         cache[rel] = {"sig": sig, "entry": entry}
@@ -717,6 +871,12 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
                     for jsonl in sorted(codex_sessions.rglob("rollout-*.jsonl")):
                         add_session(jsonl, summarize_codex_session, "",
                                     run_dir, meta, None)
+    pi_sessions = history_root / "pi"
+    if pi_sessions.is_dir():
+        meta = {"tool": "pi", "timestamp": ""}
+        for jsonl in sorted(pi_sessions.rglob("*.jsonl")):
+            add_session(jsonl, summarize_pi_session, "", pi_sessions,
+                        meta, None)
     # Sort by last-updated time (last event), falling back to start time so
     # the most recently active sessions surface first.
     sessions.sort(
@@ -759,9 +919,10 @@ class ViewerState:
             return None
         if candidate.suffix != ".jsonl":
             return None
-        parts = candidate.parts
-        # Claude/Gemini live under projects/; Codex rollouts under sessions/.
-        if "projects" not in parts and "sessions" not in parts:
+        parts = Path(rel).parts
+        # Pi has a dedicated root; other agents use run-scoped directories.
+        if (not parts or parts[0] != "pi") and \
+                "projects" not in parts and "sessions" not in parts:
             return None
         if not candidate.is_file():
             return None
@@ -910,12 +1071,15 @@ def make_handler(state: ViewerState, html_path: Path):
                         events.append(json.loads(line))
                     except json.JSONDecodeError:
                         events.append({"type": "__parse_error", "raw": line})
-            # Codex rollouts use a different schema; normalize them into the
+            # Codex and Pi use different schemas; normalize them into the
             # Claude-shaped event stream the frontend renders.
             is_codex = "sessions" in resolved.parts and resolved.name.startswith("rollout-")
+            is_pi = Path(rel).parts[0] == "pi"
             if is_codex:
                 events = codex_to_transcript(events)
-            agent = "codex" if is_codex else "claude"
+            elif is_pi:
+                events = pi_to_transcript(events)
+            agent = "codex" if is_codex else "pi" if is_pi else "claude"
             return self._send_json(HTTPStatus.OK, {"path": rel, "agent": agent, "events": events})
 
         def _serve_search(self, q: str, limit: int):

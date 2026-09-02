@@ -24,10 +24,13 @@
     --error-border: #f0c7b3;
     --topbar-bg: rgba(247,244,237,0.92);
     --shadow: rgba(0,0,0,0.08);
-    /* agent distinction (Codex). Claude reuses --accent / --accent-soft. */
+    /* Agent distinction. Claude reuses --accent / --accent-soft. */
     --agent-codex-bg: #e1ecf8;
     --agent-codex-fg: #356aa8;
     --agent-codex-line: #6f9fd8;
+    --agent-pi-bg: #e2eee3;
+    --agent-pi-fg: #3f7548;
+    --agent-pi-line: #7eaa85;
   }
   /* Dark palette. An inline <head> script resolves the effective theme
      (stored choice, else the OS preference) and sets data-theme before
@@ -55,6 +58,9 @@
     --agent-codex-bg: #20303f;
     --agent-codex-fg: #7fb0e0;
     --agent-codex-line: #4a6f96;
+    --agent-pi-bg: #203729;
+    --agent-pi-fg: #80bc8a;
+    --agent-pi-line: #4f8058;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
@@ -167,9 +173,11 @@
     border-radius: 999px; vertical-align: middle; }
   .agent-claude { background: var(--accent-soft); color: var(--accent); }
   .agent-codex  { background: var(--agent-codex-bg); color: var(--agent-codex-fg); }
+  .agent-pi     { background: var(--agent-pi-bg); color: var(--agent-pi-fg); }
   .session-card { border-left: 3px solid var(--border); }
   .session-card.claude { border-left-color: var(--accent-line); }
   .session-card.codex  { border-left-color: var(--agent-codex-line); }
+  .session-card.pi     { border-left-color: var(--agent-pi-line); }
 
   /* session page */
   .back { color: var(--muted); margin-bottom: 16px; display: inline-block; font-size: 14px; }
@@ -517,11 +525,13 @@ const state = {
   filters: { search: "", branch: "", agent: "" },
   showInternals: false,
   statsRange: "all",     // "all" | "30d" | "7d"
-  currentAgent: "claude", // agent of the open session ("claude" | "codex")
+  currentAgent: "claude",
 };
 
-const AGENTS = ["claude", "codex"];
-function agentLabel(a) { return a === "codex" ? "Codex" : "Claude"; }
+const AGENTS = ["claude", "codex", "pi"];
+function agentLabel(agent) {
+  return { claude: "Claude", codex: "Codex", pi: "Pi" }[agent] || agent;
+}
 
 // ---------- routing ----------
 const contentEl = document.getElementById("content");
