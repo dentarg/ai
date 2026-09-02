@@ -65,5 +65,21 @@ logcli --version
 
 pip install mitmproxy
 
+# Tailcat — netcat over Tailscale's data plane. Checksums come from the
+# checksums.txt file for the pinned release.
+tailcat_version=0.4.0
+case "$arch" in
+  amd64) tailcat_sha=38ff4b45fe56b32c75738c10dfed4f0b68d33bee49a19695f4bb9f9ec5d6e3c0 ;;
+  arm64) tailcat_sha=8f1835a3522ecfc855c9f4ece51c2266781fd03ce76da48036b08c4b86193899 ;;
+  *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
+esac
+download \
+  --output /tmp/tailcat.deb \
+  "https://github.com/tailscale/tailcat/releases/download/v${tailcat_version}/tailcat_${tailcat_version}_linux_${arch}.deb"
+echo "${tailcat_sha}  /tmp/tailcat.deb" | sha256sum -c -
+dpkg --install /tmp/tailcat.deb
+dpkg-query --showformat='${Version}\n' --show tailcat | grep -Fx "$tailcat_version"
+rm /tmp/tailcat.deb
+
 # These services are started explicitly when needed; do not slow sandbox boot.
 systemctl disable postgresql lavinmq redis-server

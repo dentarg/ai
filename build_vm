@@ -136,6 +136,7 @@ limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" \
     docker compose version
     command -v codex
     command -v claude
+    command -v tailcat
     test -s /workspace/.bashrc
     test -s /usr/local/bin/cx
     test -s /usr/local/bin/x
