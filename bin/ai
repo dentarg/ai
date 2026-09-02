@@ -456,6 +456,40 @@ next_vm_name() {
   return 1
 }
 
+host_terminfo_source() {
+  command -v infocmp >/dev/null 2>&1 || return 1
+  if infocmp -x "$TERM" 2>/dev/null; then
+    return
+  fi
+
+  [ "$TERM" = xterm-ghostty ] || return 1
+  if [ -n "${GHOSTTY_RESOURCES_DIR:-}" ]; then
+    ghostty_terminfo_dir=$(dirname "$GHOSTTY_RESOURCES_DIR")/terminfo
+    if infocmp -x -A "$ghostty_terminfo_dir" "$TERM" 2>/dev/null; then
+      return
+    fi
+  fi
+  infocmp -x \
+    -A /Applications/Ghostty.app/Contents/Resources/terminfo \
+    "$TERM" 2>/dev/null
+}
+
+install_host_terminfo() {
+  [ -n "${TERM:-}" ] || return 0
+
+  if host_terminfo=$(host_terminfo_source); then
+    terminfo_error=$(
+      printf '%s\n' "$host_terminfo" | \
+        limactl shell --workdir /app "$VM_NAME" -- \
+          sudo tic -x -o /etc/terminfo /dev/stdin \
+          2>&1 >/dev/null
+    ) || {
+      printf '%s\n' "$terminfo_error" >&2
+      return 1
+    }
+  fi
+}
+
 run_lima_vm() {
   command -v limactl >/dev/null 2>&1 || {
     echo 'at=fatal msg="limactl is required for --vm; install Lima first"' >&2
@@ -539,6 +573,7 @@ run_lima_vm() {
   limactl "$@"
   limactl start "$VM_NAME"
   limactl shell --workdir /app "$VM_NAME" sudo hostnamectl set-hostname "$VM_NAME"
+  install_host_terminfo
 
   if [ -n "$BROKER_SESSION_DIR" ]; then
     # Keep the token out of process arguments and Lima configuration/logs.

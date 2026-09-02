@@ -12,7 +12,22 @@ fake_bin="${tmpdir}/bin"
 ai_dir="${tmpdir}/ai"
 project="${tmpdir}/project with spaces"
 log="${tmpdir}/limactl.log"
-mkdir -p "$fake_bin" "$project" "${ai_dir}/settings" "${tmpdir}/home"
+ghostty_resources="${tmpdir}/ghostty/share/ghostty"
+mkdir -p \
+  "$fake_bin" \
+  "$project" \
+  "${ai_dir}/settings" \
+  "${tmpdir}/home" \
+  "${tmpdir}/ghostty/share/terminfo" \
+  "$ghostty_resources"
+
+cat > "${fake_bin}/infocmp" <<'EOF'
+#!/bin/sh
+[ "$1" = -x ] || exit 1
+[ "${2:-}" = -A ] || exit 1
+printf '%s\n' 'xterm-ghostty|Ghostty,' '  colors#256,'
+EOF
+chmod +x "${fake_bin}/infocmp"
 
 # The fake records one shell-quoted argument per line, grouped by invocation.
 cat > "${fake_bin}/limactl" <<'EOF'
@@ -28,6 +43,10 @@ case "${1:-}" in
   shell)
     case "$*" in
       *'/workspace/.ai-op-token'*) cat >/dev/null ;;
+      *'tic -x'*)
+        cat >/dev/null
+        echo 'terminfo setup noise' >&2
+        ;;
     esac
     if [[ "$*" == *AI_AUTO_LAUNCH=1* && "${SHELL_STATUS:-0}" -ne 0 ]]; then
       exit "$SHELL_STATUS"
@@ -37,16 +56,23 @@ esac
 EOF
 chmod +x "${fake_bin}/limactl"
 
+launch_output="${tmpdir}/launch-output"
 (
   cd "$project"
   HOME="${tmpdir}/home" \
   AI_DIR="$ai_dir" \
   AI_VM_HOST_PORT=45555 \
+  GHOSTTY_RESOURCES_DIR="$ghostty_resources" \
   LIMACTL_LOG="$log" \
+  TERM=xterm-ghostty \
   PATH="${fake_bin}:${PATH}" \
-    "$REPO_DIR/bin/ai" --vm cx --ports 9999,8888:7777 >/dev/null 2>&1
+    "$REPO_DIR/bin/ai" --vm cx --ports 9999,8888:7777 >"$launch_output" 2>&1
 )
 
+if grep -F 'terminfo setup noise' "$launch_output" >/dev/null; then
+  echo 'at=fatal msg="successful terminfo installation was noisy"' >&2
+  exit 1
+fi
 grep -F '<clone>' "$log" >/dev/null
 grep -F '<clone> <--tty=false>' "$log" >/dev/null
 if grep -F '<--nested-virt>' "$log" >/dev/null; then
@@ -56,6 +82,7 @@ fi
 grep -F '<ai-base> <ai-00-project-with-spaces>' "$log" >/dev/null
 grep -F '.timezone = "UTC"' "$log" >/dev/null
 grep -F '<shell> <--workdir> </app> <ai-00-project-with-spaces> <sudo> <hostnamectl> <set-hostname> <ai-00-project-with-spaces>' "$log" >/dev/null
+grep -F '<shell> <--workdir> </app> <ai-00-project-with-spaces> <--> <sudo> <tic> <-x> <-o> </etc/terminfo> </dev/stdin>' "$log" >/dev/null
 if grep -F '<--yes>' "$log" >/dev/null; then
   echo 'at=fatal msg="Lima launcher used deprecated --yes flag"' >&2
   exit 1
