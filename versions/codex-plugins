@@ -1,0 +1,8 @@
+# Codex plugin marketplaces baked into the image, one per line:
+#
+#   <name>  <git url>  <commit>
+#
+# <name>    directory name under /opt/codex-plugins/marketplaces
+# <commit>  pinned; refresh with a build command's --update-plugins option
+
+dentarg  https://github.com/dentarg/codex-plugins.git  d9eeb3d3f528608a589685c1556fcb727e63e6ba

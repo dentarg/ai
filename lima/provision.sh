@@ -101,6 +101,11 @@ run_as_vm_user bash /tmp/ai-build/install-agents.sh \
   "$(cat /tmp/ai-build/claude-version)" \
   /tmp/ai-build/_claude.sh
 
+install -d -o "$AI_VM_USER" -g "$AI_VM_GROUP" /opt/codex-plugins
+run_as_vm_user bash /tmp/ai-build/_codex_plugins.sh \
+  /tmp/ai-build/codex-plugins /opt/codex-plugins
+chown -R root:root /opt/codex-plugins
+
 install -m 755 /tmp/ai-build/start.sh /usr/local/bin/start.sh
 install -m 755 /tmp/ai-build/screenshot.sh /usr/local/bin/screenshot.sh
 install -m 755 /tmp/ai-build/claude.sh /usr/local/bin/c

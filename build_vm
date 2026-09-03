@@ -16,6 +16,7 @@ FORCE=0
 GPU=0
 UPDATE_CLAUDE=0
 UPDATE_CODEX=0
+UPDATE_PLUGINS=0
 
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/ai-vm-build.XXXXXX")
 cleanup() {
@@ -25,7 +26,7 @@ trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
 usage () {
-  echo "Usage: ./build_vm [--force] [--gpu] [--update-claude] [--update-codex]" >&2
+  echo "Usage: ./build_vm [--force] [--gpu] [--update-claude] [--update-codex] [--update-plugins]" >&2
   echo "       ./build_vm [--force] [--gpu] --update-agents" >&2
   exit "${1:-1}"
 }
@@ -36,7 +37,8 @@ while [ $# -gt 0 ]; do
     --gpu) GPU=1 ;;
     --update-claude) UPDATE_CLAUDE=1 ;;
     --update-codex) UPDATE_CODEX=1 ;;
-    --update-agents) UPDATE_CLAUDE=1; UPDATE_CODEX=1 ;;
+    --update-plugins) UPDATE_PLUGINS=1 ;;
+    --update-agents) UPDATE_CLAUDE=1; UPDATE_CODEX=1; UPDATE_PLUGINS=1 ;;
     -h|--help) usage 0 ;;
     *) echo "at=fatal msg=\"unknown option\" option=\"$1\"" >&2; usage ;;
   esac
@@ -70,6 +72,8 @@ fi
 
 [ "$UPDATE_CLAUDE" -eq 1 ] && update_claude_version
 [ "$UPDATE_CODEX" -eq 1 ] && update_codex_version
+[ "$UPDATE_PLUGINS" -eq 1 ] && \
+  update_plugin_manifest "$REPO_DIR/versions/codex-plugins"
 
 ASSET_DIR=${BUILD_DIR}/assets
 INSTALLERS_TAR=${BUILD_DIR}/ai-build-installers.tar.gz

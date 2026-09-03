@@ -32,3 +32,44 @@ update_codex_version () {
   mkdir -p "$REPO_DIR/versions"
   printf '%s\n' "$version" > "$REPO_DIR/versions/codex"
 }
+
+update_plugin_manifest () {
+  file=$1
+  tmp=$(mktemp)
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ''|'#'*)
+        printf '%s\n' "$line" >> "$tmp"
+        continue
+        ;;
+    esac
+
+    # shellcheck disable=SC2086 # deliberate word splitting into name/url/commit
+    set -- $line
+    if [ "$#" -ne 3 ]; then
+      echo "at=fatal msg=\"invalid plugin pin\" file=\"$file\" line=\"$line\"" >&2
+      rm -f "$tmp"
+      exit 1
+    fi
+
+    sha=$(git ls-remote "$2" HEAD | cut -f1)
+    case "$sha" in
+      ????????????????????????????????????????) ;;
+      *)
+        echo "at=fatal msg=\"invalid plugin commit\" name=\"$1\" url=\"$2\" sha=\"$sha\"" >&2
+        rm -f "$tmp"
+        exit 1
+        ;;
+    esac
+
+    printf '%s  %s  %s\n' "$1" "$2" "$sha" >> "$tmp"
+  done < "$file"
+
+  mv "$tmp" "$file"
+}
+
+update_plugins_versions () {
+  update_plugin_manifest "$REPO_DIR/versions/claude-plugins"
+  update_plugin_manifest "$REPO_DIR/versions/codex-plugins"
+}

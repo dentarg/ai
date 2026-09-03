@@ -115,6 +115,13 @@ RUN bash /tmp/install-agents.sh \
     && rm /tmp/codex-version /tmp/claude-version \
           /tmp/claude-installer.sh /tmp/install-agents.sh
 
+# Codex plugins — clone pinned marketplaces and build the cache/configuration
+# copied into each ephemeral session by tools/codex.sh.
+COPY inside_deps/_codex_plugins.sh ./
+COPY versions/codex-plugins /tmp/codex-plugins
+RUN bash _codex_plugins.sh /tmp/codex-plugins /opt/codex-plugins \
+    && rm _codex_plugins.sh /tmp/codex-plugins
+
 # Claude Code plugins — every marketplace pinned in versions/claude-plugins is
 # cloned in and its plugins exposed under /opt/claude-plugins/enabled, which
 # tools/claude.sh links into each session's ~/.claude/skills/. They then load in

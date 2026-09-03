@@ -174,6 +174,7 @@ bin/setup-vm
 # replace an existing base VM; accepts the same agent update flags
 ./build_vm --force
 ./build_vm --force --update-agents
+./build_vm --force --update-plugins
 
 # build the separate ai-base-gpu instance with Lima's krunkit driver
 ./build_vm --gpu
@@ -534,6 +535,26 @@ paths into that throwaway directory, so it would be discarded on every launch.
 the interactive trust dialog. Symlinking into `~/.claude/skills/` sidesteps all
 of it — and because they're symlinks into the image, a rebuild reaches resumed
 sessions too.
+
+## Codex plugins
+
+Codex marketplaces are pinned separately in `versions/codex-plugins`:
+
+```
+# <name>  <git url>  <commit>
+dentarg  https://github.com/dentarg/codex-plugins.git  d9eeb3d3…
+```
+
+Image and VM builds clone each marketplace, install every local plugin into a
+validated Codex cache, and enable it in a reusable configuration fragment.
+`cx` copies that cache and configuration into every new or resumed session.
+The `dentarg/codex-plugins` marketplace currently provides the `gem@84codes`
+plugin and its `$gem-bump` skill.
+
+`./build_image --update-plugins` refreshes the Claude Code and Codex pins;
+`./build_vm --update-plugins` refreshes the Codex pins used by the VM. A
+selected Codex configuration profile can disable a baked plugin because profile
+configuration is layered above the generated base configuration.
 
 ## MCP Servers
 

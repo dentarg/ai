@@ -4,6 +4,16 @@ set -e
 
 HISTORY_ROOT=${HISTORY_ROOT:-/history}
 SETTINGS_ROOT=${SETTINGS_ROOT:-/settings}
+CODEX_PLUGIN_ROOT=${CODEX_PLUGIN_ROOT:-/opt/codex-plugins}
+
+install_image_plugins () {
+  [[ -f "$CODEX_PLUGIN_ROOT/config.toml" ]] || return 0
+
+  mkdir -p "$HOME/.codex/plugins/cache"
+  cp -a "$CODEX_PLUGIN_ROOT/plugins/cache/." "$HOME/.codex/plugins/cache/"
+  printf '\n' >> "$HOME/.codex/config.toml"
+  cat "$CODEX_PLUGIN_ROOT/config.toml" >> "$HOME/.codex/config.toml"
+}
 
 history_dir () {
   local tool=$1
@@ -318,6 +328,8 @@ EOF
 trust_level = "trusted"
 EOF
   fi
+
+  install_image_plugins
 
   sync_auth_back() {
     local session_auth="$HOME/.codex/auth.json"

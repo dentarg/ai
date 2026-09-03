@@ -29,8 +29,10 @@ npm-packages.txt inside_deps/npm-packages.txt project
 rv-ruby-versions.txt inside_deps/rv-ruby-versions.txt project
 ruby-build-versions.txt inside_deps/ruby-build-versions.txt project
 install-agents.sh inside_deps/install-agents.sh project
+_codex_plugins.sh inside_deps/_codex_plugins.sh project
 claude-version versions/claude-code project
 codex-version versions/codex project
+codex-plugins versions/codex-plugins project
 bashrc dot.bashrc project
 gitconfig lima/assets/gitconfig project
 gitignore gitignore-global project
