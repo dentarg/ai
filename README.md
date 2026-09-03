@@ -267,8 +267,8 @@ The GPU base runs a shared, authenticated llama.cpp router as
 `local-code-server.service`. Model instances load on demand and unload when a
 different model is selected, so multiple Pi sessions share one model allocation.
 Qwen has one 8K slot because a second slot exceeds the current Vulkan allocation
-limit. Gemma has one 64K slot, giving complex Pi tasks 60K tokens of working
-context after its response reserve.
+limit. Gemma has one 64K slot. Qwen is the supported default for autonomous
+repository work; use Gemma for bounded generation, review, and diagnosis.
 
 The `local-code` client is available in both the VM and the OCI image. It uses
 Qwen3.8-27B IQ4_XS by default and accepts `qwen38` and `gemma4` aliases:
@@ -288,9 +288,18 @@ containers in the GPU VM can reach the same server at `127.0.0.1:8080`; set
 `LOCAL_CODE_BASE_URL` when using a different address. The API key defaults to
 `local` and can be changed with `LOCAL_CODE_API_KEY` on the service and clients.
 The client reserves 4K tokens for each response. When compacting, it retains the
-newest 2K tokens for Qwen and 16K for Gemma, preventing long tasks from
-exhausting Pi's output budget without discarding too much recent Gemma context.
-Pi sessions persist under `/history/pi` and appear in the history viewer.
+newest 2K tokens for Qwen and 4K for Gemma. A Pi extension blocks unbounded
+recursive listings, stops after three consecutive tool errors, and limits Gemma
+tasks to 24 tool calls. Gemma uses Google's pinned canonical chat template and
+preserves thinking across tool-call turns. Pi sessions persist under
+`/history/pi` and appear in the history viewer.
+
+Run the end-to-end smoke test inside a GPU VM to verify that the default model
+can inspect a broken JavaScript function, edit it, and pass its test:
+
+```shell
+tools/test_local_code_model.sh
+```
 
 The model presets use 44 GPU layers for `qwen38` and 20 for `gemma4`. To
 override the selected profile, stop the service and run the server directly:

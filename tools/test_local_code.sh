@@ -15,9 +15,11 @@ models="${tmpdir}/models.json"
 settings="${tmpdir}/settings.json"
 qwen_settings="${tmpdir}/qwen-settings.json"
 extension="${tmpdir}/duration.ts"
+guard_extension="${tmpdir}/guard.ts"
 presets="${tmpdir}/models.ini"
 mkdir -p "$fake_bin" "${tmpdir}/home"
 : > "$extension"
+: > "$guard_extension"
 : > "$presets"
 
 cat > "${fake_bin}/curl" <<'EOF'
@@ -44,6 +46,7 @@ LOCAL_CODE_TEST_LOG="$log" \
 LOCAL_CODE_TEST_MODELS="$models" \
 LOCAL_CODE_TEST_SETTINGS="$settings" \
 LOCAL_CODE_DURATION_EXTENSION="$extension" \
+LOCAL_CODE_GUARD_EXTENSION="$guard_extension" \
 LOCAL_CODE_PORT=18080 \
 PATH="${fake_bin}:${PATH}" \
   "$SCRIPT_DIR/local-code.sh" --model gemma4 --print 'create example.rb'
@@ -53,7 +56,7 @@ grep -F 'curl args=<--fail --silent --show-error --header Authorization: Bearer 
 grep -F 'key=<local> print=<1>' "$log" >/dev/null
 grep -F 'args=<--offline --provider llama-cpp --model gemma4' "$log" >/dev/null
 grep -F -- '--session-dir /history/pi' "$log" >/dev/null
-grep -F -- "--extension $extension --print create example.rb>" "$log" >/dev/null
+grep -F -- "--extension $extension --extension $guard_extension --print create example.rb>" "$log" >/dev/null
 grep -F '"id": "qwen38"' "$models" >/dev/null
 grep -F '"id": "gemma4"' "$models" >/dev/null
 grep -F "\"apiKey\": \"\$LOCAL_CODE_API_KEY\"" "$models" >/dev/null
@@ -71,7 +74,7 @@ jq -e '
     "dry_sequence_breakers": ["<|dry-sequence-breaker|>"]
   }' "$models" >/dev/null
 jq -e \
-  '.compaction == {"enabled": true, "reserveTokens": 4096, "keepRecentTokens": 16384}' \
+  '.compaction == {"enabled": true, "reserveTokens": 4096, "keepRecentTokens": 4096}' \
   "$settings" >/dev/null
 
 HOME="${tmpdir}/home" \
@@ -79,15 +82,18 @@ LOCAL_CODE_TEST_LOG="$log" \
 LOCAL_CODE_TEST_MODELS="$models" \
 LOCAL_CODE_TEST_SETTINGS="$qwen_settings" \
 LOCAL_CODE_DURATION_EXTENSION="$extension" \
+LOCAL_CODE_GUARD_EXTENSION="$guard_extension" \
 LOCAL_CODE_PORT=18080 \
 PATH="${fake_bin}:${PATH}" \
   "$SCRIPT_DIR/local-code.sh" --print 'create example.rb'
 
+grep -F 'args=<--offline --provider llama-cpp --model qwen38' "$log" >/dev/null
 jq -e \
   '.compaction == {"enabled": true, "reserveTokens": 4096, "keepRecentTokens": 2048}' \
   "$qwen_settings" >/dev/null
 
-if LOCAL_CODE_DURATION_EXTENSION="$extension" PATH="${fake_bin}:${PATH}" \
+if LOCAL_CODE_DURATION_EXTENSION="$extension" \
+  LOCAL_CODE_GUARD_EXTENSION="$guard_extension" PATH="${fake_bin}:${PATH}" \
   "$SCRIPT_DIR/local-code.sh" --model unknown >/dev/null 2>&1; then
   echo 'at=fatal msg="local-code accepted an unknown model"' >&2
   exit 1
@@ -114,5 +120,19 @@ grep -F 'n-gpu-layers = 20' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/nu
 gemma_preset=$(sed -n '/^\[gemma4\]/,$p' "$SCRIPT_DIR/../lima/local-code-models.ini")
 printf '%s\n' "$gemma_preset" | grep -Fx 'parallel = 1' >/dev/null
 printf '%s\n' "$gemma_preset" | grep -Fx 'kv-unified-per-slot = 65536' >/dev/null
+printf '%s\n' "$gemma_preset" | \
+  grep -Fx 'chat-template-file = /usr/local/share/ai/gemma-chat-template.jinja' >/dev/null
+if printf '%s\n' "$gemma_preset" | grep -q '^reasoning-format ='; then
+  echo 'at=fatal msg="Gemma preset forces a non-native reasoning format"' >&2
+  exit 1
+fi
+grep -Fx 'pi-local-guard.ts tools/pi-local-guard.ts project' \
+  "$SCRIPT_DIR/../lima/assets/manifest.txt" >/dev/null
+grep -Fx 'gemma-chat-template-version versions/gemma-chat-template project' \
+  "$SCRIPT_DIR/../lima/assets/manifest.txt" >/dev/null
+grep -F 'google/gemma-4-26B-A4B-it/resolve/' \
+  "$SCRIPT_DIR/../lima/provision.sh" >/dev/null
+grep -Eq '^[0-9a-f]{40}$' "$SCRIPT_DIR/../versions/gemma-chat-template"
+node "$SCRIPT_DIR/test_pi_local_guard.mjs"
 
 echo 'at=info msg="local code tests passed"'

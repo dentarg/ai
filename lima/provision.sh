@@ -57,6 +57,8 @@ if [[ -c /dev/dri/renderD128 ]]; then
     /usr/local/share/ai/local-code-models.ini
   install -D -m 644 /tmp/ai-build/pi-duration.ts \
     /usr/local/share/ai/pi-duration.ts
+  install -D -m 644 /tmp/ai-build/pi-local-guard.ts \
+    /usr/local/share/ai/pi-local-guard.ts
   install -D -m 644 /tmp/ai-build/local-code-server.service \
     /etc/systemd/system/local-code-server.service
   systemctl enable local-code-server.service
@@ -66,6 +68,12 @@ if [[ -c /dev/dri/renderD128 ]]; then
     --output /tmp/qwen-chat-template.jinja
   install -D -m 644 /tmp/qwen-chat-template.jinja \
     /usr/local/share/ai/qwen-chat-template.jinja
+  gemma_template_version=$(cat /tmp/ai-build/gemma-chat-template-version)
+  curl --fail --location --silent --show-error \
+    "https://huggingface.co/google/gemma-4-26B-A4B-it/resolve/${gemma_template_version}/chat_template.jinja" \
+    --output /tmp/gemma-chat-template.jinja
+  install -D -m 644 /tmp/gemma-chat-template.jinja \
+    /usr/local/share/ai/gemma-chat-template.jinja
 fi
 
 bash /tmp/ai-build/install-chromium.sh /tmp/ai-build/chromium-packages.txt

@@ -34,7 +34,7 @@ esac
 
 case "$model" in
   qwen38) keep_recent_tokens=2048 ;;
-  gemma4) keep_recent_tokens=16384 ;;
+  gemma4) keep_recent_tokens=4096 ;;
   *)
     echo "at=fatal msg=\"unknown local model\" model=\"$model\"" >&2
     exit 1
@@ -45,10 +45,15 @@ port=${LOCAL_CODE_PORT:-8080}
 base_url=${LOCAL_CODE_BASE_URL:-http://127.0.0.1:${port}/v1}
 api_key=${LOCAL_CODE_API_KEY:-local}
 extension=${LOCAL_CODE_DURATION_EXTENSION:-/usr/local/share/ai/pi-duration.ts}
+guard_extension=${LOCAL_CODE_GUARD_EXTENSION:-/usr/local/share/ai/pi-local-guard.ts}
 session_dir=${PI_CODING_AGENT_SESSION_DIR:-/history/pi}
 
 if [ ! -f "$extension" ]; then
   echo "at=fatal msg=\"Pi duration extension not found\" path=\"$extension\"" >&2
+  exit 1
+fi
+if [ ! -f "$guard_extension" ]; then
+  echo "at=fatal msg=\"Pi local guard extension not found\" path=\"$guard_extension\"" >&2
   exit 1
 fi
 if [ -z "$api_key" ]; then
@@ -145,4 +150,5 @@ pi \
   --model "$model" \
   --session-dir "$session_dir" \
   --extension "$extension" \
+  --extension "$guard_extension" \
   "$@"
