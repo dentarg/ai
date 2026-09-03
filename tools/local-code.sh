@@ -104,7 +104,14 @@ cat >"${runtime_dir}/models.json" <<EOF
           "name": "Gemma 4 26B A4B Q4_0",
           "reasoning": true,
           "contextWindow": 65536,
-          "maxTokens": 4096
+          "maxTokens": 4096,
+          "samplingParams": {
+            "dry_multiplier": 0.8,
+            "dry_base": 1.75,
+            "dry_allowed_length": 2,
+            "dry_penalty_last_n": 256,
+            "dry_sequence_breakers": ["<|dry-sequence-breaker|>"]
+          }
         }
       ]
     }

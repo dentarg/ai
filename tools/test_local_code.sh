@@ -60,6 +60,16 @@ grep -F "\"apiKey\": \"\$LOCAL_CODE_API_KEY\"" "$models" >/dev/null
 jq -e \
   '.providers["llama-cpp"].models[] | select(.id == "gemma4") | .contextWindow == 65536' \
   "$models" >/dev/null
+jq -e '
+  .providers["llama-cpp"].models[] |
+  select(.id == "gemma4") |
+  .samplingParams == {
+    "dry_multiplier": 0.8,
+    "dry_base": 1.75,
+    "dry_allowed_length": 2,
+    "dry_penalty_last_n": 256,
+    "dry_sequence_breakers": ["<|dry-sequence-breaker|>"]
+  }' "$models" >/dev/null
 jq -e \
   '.compaction == {"enabled": true, "reserveTokens": 4096, "keepRecentTokens": 16384}' \
   "$settings" >/dev/null
