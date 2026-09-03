@@ -42,7 +42,11 @@ CAPTURED_TEMPLATE="$captured_template" CAPTURED_ARCHIVES="$captured_archives" \
   LIMACTL_LOG="$log" PATH="${fake_bin}:${PATH}" "$REPO_DIR/build_vm" >/dev/null
 grep -F '<validate><' "$log" >/dev/null
 grep -F '<create><--tty=false><--name><ai-base><--cpus><4><--memory><8><--disk><100>' "$log" >/dev/null
-grep -F '<start><--progress><--timeout><60m><ai-base>' "$log" >/dev/null
+grep -F '<start><--timeout><60m><ai-base>' "$log" >/dev/null
+if grep -F '<--progress>' "$log" >/dev/null; then
+  echo 'at=fatal msg="build_vm enabled Lima progress monitoring"' >&2
+  exit 1
+fi
 grep -F '<stop><ai-base>' "$log" >/dev/null
 grep -F '<protect><ai-base>' "$log" >/dev/null
 if grep -F '@AI_BUILD_' "$captured_template" >/dev/null; then
@@ -89,7 +93,7 @@ grep -F '<delete><--force><ai-base>' "$log" >/dev/null
 AI_VM_BUILD_TIMEOUT=90m CAPTURED_TEMPLATE="$captured_template" CAPTURED_ARCHIVES="$captured_archives" \
   LIMACTL_LOG="$log" PATH="${fake_bin}:${PATH}" \
   "$REPO_DIR/build_vm" >/dev/null
-grep -F '<start><--progress><--timeout><90m><ai-base>' "$log" >/dev/null
+grep -F '<start><--timeout><90m><ai-base>' "$log" >/dev/null
 
 : > "$log"
 CAPTURED_TEMPLATE="$captured_template" CAPTURED_ARCHIVES="$captured_archives" \
@@ -97,7 +101,7 @@ CAPTURED_TEMPLATE="$captured_template" CAPTURED_ARCHIVES="$captured_archives" \
   "$REPO_DIR/build_vm" --gpu >/dev/null
 grep -F '<info>' "$log" >/dev/null
 grep -F '<create><--tty=false><--vm-type><krunkit><--name><ai-base-gpu>' "$log" >/dev/null
-grep -F '<start><--progress><--timeout><60m><ai-base-gpu>' "$log" >/dev/null
+grep -F '<start><--timeout><60m><ai-base-gpu>' "$log" >/dev/null
 grep -F '<stop><ai-base-gpu>' "$log" >/dev/null
 grep -F '<protect><ai-base-gpu>' "$log" >/dev/null
 grep -F '<AI_VM_GPU=1>' "$log" >/dev/null
@@ -117,7 +121,7 @@ grep -F 'swapon --show=NAME --noheadings' "$log" >/dev/null
 grep -F 'systemctl is-enabled --quiet docker.socket' "$log" >/dev/null
 grep -F '! systemctl is-enabled --quiet docker.service' "$log" >/dev/null
 grep -F 'sync' "$log" >/dev/null
-if [[ $(grep -Fc '<start><--timeout><60m><ai-base-gpu>' "$log") -ne 1 ]]; then
+if [[ $(grep -Fc '<start><--timeout><60m><ai-base-gpu>' "$log") -ne 2 ]]; then
   echo 'at=fatal msg="build_vm did not restart the GPU base for persistence verification"' >&2
   exit 1
 fi

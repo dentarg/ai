@@ -127,7 +127,10 @@ set -- "$@" \
   --disk "$VM_DISK" \
   "$VM_TEMPLATE"
 limactl "$@"
-limactl start --progress --timeout "$VM_BUILD_TIMEOUT" "$BASE_NAME"
+# Lima's progress log streamer has its own ten-minute timeout, independent of
+# --timeout. Provisioning can legitimately take longer while building images or
+# downloading packages, so rely on the host-agent timeout for the initial boot.
+limactl start --timeout "$VM_BUILD_TIMEOUT" "$BASE_NAME"
 limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" \
   HOME=/workspace BASH_ENV=/workspace/.bash_profile \
   bash -lc '
