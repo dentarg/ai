@@ -33,6 +33,10 @@ AI_DIR="$ai_dir" \
 PATH="${fake_bin}:${REPO_DIR}/bin:${PATH}" \
   "$REPO_DIR/bin/ai" cx >/dev/null
 assert_label codex
+project_name=$(basename "$(pwd)")
+grep -Fx "HOST_DIR=$project_name" "$PODMAN_ARGS_FILE" >/dev/null
+grep -Fx "HOST_WORKDIR=/host-workdir/$project_name" "$PODMAN_ARGS_FILE" >/dev/null
+grep -Fx "$(pwd):/host-workdir/$project_name" "$PODMAN_ARGS_FILE" >/dev/null
 
 mkdir -p "${ai_dir}/settings/codex_alpha"
 printf '{}\n' > "${ai_dir}/settings/codex_alpha/auth.json"

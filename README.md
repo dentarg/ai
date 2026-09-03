@@ -115,19 +115,23 @@ cx
 # launch codex with a specific oauth profile
 cx <profile>
 
+# layer a native Codex configuration profile from
+# ~/ai/settings/codex[_<oauth-profile>]/<config-profile>.config.toml
+cx [<oauth-profile>] --profile <config-profile>
+
 # resume a prior Codex session (searches /history for the session id; a prefix is enough).
-# profile is auto-detected from the session's saved .profile file.
+# oauth and configuration profiles are auto-detected from the session.
 cx --resume <session-id>
 
 # exit the container or VM session
 x
 ```
 
-`cx` launches Codex through a temporary symlink named after the host directory
-captured by `bin/ai`, so Codex's terminal title and project/status fields show
-that host directory name instead of `/app`. Its generated statusline shows the
-project, git branch, model/reasoning, context used, and thread id. TUI
-notifications are disabled for quieter terminal sessions.
+`bin/ai` mounts the project at both `/app` and a host-named path used by `cx`,
+so Codex's terminal title and project/status fields show the host directory
+name instead of `app`. Its generated statusline shows the project, git branch,
+model/reasoning, context used, and thread id. TUI notifications are disabled
+for quieter terminal sessions.
 `cx --resume <id>` searches archived Codex rollouts under `/history` and
 reuses the original Codex home before launching `codex resume <id>`.
 

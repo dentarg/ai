@@ -102,22 +102,25 @@ valid_profile () {
 }
 
 usage () {
-  echo "Usage: $(basename "$0") [<profile>] [--resume <id>]"
+  echo "Usage: $(basename "$0") [<auth-profile>] [--profile <config-profile>] [--resume <id>]"
   echo
-  echo "  <profile>            Use auth from /settings/codex_<profile>/auth.json."
+  echo "  <auth-profile>       Use auth from /settings/codex_<profile>/auth.json."
+  echo "  -p, --profile <name> Layer <name>.config.toml from the auth profile."
   echo "  -r, --resume <id>    Resume a prior Codex session; <id> may be a prefix."
-  echo "                       The profile is auto-detected if omitted."
+  echo "                       Profiles are auto-detected if omitted."
   exit 1
 }
 
 main () {
   local profile=""
+  local config_profile=""
   local resume_id=""
   local jsonl=""
   local saved
   local settings_home
   local shared_codex_home
   local shared_auth
+  local config_profile_path
   local host_dir
   local codex_cwd
   local host_workdir_parent=""
@@ -129,6 +132,18 @@ main () {
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      -p|--profile)
+        config_profile="${2:?--profile requires a name}"
+        shift 2
+        ;;
+      --profile=*)
+        config_profile="${1#--profile=}"
+        [[ -n "$config_profile" ]] || {
+          echo 'at=fatal msg="--profile requires a name"' >&2
+          exit 1
+        }
+        shift
+        ;;
       -r|--resume)
         resume_id="${2:?--resume requires a session id}"
         shift 2
@@ -159,6 +174,11 @@ main () {
     esac
   done
 
+  if [[ -n "$config_profile" ]] && ! valid_profile "$config_profile"; then
+    echo "at=fatal msg=\"invalid Codex config profile\" profile=\"$config_profile\"" >&2
+    usage
+  fi
+
   if [[ -n "$resume_id" ]]; then
     if ! jsonl=$(find_codex_resume_jsonl "$HISTORY_ROOT" "$resume_id"); then
       echo "at=fatal msg=\"no codex session matching resume id\" resume=\"$resume_id\" history=\"$HISTORY_ROOT\"" >&2
@@ -175,17 +195,28 @@ main () {
         profile=$saved
       fi
     fi
+    if [[ -z "$config_profile" && -f "$settings_home/.config_profile" ]]; then
+      saved=$(cat "$settings_home/.config_profile")
+      if valid_profile "$saved"; then
+        config_profile=$saved
+      fi
+    fi
   else
     settings_home=$(history_dir codex)
   fi
 
   shared_codex_home=$(codex_settings_home "$profile")
   shared_auth="${shared_codex_home}/auth.json"
+  config_profile_path="${shared_codex_home}/${config_profile}.config.toml"
   if [[ ! -f "$shared_auth" ]]; then
     echo "at=error msg=\"codex auth file not found\" path=$shared_auth"
     echo ""
     echo "  First time? Run codex-login ${profile} to Sign in with Device Code."
     echo ""
+    exit 1
+  fi
+  if [[ -n "$config_profile" && ! -f "$config_profile_path" ]]; then
+    echo "at=fatal msg=\"codex config profile not found\" path=\"$config_profile_path\"" >&2
     exit 1
   fi
 
@@ -199,6 +230,13 @@ main () {
   else
     rm -f "$HOME/.codex/.profile"
   fi
+  if [[ -n "$config_profile" ]]; then
+    install -m 600 "$config_profile_path" \
+      "$HOME/.codex/${config_profile}.config.toml"
+    printf '%s\n' "$config_profile" > "$HOME/.codex/.config_profile"
+  else
+    rm -f "$HOME/.codex/.config_profile"
+  fi
   [[ -f "$SETTINGS_ROOT/AGENTS.md" ]] && cp "$SETTINGS_ROOT/AGENTS.md" "$HOME/.codex"
 
   host_dir="${HOST_DIR:-$(basename "$PWD")}"
@@ -207,7 +245,10 @@ main () {
   esac
 
   codex_cwd="$PWD"
-  if host_workdir_parent=$(mktemp -d /tmp/codex-host-cwd.XXXXXX); then
+  if [[ -n "${HOST_WORKDIR:-}" && -d "$HOST_WORKDIR" && \
+    "$(basename "$HOST_WORKDIR")" == "$host_dir" ]]; then
+    codex_cwd=$HOST_WORKDIR
+  elif host_workdir_parent=$(mktemp -d /tmp/codex-host-cwd.XXXXXX); then
     host_workdir="$host_workdir_parent/$host_dir"
     if ln -s "$PWD" "$host_workdir"; then
       codex_cwd="$host_workdir"
@@ -268,6 +309,9 @@ EOF
 
   codex_cmd=(
     codex
+  )
+  [[ -n "$config_profile" ]] && codex_cmd+=(--profile "$config_profile")
+  codex_cmd+=(
     --cd "$codex_cwd"
     --dangerously-bypass-approvals-and-sandbox
     --search

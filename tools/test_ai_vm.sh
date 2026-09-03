@@ -88,11 +88,13 @@ if grep -F '<--yes>' "$log" >/dev/null; then
   exit 1
 fi
 grep -F '"mountPoint":"/app"' "$log" >/dev/null
+grep -F '"mountPoint":"/host-workdir/project with spaces"' "$log" >/dev/null
 grep -F '"location":"'"$project"'"' "$log" >/dev/null
 grep -F '"guestPort":1337,"hostPort":45555' "$log" >/dev/null
 grep -F '"guestPort":9999,"hostPort":9999' "$log" >/dev/null
 grep -F '"guestPort":7777,"hostPort":8888' "$log" >/dev/null
 grep -F '<AI_AUTO_LAUNCH=1>' "$log" >/dev/null
+grep -F '<HOST_WORKDIR=/host-workdir/project with spaces>' "$log" >/dev/null
 grep -F '<CODEX_AUTO_START=1>' "$log" >/dev/null
 grep -F '<shell> <--workdir> </app>' "$log" >/dev/null
 grep -F 'Lima clone is missing the provisioned shell or tools' "$log" >/dev/null
