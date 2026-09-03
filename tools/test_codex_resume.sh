@@ -64,7 +64,9 @@ EOF
 cat > "${tmpdir}/bin/codex" <<'EOF'
 #!/bin/sh
 jq -r .profile "$HOME/.codex/auth.json"
-cat "$HOME/.codex/.profile"
+if [ -f "$HOME/.codex/.profile" ]; then
+  cat "$HOME/.codex/.profile"
+fi
 if [ -f "$HOME/.codex/.config_profile" ]; then
   cat "$HOME/.codex/.config_profile"
   cat "$HOME/.codex/$(cat "$HOME/.codex/.config_profile").config.toml"
@@ -102,6 +104,21 @@ assert_equal 'model = "gpt-test"' "$(printf '%s\n' "$output" | sed -n '4p')" \
 printf '%s\n' "$output" | grep -Fx -- '--profile' >/dev/null
 printf '%s\n' "$output" | grep -Fx -- 'work' >/dev/null
 printf '%s\n' "$output" | grep -Fx -- '--cd' >/dev/null
-printf '%s\n' "$output" | grep -Fx -- "$run_dir" >/dev/null
+printf '%s\n' "$output" | grep -F -- 'example_codex [alpha]' >/dev/null
+grep -F 'status_line = ["current-dir",' \
+  "${tmpdir}/home/.codex/config.toml" >/dev/null
+
+mkdir -p "${SETTINGS_ROOT}/codex"
+printf '%s\n' '{"profile":"default"}' > "${SETTINGS_ROOT}/codex/auth.json"
+output=$(
+  HOME="${tmpdir}/home" \
+  HOST_DIR=$(basename "$run_dir") \
+  HOST_WORKDIR="$run_dir" \
+  HISTORY_ROOT="$tmpdir" \
+  SETTINGS_ROOT="$SETTINGS_ROOT" \
+  PATH="${tmpdir}/bin:$PATH" \
+    main
+)
+printf '%s\n' "$output" | grep -F -- 'example_codex [default]' >/dev/null
 
 echo 'at=info msg="codex resume lookup tests passed"'

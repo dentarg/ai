@@ -129,7 +129,8 @@ x
 
 `bin/ai` mounts the project at both `/app` and a host-named path used by `cx`,
 so Codex's terminal title and project/status fields show the host directory
-name instead of `app`. Its generated statusline shows the project, git branch,
+name instead of `app`. Its generated statusline shows the project and OAuth
+profile as `<project> [<profile>]`, followed by the git branch,
 model/reasoning, context used, and thread id. TUI notifications are disabled
 for quieter terminal sessions.
 `cx --resume <id>` searches archived Codex rollouts under `/history` and
