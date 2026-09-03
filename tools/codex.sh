@@ -3,6 +3,7 @@
 set -e
 
 HISTORY_ROOT=${HISTORY_ROOT:-/history}
+SETTINGS_ROOT=${SETTINGS_ROOT:-/settings}
 
 history_dir () {
   local tool=$1
@@ -83,19 +84,40 @@ find_codex_resume_jsonl () {
   find_matching_codex_resume_jsonl "$history_root" "$session_id" 'rollout-*.jsonl'
 }
 
+codex_settings_home () {
+  local profile=$1
+
+  if [[ -n "$profile" ]]; then
+    printf '%s/codex_%s\n' "$SETTINGS_ROOT" "$profile"
+  else
+    printf '%s/codex\n' "$SETTINGS_ROOT"
+  fi
+}
+
+valid_profile () {
+  case "$1" in
+    ""|*[!A-Za-z0-9._-]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
 usage () {
-  echo "Usage: $(basename "$0") [--resume <id>]"
+  echo "Usage: $(basename "$0") [<profile>] [--resume <id>]"
   echo
+  echo "  <profile>            Use auth from /settings/codex_<profile>/auth.json."
   echo "  -r, --resume <id>    Resume a prior Codex session; <id> may be a prefix."
+  echo "                       The profile is auto-detected if omitted."
   exit 1
 }
 
 main () {
+  local profile=""
   local resume_id=""
   local jsonl=""
+  local saved
   local settings_home
-  local shared_codex_home=/settings/codex
-  local shared_auth="${shared_codex_home}/auth.json"
+  local shared_codex_home
+  local shared_auth
   local host_dir
   local codex_cwd
   local host_workdir_parent=""
@@ -127,19 +149,15 @@ main () {
         usage
         ;;
       *)
-        echo "at=fatal msg=\"unexpected argument\" arg=\"$1\"" >&2
-        usage
+        if [[ -n "$profile" ]] || ! valid_profile "$1"; then
+          echo "at=fatal msg=\"invalid codex profile\" profile=\"$1\"" >&2
+          usage
+        fi
+        profile=$1
+        shift
         ;;
     esac
   done
-
-  if [[ ! -f "$shared_auth" ]]; then
-    echo "at=error msg=\"codex auth file not found\" path=$shared_auth"
-    echo ""
-    echo "  First time? Run codex-login to Sign in with Device Code."
-    echo ""
-    exit 1
-  fi
 
   if [[ -n "$resume_id" ]]; then
     if ! jsonl=$(find_codex_resume_jsonl "$HISTORY_ROOT" "$resume_id"); then
@@ -151,8 +169,24 @@ main () {
       echo "at=fatal msg=\"codex session id not found\" path=\"$jsonl\"" >&2
       exit 1
     fi
+    if [[ -z "$profile" && -f "$settings_home/.profile" ]]; then
+      saved=$(cat "$settings_home/.profile")
+      if valid_profile "$saved"; then
+        profile=$saved
+      fi
+    fi
   else
     settings_home=$(history_dir codex)
+  fi
+
+  shared_codex_home=$(codex_settings_home "$profile")
+  shared_auth="${shared_codex_home}/auth.json"
+  if [[ ! -f "$shared_auth" ]]; then
+    echo "at=error msg=\"codex auth file not found\" path=$shared_auth"
+    echo ""
+    echo "  First time? Run codex-login ${profile} to Sign in with Device Code."
+    echo ""
+    exit 1
   fi
 
   rm -f "$HOME/.codex" # should be a symlink
@@ -160,7 +194,12 @@ main () {
   ln -s "$settings_home" "$HOME/.codex"
 
   install -m 600 "$shared_auth" "$HOME/.codex/auth.json"
-  [[ -f /settings/AGENTS.md ]] && cp /settings/AGENTS.md "$HOME/.codex"
+  if [[ -n "$profile" ]]; then
+    printf '%s\n' "$profile" > "$HOME/.codex/.profile"
+  else
+    rm -f "$HOME/.codex/.profile"
+  fi
+  [[ -f "$SETTINGS_ROOT/AGENTS.md" ]] && cp "$SETTINGS_ROOT/AGENTS.md" "$HOME/.codex"
 
   host_dir="${HOST_DIR:-$(basename "$PWD")}"
   case "$host_dir" in

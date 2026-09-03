@@ -34,6 +34,14 @@ PATH="${fake_bin}:${REPO_DIR}/bin:${PATH}" \
   "$REPO_DIR/bin/ai" cx >/dev/null
 assert_label codex
 
+mkdir -p "${ai_dir}/settings/codex_alpha"
+printf '{}\n' > "${ai_dir}/settings/codex_alpha/auth.json"
+HOME="${tmpdir}/home" \
+AI_DIR="$ai_dir" \
+PATH="${fake_bin}:${REPO_DIR}/bin:${PATH}" \
+  "$REPO_DIR/bin/ai" cx alpha >/dev/null
+grep -Fx 'CODEX_PROFILE=alpha' "$PODMAN_ARGS_FILE" >/dev/null
+
 expires_at=$(( $(date +%s) * 1000 + 7200000 ))
 jq -n --argjson expires_at "$expires_at" \
   '{claudeAiOauth: {expiresAt: $expires_at}}' \

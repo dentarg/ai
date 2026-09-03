@@ -20,6 +20,12 @@ assert_equal () {
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
+SETTINGS_ROOT="${tmpdir}/settings"
+assert_equal "${SETTINGS_ROOT}/codex" "$(codex_settings_home "")" \
+  "default Codex settings path is wrong"
+assert_equal "${SETTINGS_ROOT}/codex_alpha" "$(codex_settings_home alpha)" \
+  "profile Codex settings path is wrong"
+
 session_id=11111111-2222-4333-8444-555555555555
 legacy_id=legacy-session
 run_dir="${tmpdir}/example_codex"
@@ -46,5 +52,33 @@ assert_equal "$legacy_expected" "$actual" "resume lookup did not use session met
 
 actual=$(find_codex_resume_jsonl "$tmpdir" "missing" || true)
 assert_equal "" "$actual" "resume lookup should fail when no Codex session matches"
+
+printf '%s\n' alpha > "$run_dir/.profile"
+mkdir -p "${SETTINGS_ROOT}/codex_alpha" "${tmpdir}/home" "${tmpdir}/bin"
+printf '%s\n' '{"profile":"alpha"}' > "${SETTINGS_ROOT}/codex_alpha/auth.json"
+
+cat > "${tmpdir}/bin/start.sh" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat > "${tmpdir}/bin/codex" <<'EOF'
+#!/bin/sh
+jq -r .profile "$HOME/.codex/auth.json"
+cat "$HOME/.codex/.profile"
+printf '%s\n' "$@"
+EOF
+chmod +x "${tmpdir}/bin/start.sh" "${tmpdir}/bin/codex"
+
+output=$(
+  HOME="${tmpdir}/home" \
+  HISTORY_ROOT="$tmpdir" \
+  SETTINGS_ROOT="$SETTINGS_ROOT" \
+  PATH="${tmpdir}/bin:$PATH" \
+    main --resume "${session_id:0:8}"
+)
+assert_equal "alpha" "$(printf '%s\n' "$output" | sed -n '1p')" \
+  "resume did not load the saved Codex profile auth"
+assert_equal "alpha" "$(printf '%s\n' "$output" | sed -n '2p')" \
+  "resume did not preserve the saved Codex profile"
 
 echo 'at=info msg="codex resume lookup tests passed"'

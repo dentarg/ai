@@ -22,6 +22,9 @@ Drop per-profile OAuth credentials in `$HOME/ai/settings` as
 into `~/.claude/` when you launch claude with a matching profile. See the
 [OAuth Login](#oauth-login) section for how to generate these.
 
+Codex profiles are stored as `$HOME/ai/settings/codex_<profile>/auth.json`.
+The unprofiled default remains `$HOME/ai/settings/codex/auth.json`.
+
 Optionally, add `AGENTS.md` to `$HOME/ai/settings` — it becomes `CLAUDE.md`
 for Claude Code, `GEMINI.md` for Gemini CLI, and is copied into Codex's
 session config.
@@ -58,12 +61,16 @@ bin/ai <profile>
 # start podman and auto-launch "cx" once the container is up.
 bin/ai cx
 
+# launch Codex with a specific profile.
+bin/ai cx <profile>
+
 # resume a prior Claude session: passed through to "c --resume <id>" on launch.
 # works with or without a profile (c auto-detects it from the session).
 bin/ai --resume <session-id>
 bin/ai <profile> --resume <session-id>
 
 # resume a prior Codex session: passed through to "cx --resume <id>" on launch.
+# the profile is auto-detected from the original session.
 bin/ai cx --resume <session-id>
 
 # publish extra ports from the container to the host. each entry is either
@@ -105,7 +112,11 @@ g
 # launch openai codex
 cx
 
+# launch codex with a specific oauth profile
+cx <profile>
+
 # resume a prior Codex session (searches /history for the session id; a prefix is enough).
+# profile is auto-detected from the session's saved .profile file.
 cx --resume <session-id>
 
 # exit the container or VM session
@@ -387,9 +398,11 @@ OpenAI Codex:
 ```shell
 # inside the container
 codex-login
+codex-login <profile>
 
 # or from the host
 bin/codex-login
+bin/codex-login <profile>
 ```
 
 This standalone helper starts Codex's "Sign in with Device Code" flow without
@@ -397,6 +410,7 @@ running the Codex CLI. Open the displayed URL, enter the one-time code, and
 finish sign-in in your browser. Credentials are saved to
 `/settings/codex/auth.json` in the container, or
 `$HOME/ai/settings/codex/auth.json` from the host.
+For a named profile, `codex_<profile>` replaces the `codex` directory name.
 
 ## Token Refresh Service
 

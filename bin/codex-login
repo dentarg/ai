@@ -8,26 +8,30 @@ CODEX_ISSUER="${CODEX_ISSUER:-https://auth.openai.com}"
 CODEX_MAX_WAIT="${CODEX_MAX_WAIT:-900}"
 
 default_codex_settings_dir() {
+  local profile=${1:-}
+  local suffix=""
+
+  [[ -n "$profile" ]] && suffix="_${profile}"
   if [[ -d /settings ]]; then
-    echo "/settings/codex"
+    echo "/settings/codex${suffix}"
   else
-    echo "${AI_DIR}/settings/codex"
+    echo "${AI_DIR}/settings/codex${suffix}"
   fi
 }
 
-CODEX_SETTINGS_DIR="${CODEX_SETTINGS_DIR:-${CODEX_HOME:-$(default_codex_settings_dir)}}"
+CODEX_SETTINGS_DIR="${CODEX_SETTINGS_DIR:-${CODEX_HOME:-}}"
 
 usage() {
-  echo "Usage: $(basename "$0") [--login|--status|--help]"
+  echo "Usage: $(basename "$0") [<profile>] [--login|--status|--help]"
   echo ""
   echo "Commands:"
+  echo "  <profile>  Use the named Codex profile"
   echo "  --login    Sign in with Device Code and save Codex auth (default)"
   echo "  --status   Show Codex login status for the shared auth directory"
   echo "  --help     Show this help"
   echo ""
   echo "Environment:"
-  echo "  CODEX_SETTINGS_DIR   Codex auth directory (default: /settings/codex in the container,"
-  echo "                       otherwise ~/ai/settings/codex)"
+  echo "  CODEX_SETTINGS_DIR   Override the Codex auth directory"
   echo "  CODEX_HOME           Used as CODEX_SETTINGS_DIR when CODEX_SETTINGS_DIR is unset"
   echo "  CODEX_ISSUER         OAuth issuer (default: https://auth.openai.com)"
   echo "  CODEX_CLIENT_ID      OAuth client id"
@@ -327,18 +331,49 @@ status() {
 }
 
 main() {
-  local command="${1:---login}"
+  local command="--login"
+  local command_set=0
+  local profile=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --login|--status)
+        if [[ "$command_set" -eq 1 ]]; then
+          usage
+          return 1
+        fi
+        command=$1
+        command_set=1
+        ;;
+      --help|-h)
+        usage
+        return 0
+        ;;
+      -*)
+        usage
+        return 1
+        ;;
+      *)
+        if [[ -n "$profile" ]] || [[ "$1" == *[!A-Za-z0-9._-]* ]]; then
+          usage
+          return 1
+        fi
+        profile=$1
+        ;;
+    esac
+    shift
+  done
+
+  if [[ -z "$CODEX_SETTINGS_DIR" ]]; then
+    CODEX_SETTINGS_DIR=$(default_codex_settings_dir "$profile")
+  fi
+
   case "$command" in
     --login)
-      shift || true
-      login "$@"
+      login
       ;;
     --status)
-      shift || true
-      status "$@"
-      ;;
-    --help|-h)
-      usage
+      status
       ;;
     *)
       usage
