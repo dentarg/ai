@@ -57,7 +57,12 @@ provision:
       mkdir -p /tmp/ai-build
       base64 --decode /tmp/ai-build-installers.tar.gz.b64 | tar -xzf - -C /tmp/ai-build
       base64 --decode /tmp/ai-build-project.tar.gz.b64 | tar -xzf - -C /tmp/ai-build
-      AI_VM_USER="{{.User}}" exec bash /tmp/ai-build/provision.sh
+      install -m 600 /dev/null /var/log/ai-base-provision.log
+      systemd-run \
+        --unit=ai-base-provision \
+        --property=Type=exec \
+        env AI_VM_USER="{{.User}}" \
+        bash -c 'exec bash /tmp/ai-build/provision.sh >>/var/log/ai-base-provision.log 2>&1'
 
 message: |
-  AI base VM {{.Name}} is ready. build_vm will stop it after verification.
+  AI base VM {{.Name}} booted. build_vm is completing provisioning and verification.

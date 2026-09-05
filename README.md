@@ -192,9 +192,10 @@ interactive shell exits. The image and VM builds share the Chromium, system
 tool, language-runtime, coding-agent, and token-refresh service recipes under
 `inside_deps/`; only backend-specific setup remains in their provisioners.
 The initial build may take a while; `AI_VM_BUILD_TIMEOUT` controls its Lima
-startup timeout and defaults to `60m`. The build does not enable Lima's
-cloud-init progress display because its separate ten-minute monitor can abort
-healthy provisioning before the startup timeout expires.
+startup and provisioning timeout and defaults to `60m`. Long-running
+provisioning runs separately from Lima's boot scripts, and `build_vm` streams
+its output. This avoids Lima's fixed ten-minute boot-script and cloud-init
+progress-monitor limits.
 
 Runtime instances and guest hostnames use `ai-XX-<project>`, where `XX` is the
 first available two-digit suffix and `project` is the current directory name.

@@ -127,15 +127,31 @@ set -- "$@" \
   --disk "$VM_DISK" \
   "$VM_TEMPLATE"
 limactl "$@"
-# Lima's progress log streamer has its own ten-minute timeout, independent of
-# --timeout. Provisioning can legitimately take longer while building images or
-# downloading packages, so rely on the host-agent timeout for the initial boot.
+# Lima allows only ten minutes for its boot scripts to finish. The template
+# starts long-running provisioning as a systemd unit so Lima can finish booting;
+# stream that unit's log here and apply the configured build timeout ourselves.
 limactl start --timeout "$VM_BUILD_TIMEOUT" "$BASE_NAME"
+if ! limactl shell "$BASE_NAME" sudo env \
+  AI_VM_BUILD_TIMEOUT="$VM_BUILD_TIMEOUT" bash -lc '
+    log=/var/log/ai-base-provision.log
+    if systemctl is-active --quiet ai-base-provision.service; then
+      provision_pid=$(systemctl show \
+        --property=MainPID --value ai-base-provision.service)
+      timeout "$AI_VM_BUILD_TIMEOUT" \
+        tail --pid="$provision_pid" -n +1 -f "$log"
+    else
+      cat "$log"
+    fi
+  '
+then
+  echo "at=fatal msg=\"VM provisioning exceeded build timeout\" timeout=$VM_BUILD_TIMEOUT" >&2
+  exit 1
+fi
 limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" \
   HOME=/workspace BASH_ENV=/workspace/.bash_profile \
   bash -lc '
     if ! test -f /var/lib/ai-base-provisioned; then
-      echo "at=fatal msg=\"VM provisioning did not complete; inspect the cloud-init output above\"" >&2
+      echo "at=fatal msg=\"VM provisioning did not complete; inspect the provisioning output above\"" >&2
       exit 1
     fi
     docker info >/dev/null

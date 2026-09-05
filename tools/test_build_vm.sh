@@ -53,7 +53,10 @@ if grep -F '@AI_BUILD_' "$captured_template" >/dev/null; then
   echo 'at=fatal msg="build_vm did not resolve the asset archive placeholder"' >&2
   exit 1
 fi
-grep -F 'AI_VM_USER="{{.User}}" exec bash /tmp/ai-build/provision.sh' \
+grep -F 'systemd-run' "$captured_template" >/dev/null
+grep -F 'env AI_VM_USER="{{.User}}"' \
+  "$captured_template" >/dev/null
+grep -F 'exec bash /tmp/ai-build/provision.sh >>/var/log/ai-base-provision.log 2>&1' \
   "$captured_template" >/dev/null
 grep -F 'timezone: UTC' "$captured_template" >/dev/null
 if grep -F 'mode: readiness' "$captured_template" >/dev/null; then
@@ -111,6 +114,8 @@ grep -F 'command -v llama-cli' "$log" >/dev/null
 grep -F 'command -v llama-server' "$log" >/dev/null
 grep -F 'llama-cli --list-devices' "$log" >/dev/null
 grep -F 'docker image inspect ai-llama.cpp' "$log" >/dev/null
+grep -F '<AI_VM_BUILD_TIMEOUT=60m>' "$log" >/dev/null
+grep -F 'tail --pid="$provision_pid"' "$log" >/dev/null
 grep -F 'test -L /usr/local/bin/llama-cli' "$log" >/dev/null
 grep -F 'test -L /usr/local/bin/llama-server' "$log" >/dev/null
 grep -F 'test -s /workspace/.bashrc' "$log" >/dev/null
