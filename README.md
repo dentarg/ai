@@ -229,10 +229,14 @@ Mesa image recommended for krunkit:
 docker run --rm --device /dev/dri --env XDG_RUNTIME_DIR=/tmp --entrypoint vulkaninfo quay.io/slopezpa/fedora-vgpu --summary
 ```
 
-Ubuntu's Mesa packages are not installed in the guest because their Venus
-protocol is incompatible with krunkit's host-side virglrenderer. GPU workloads
-should carry compatible Mesa libraries in their container image, using the
-patched Fedora image above as a base when appropriate.
+GPU workloads do not use the guest's Ubuntu Mesa because its Venus protocol is
+incompatible with krunkit's host-side virglrenderer. They carry compatible Mesa
+libraries in their container image, using the patched Fedora image above as a
+base when appropriate.
+
+Debian sid supplies Chromium without Ubuntu's snap wrapper. Its repository is
+pinned below Ubuntu so installing Chromium cannot upgrade the guest's Mesa and
+other base libraries to Debian versions.
 
 The GPU base includes a pinned llama.cpp build with Vulkan support. The
 `llama-cli` and `llama-server` commands run it in the compatible Fedora image,
@@ -270,9 +274,9 @@ through the VM's configured forwards.
 The GPU base runs a shared, authenticated llama.cpp router as
 `local-code-server.service`. Model instances load on demand and unload when a
 different model is selected, so multiple Pi sessions share one model allocation.
-Qwen has one 8K slot because a second slot exceeds the current Vulkan allocation
-limit. Gemma has one 64K slot. Qwen is the supported default for autonomous
-repository work; use Gemma for bounded generation, review, and diagnosis.
+Qwen has one 16K slot and Gemma has one 64K slot. Qwen is the supported default
+for autonomous repository work; use Gemma for bounded generation, review, and
+diagnosis.
 
 The `local-code` client is available in both the VM and the OCI image. It uses
 Qwen3.8-27B IQ4_XS by default and accepts `qwen38` and `gemma4` aliases:
@@ -305,7 +309,7 @@ can inspect a broken JavaScript function, edit it, and pass its test:
 tools/test_local_code_model.sh
 ```
 
-The model presets use 44 GPU layers for `qwen38` and 20 for `gemma4`. To
+The model presets use 36 GPU layers for `qwen38` and 20 for `gemma4`. To
 override the selected profile, stop the service and run the server directly:
 
 ```shell

@@ -20,6 +20,15 @@ gpg --batch --yes --dearmor \
   /tmp/debian.asc
 echo 'deb [signed-by=/usr/share/keyrings/debian-archive.gpg] http://deb.debian.org/debian sid main' \
   > /etc/apt/sources.list.d/debian-sid.list
+cat > /etc/apt/preferences.d/debian-sid <<'EOF'
+Package: *
+Pin: release o=Debian, a=unstable
+Pin-Priority: 100
+
+Package: chromium chromium-common
+Pin: release o=Debian, a=unstable
+Pin-Priority: 990
+EOF
 apt-get update
 apt-get install -y --no-install-recommends chromium
 rm -rf /var/lib/apt/lists/* /tmp/debian.asc

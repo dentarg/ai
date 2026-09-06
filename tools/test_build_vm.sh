@@ -69,6 +69,12 @@ mkdir -p "$archive_dir"
 for archive in "$captured_archives"/*.tar.gz.b64; do
   base64 -d < "$archive" | tar -xzf - -C "$archive_dir"
 done
+grep -F 'Pin: release o=Debian, a=unstable' \
+  "$archive_dir/install-chromium.sh" >/dev/null
+grep -F 'Pin-Priority: 100' "$archive_dir/install-chromium.sh" >/dev/null
+grep -F 'Package: chromium chromium-common' \
+  "$archive_dir/install-chromium.sh" >/dev/null
+grep -F 'Pin-Priority: 990' "$archive_dir/install-chromium.sh" >/dev/null
 grep -F 'systemctl disable docker.service' "$archive_dir/provision.sh" >/dev/null
 grep -F 'systemctl enable --now docker.socket' "$archive_dir/provision.sh" >/dev/null
 while read -r destination source archive; do

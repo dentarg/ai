@@ -61,6 +61,9 @@ grep -F '"id": "qwen38"' "$models" >/dev/null
 grep -F '"id": "gemma4"' "$models" >/dev/null
 grep -F "\"apiKey\": \"\$LOCAL_CODE_API_KEY\"" "$models" >/dev/null
 jq -e \
+  '.providers["llama-cpp"].models[] | select(.id == "qwen38") | .contextWindow == 16384' \
+  "$models" >/dev/null
+jq -e \
   '.providers["llama-cpp"].models[] | select(.id == "gemma4") | .contextWindow == 65536' \
   "$models" >/dev/null
 jq -e '
@@ -114,7 +117,9 @@ grep -F -- '--host 0.0.0.0 --port 18081 --api-key test-key' "$log" >/dev/null
 grep -F -- '--gpu-layers 18' "$log" >/dev/null
 
 grep -F '[qwen38]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
-grep -F 'n-gpu-layers = 44' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
+qwen_preset=$(sed -n '/^\[qwen38\]/,/^\[gemma4\]/p' "$SCRIPT_DIR/../lima/local-code-models.ini")
+printf '%s\n' "$qwen_preset" | grep -Fx 'n-gpu-layers = 36' >/dev/null
+printf '%s\n' "$qwen_preset" | grep -Fx 'kv-unified-per-slot = 16384' >/dev/null
 grep -F '[gemma4]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
 grep -F 'n-gpu-layers = 20' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
 gemma_preset=$(sed -n '/^\[gemma4\]/,$p' "$SCRIPT_DIR/../lima/local-code-models.ini")
