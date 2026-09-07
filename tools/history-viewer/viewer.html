@@ -524,6 +524,7 @@ const state = {
   searchResults: null,   // null = no active search
   filters: { search: "", branch: "", agent: "" },
   showInternals: false,
+  showIntermediateSteps: false,
   statsRange: "all",     // "all" | "30d" | "7d"
   currentAgent: "claude",
 };
@@ -807,6 +808,9 @@ function renderSessionHeader(s, path) {
       </div>
       <div class="stats-controls">
         <label class="toggle">
+          <input type="checkbox" id="toggle-steps" ${state.showIntermediateSteps?"checked":""}> show intermediate steps
+        </label>
+        <label class="toggle">
           <input type="checkbox" id="toggle-internals" ${state.showInternals?"checked":""}> show internals
         </label>
         <span class="actions">
@@ -820,6 +824,10 @@ function renderSessionHeader(s, path) {
       </div>
     </div>
   `;
+  document.getElementById("toggle-steps").addEventListener("change", (e) => {
+    state.showIntermediateSteps = e.target.checked;
+    drawTranscript();
+  });
   document.getElementById("toggle-internals").addEventListener("change", (e) => {
     state.showInternals = e.target.checked;
     drawTranscript();
@@ -858,7 +866,39 @@ const INTERNAL_TYPES = new Set([
   "attachment", "__parse_error",
 ]);
 
+// Older transcripts have no final-answer marker: keep the last prose response
+// between user prompts. Tool results are user events, but do not start a turn.
+function conversationEvents(events) {
+  const visible = new Map();
+  let answer = null;
+  for (const e of events) {
+    const content = e.message?.content;
+    const text = typeof content === "string"
+      ? [{ type: "text", text: content }]
+      : (content || []).filter(b => b.type === "text" && b.text?.trim());
+    if (e.type === "user" && text.some(b => b.text.trim())) {
+      answer = null;
+      visible.set(e, { ...e, message: { ...e.message, content: text } });
+    } else if (e.type === "assistant") {
+      const prose = text.filter(b => !b.channel || b.channel === "final");
+      const usesTool = (content || []).some(b => b.type === "tool_use");
+      if (usesTool || prose.length) {
+        if (answer) visible.delete(answer);
+        answer = null;
+      }
+      if (!usesTool && prose.length) {
+        answer = e;
+        visible.set(e, { ...e, message: { ...e.message, content: prose } });
+      }
+    } else if (e.type !== "user") {
+      visible.set(e, e);
+    }
+  }
+  return [...visible.values()];
+}
+
 function transcriptHtml(events) {
+  if (!state.showIntermediateSteps) events = conversationEvents(events);
   const parts = [];
   let pending = [];
   const flush = () => {
