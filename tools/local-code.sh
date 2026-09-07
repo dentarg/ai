@@ -101,7 +101,7 @@ cat >"${runtime_dir}/models.json" <<EOF
           "id": "qwen38",
           "name": "Qwen3.8 27B IQ4_XS",
           "reasoning": true,
-          "contextWindow": 16384,
+          "contextWindow": 32768,
           "maxTokens": 4096
         },
         {
