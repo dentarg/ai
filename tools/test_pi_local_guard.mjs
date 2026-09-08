@@ -33,21 +33,21 @@ function harness(modelId = "gemma4") {
 	const test = harness();
 	const result = await test.emit("before_agent_start", { systemPrompt: "base" });
 	assert.match(result.systemPrompt, /Never run recursive directory listings/);
-	assert.match(result.systemPrompt, /six inspection calls/);
+	assert.match(result.systemPrompt, /locate its application entry point/);
 }
 
 for (const input of [
 	{ path: "README.md" },
 	{ path: "README.md", limit: 201 },
 ]) {
-	const test = harness("qwen38");
+	const test = harness("qwen3coder");
 	const result = await test.emit("tool_call", { toolName: "read", input });
-	assert.equal(result.block, true);
-	assert.match(result.reason, /at most 200 lines/);
+	assert.equal(result, undefined);
+	assert.equal(input.limit, 200);
 }
 
 {
-	const test = harness("qwen38");
+	const test = harness("qwen3coder");
 	const result = await test.emit("tool_call", {
 		toolName: "read",
 		input: { path: "README.md", limit: 200 },
@@ -82,51 +82,8 @@ for (const command of ["ls -R", "ls -laR browser-extensions", "find . -name '*.j
 }
 
 {
-	const test = harness("qwen38");
-	for (let index = 0; index < 6; index += 1) {
-		const result = await test.emit("tool_call", {
-			toolName: "read",
-			input: { path: "README.md", limit: 20 },
-		});
-		assert.equal(result, undefined);
-	}
-	const result = await test.emit("tool_call", {
-		toolName: "read",
-		input: { path: "README.md", limit: 20 },
-	});
-	assert.equal(result.block, true);
-	assert.match(result.reason, /inspection budget/);
-	assert.equal(result.terminate, undefined);
-
-	await test.emit("tool_call", {
-		toolName: "edit",
-		input: { path: "README.md", oldText: "old", newText: "new" },
-	});
-	await test.emit("tool_result", { toolName: "edit", isError: true });
-	assert.equal((await test.emit("tool_call", {
-		toolName: "read",
-		input: { path: "README.md", limit: 20 },
-	})).block, true);
-
-	await test.emit("tool_call", {
-		toolName: "edit",
-		input: { path: "README.md", oldText: "old", newText: "new" },
-	});
-	await test.emit("tool_result", { toolName: "edit", isError: false });
-	assert.equal(await test.emit("tool_call", {
-		toolName: "read",
-		input: { path: "README.md", limit: 20 },
-	}), undefined);
-}
-
-{
-	const test = harness("qwen38");
-	await test.emit("tool_call", {
-		toolName: "edit",
-		input: { path: "README.md", oldText: "old", newText: "new" },
-	});
-	await test.emit("tool_result", { toolName: "edit", isError: false });
-	for (let index = 1; index < 16; index += 1) {
+	const test = harness("qwen3coder");
+	for (let index = 0; index < 24; index += 1) {
 		assert.equal(await test.emit("tool_call", {
 			toolName: "read",
 			input: { path: "README.md", limit: 20 },
@@ -141,7 +98,7 @@ for (const command of ["ls -R", "ls -laR browser-extensions", "find . -name '*.j
 }
 
 {
-	const test = harness("qwen38");
+	const test = harness("qwen3coder");
 	const result = await test.emit("session_before_compact", {
 		preparation: {
 			firstKeptEntryId: "keep-this",
@@ -226,7 +183,7 @@ for (const command of ["ls -R", "ls -laR browser-extensions", "find . -name '*.j
 }
 
 {
-	const test = harness("qwen38");
+	const test = harness("qwen3coder");
 	const payload = { messages: [] };
 	const result = await test.emit("before_provider_request", { payload });
 	assert.equal(result, undefined);

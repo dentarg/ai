@@ -450,16 +450,17 @@ through the VM's configured forwards.
 The GPU base runs a shared, authenticated llama.cpp router as
 `local-code-server.service`. Model instances load on demand and unload when a
 different model is selected, so multiple Pi sessions share one model allocation.
-Qwen has one 32K slot and Gemma has one 64K slot. Qwen is the supported default
-for autonomous repository work; use Gemma for bounded generation, review, and
-diagnosis.
+Qwen3-Coder has one 32K slot and Gemma has one 64K slot. Qwen3-Coder is the
+default for focused repository work; use Gemma for bounded generation, review,
+and diagnosis.
 
 The `local-code` client is available in both the VM and the OCI image. It uses
-Qwen3.8-27B IQ4_XS by default and accepts `qwen38` and `gemma4` aliases:
+Qwen3-Coder 30B-A3B Q5_K_M by default and accepts `qwen3coder` and `gemma4`
+aliases:
 
 ```shell
-curl -L -o /share/models/Qwen3.8-27B-UD-IQ4_XS.gguf \
-  https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-IQ4_XS.gguf
+curl -L -o /share/models/Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf \
+  https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF/resolve/b17cb02dd882d5b6ab62fc777ad2995f19668350/Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf
 local-code
 curl -L -o /share/models/gemma-4-26B_q4_0-it.gguf \
   https://huggingface.co/google/gemma-4-26B-A4B-it-qat-q4_0-gguf/resolve/main/gemma-4-26B_q4_0-it.gguf
@@ -474,8 +475,8 @@ containers in the GPU VM can reach the same server at `127.0.0.1:8080`; set
 The client reserves 4K tokens for each response. When compacting, it retains the
 newest 2K tokens for Qwen and 4K for Gemma. A Pi extension limits reads to 200
 lines, blocks unbounded recursive listings, and stops after three consecutive
-tool errors. Qwen must start editing within six inspection calls and stops at
-16 total calls; Gemma stops at 24 calls. Qwen compaction creates a small local
+tool errors. Read limits are clamped to 200 lines, and both models stop at 24
+total calls. Qwen compaction creates a small local
 checkpoint instead of spending model tokens generating a summary. Gemma uses
 Google's pinned canonical chat template and preserves thinking across tool-call
 turns. Pi sessions persist under `/history/pi` and appear in the history viewer.
@@ -487,7 +488,7 @@ can inspect a broken JavaScript function, edit it, and pass its test:
 tools/test_local_code_model.sh
 ```
 
-The model presets use 36 GPU layers for `qwen38` and 20 for `gemma4`. To
+The model presets use 36 GPU layers for `qwen3coder` and 20 for `gemma4`. To
 override the selected profile, stop the service and run the server directly:
 
 ```shell

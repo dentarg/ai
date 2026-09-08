@@ -49,4 +49,4 @@ EOF
 )
 
 grep -F 'return left + right;' "${project}/calculator.js" >/dev/null
-echo 'at=info msg="local coding model smoke test passed" model="qwen38"'
+echo 'at=info msg="local coding model smoke test passed" model="qwen3coder"'

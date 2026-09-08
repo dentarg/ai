@@ -4,14 +4,14 @@ set -eu
 
 usage() {
   cat <<EOF
-Usage: local-code [--model qwen38|gemma4] [pi options] [prompt]
+Usage: local-code [--model qwen3coder|gemma4] [pi options] [prompt]
 
 Connect Pi to the shared local llama.cpp server. The --model option must come
-before Pi's options. qwen38 is the default.
+before Pi's options. qwen3coder is the default.
 EOF
 }
 
-model=qwen38
+model=qwen3coder
 case "${1:-}" in
   --model)
     shift
@@ -33,7 +33,7 @@ case "${1:-}" in
 esac
 
 case "$model" in
-  qwen38) keep_recent_tokens=2048 ;;
+  qwen3coder) keep_recent_tokens=2048 ;;
   gemma4) keep_recent_tokens=4096 ;;
   *)
     echo "at=fatal msg=\"unknown local model\" model=\"$model\"" >&2
@@ -98,9 +98,9 @@ cat >"${runtime_dir}/models.json" <<EOF
       },
       "models": [
         {
-          "id": "qwen38",
-          "name": "Qwen3.8 27B IQ4_XS",
-          "reasoning": true,
+          "id": "qwen3coder",
+          "name": "Qwen3-Coder 30B-A3B Q5_K_M",
+          "reasoning": false,
           "contextWindow": 32768,
           "maxTokens": 4096
         },

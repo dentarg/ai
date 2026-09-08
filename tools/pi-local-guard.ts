@@ -1,21 +1,20 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const MAX_GEMMA_TOOL_CALLS = 24;
-const MAX_QWEN_TOOL_CALLS = 16;
-const MAX_QWEN_INSPECTION_CALLS = 6;
+const MAX_CODER_TOOL_CALLS = 24;
 const MAX_CONSECUTIVE_TOOL_ERRORS = 3;
 const MAX_READ_LINES = 200;
-const INSPECTION_TOOLS = new Set(["bash", "find", "grep", "ls", "read"]);
 
 const TOOL_GUIDANCE = `## Local model guardrails
 
 - Never run recursive directory listings. Use \`rg --files\` with explicit
   exclusions such as \`-g '!node_modules'\` and inspect only relevant paths.
 - Do not use \`find\` without either \`-maxdepth\` or an explicit pruning rule.
+- For a named host or route, first locate its application entry point with a
+  targeted \`rg -n\` search before choosing implementation files.
 - Copy paths exactly from tool output. After a tool error, inspect the error and
   change approach instead of retrying variants of the same call.
-- Read at most 200 lines at a time. Begin editing within six inspection calls;
-  do not exhaustively map the repository before making the first change.
+- Read at most 200 lines at a time. Omitted or larger read limits are clamped.
 - Keep the task bounded. Make the smallest relevant change, run its focused
   test, and report completion.`;
 
@@ -71,14 +70,10 @@ function isRecursiveListing(command: string): boolean {
 
 export default function (pi: ExtensionAPI) {
 	let consecutiveToolErrors = 0;
-	let inspectionCalls = 0;
-	let qwenModifiedFiles = false;
 	let toolCalls = 0;
 
 	pi.on("agent_start", () => {
 		consecutiveToolErrors = 0;
-		inspectionCalls = 0;
-		qwenModifiedFiles = false;
 		toolCalls = 0;
 	});
 
@@ -101,7 +96,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_before_compact", (event, ctx) => {
-		if (ctx.model?.id !== "qwen38") return;
+		if (ctx.model?.id !== "qwen3coder") return;
 
 		const { preparation } = event;
 		const userMessages = event.branchEntries
@@ -165,8 +160,8 @@ Modified: ${truncate(formatPaths(modifiedFiles), 800)}`;
 			};
 		}
 
-		const toolLimit = ctx.model?.id === "qwen38"
-			? MAX_QWEN_TOOL_CALLS
+		const toolLimit = ctx.model?.id === "qwen3coder"
+			? MAX_CODER_TOOL_CALLS
 			: ctx.model?.id === "gemma4" ? MAX_GEMMA_TOOL_CALLS : undefined;
 		if (toolLimit !== undefined && toolCalls >= toolLimit) {
 			return {
@@ -177,14 +172,10 @@ Modified: ${truncate(formatPaths(modifiedFiles), 800)}`;
 		}
 
 		toolCalls += 1;
-		if (event.toolName === "edit" || event.toolName === "write") return;
 
 		if (event.toolName === "read" &&
 			(typeof event.input.limit !== "number" || event.input.limit > MAX_READ_LINES)) {
-			return {
-				block: true,
-				reason: "Read blocked; specify a limit of at most 200 lines.",
-			};
+			event.input.limit = MAX_READ_LINES;
 		}
 
 		if (event.toolName === "bash") {
@@ -196,22 +187,9 @@ Modified: ${truncate(formatPaths(modifiedFiles), 800)}`;
 				};
 			}
 		}
-
-		if (ctx.model?.id === "qwen38" && !qwenModifiedFiles && INSPECTION_TOOLS.has(event.toolName)) {
-			if (inspectionCalls >= MAX_QWEN_INSPECTION_CALLS) {
-				return {
-					block: true,
-					reason: "Qwen inspection budget exhausted; make the first edit before inspecting more.",
-				};
-			}
-			inspectionCalls += 1;
-		}
 	});
 
 	pi.on("tool_result", (event) => {
 		consecutiveToolErrors = event.isError ? consecutiveToolErrors + 1 : 0;
-		if (!event.isError && (event.toolName === "edit" || event.toolName === "write")) {
-			qwenModifiedFiles = true;
-		}
 	});
 }

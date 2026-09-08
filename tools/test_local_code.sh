@@ -60,11 +60,15 @@ grep -F 'key=<local> print=<1>' "$log" >/dev/null
 grep -F 'args=<--offline --provider llama-cpp --model gemma4' "$log" >/dev/null
 grep -F -- '--session-dir /history/pi' "$log" >/dev/null
 grep -F -- "--extension $extension --extension $guard_extension --print create example.rb>" "$log" >/dev/null
-grep -F '"id": "qwen38"' "$models" >/dev/null
+grep -F '"id": "qwen3coder"' "$models" >/dev/null
 grep -F '"id": "gemma4"' "$models" >/dev/null
 grep -F "\"apiKey\": \"\$LOCAL_CODE_API_KEY\"" "$models" >/dev/null
 jq -e \
-  '.providers["llama-cpp"].models[] | select(.id == "qwen38") | .contextWindow == 32768' \
+  '.providers["llama-cpp"].models[] |
+  select(.id == "qwen3coder") |
+  .name == "Qwen3-Coder 30B-A3B Q5_K_M" and
+  .contextWindow == 32768 and
+  .reasoning == false' \
   "$models" >/dev/null
 jq -e \
   '.providers["llama-cpp"].models[] | select(.id == "gemma4") | .contextWindow == 65536' \
@@ -93,7 +97,7 @@ LOCAL_CODE_PORT=18080 \
 PATH="${fake_bin}:${PATH}" \
   "$SCRIPT_DIR/local-code.sh" --print 'create example.rb'
 
-grep -F 'args=<--offline --provider llama-cpp --model qwen38' "$log" >/dev/null
+grep -F 'args=<--offline --provider llama-cpp --model qwen3coder' "$log" >/dev/null
 jq -e \
   '.compaction == {"enabled": true, "reserveTokens": 4096, "keepRecentTokens": 2048}' \
   "$qwen_settings" >/dev/null
@@ -119,10 +123,18 @@ grep -F -- "--models-preset $presets --models-max 1" "$log" >/dev/null
 grep -F -- '--host 0.0.0.0 --port 18081 --api-key test-key' "$log" >/dev/null
 grep -F -- '--gpu-layers 18' "$log" >/dev/null
 
-grep -F '[qwen38]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
-qwen_preset=$(sed -n '/^\[qwen38\]/,/^\[gemma4\]/p' "$SCRIPT_DIR/../lima/local-code-models.ini")
+grep -F '[qwen3coder]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
+qwen_preset=$(sed -n '/^\[qwen3coder\]/,/^\[gemma4\]/p' "$SCRIPT_DIR/../lima/local-code-models.ini")
 printf '%s\n' "$qwen_preset" | grep -Fx 'n-gpu-layers = 36' >/dev/null
 printf '%s\n' "$qwen_preset" | grep -Fx 'kv-unified-per-slot = 32768' >/dev/null
+printf '%s\n' "$qwen_preset" | \
+  grep -Fx 'model = /share/models/Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf' >/dev/null
+printf '%s\n' "$qwen_preset" | \
+  grep -Fx 'chat-template-file = /usr/local/share/ai/qwen-chat-template.jinja' >/dev/null
+if printf '%s\n' "$qwen_preset" | grep -q '^reasoning-'; then
+  echo 'at=fatal msg="Qwen3-Coder preset enables unsupported reasoning"' >&2
+  exit 1
+fi
 grep -F '[gemma4]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
 grep -F 'n-gpu-layers = 20' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
 gemma_preset=$(sed -n '/^\[gemma4\]/,$p' "$SCRIPT_DIR/../lima/local-code-models.ini")
@@ -138,6 +150,9 @@ grep -Fx 'pi-local-guard.ts tools/pi-local-guard.ts project' \
   "$SCRIPT_DIR/../lima/assets/manifest.txt" >/dev/null
 grep -Fx 'gemma-chat-template-version versions/gemma-chat-template project' \
   "$SCRIPT_DIR/../lima/assets/manifest.txt" >/dev/null
+grep -F 'Qwen/Qwen3-Coder-30B-A3B-Instruct/resolve/' \
+  "$SCRIPT_DIR/../lima/provision.sh" >/dev/null
+grep -Eq '^[0-9a-f]{40}$' "$SCRIPT_DIR/../versions/qwen-chat-template"
 grep -F 'google/gemma-4-26B-A4B-it/resolve/' \
   "$SCRIPT_DIR/../lima/provision.sh" >/dev/null
 grep -Eq '^[0-9a-f]{40}$' "$SCRIPT_DIR/../versions/gemma-chat-template"
