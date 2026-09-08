@@ -837,7 +837,7 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
         sig = (st.st_size, st.st_mtime_ns)
         cached = cache.get(rel)
         if cached and cached["sig"] == sig:
-            sessions.append(cached["entry"])
+            sessions.append({**cached["entry"], "profile": meta.get("profile", "")})
             return
         try:
             summary = summarizer(jsonl)
@@ -851,6 +851,7 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
             "runStartedAt": meta["timestamp"],
             "project": project,
             **summary,
+            "profile": meta.get("profile", ""),
         }
         if not entry["project"]:
             entry["project"] = entry.get("repo") or jsonl.parent.name
@@ -865,6 +866,14 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
                 meta = parse_run_dir(year_dir.name, month_dir.name, run_dir.name)
                 if not meta:
                     continue
+                try:
+                    meta["profile"] = (run_dir / ".profile").read_text(
+                        encoding="utf-8", errors="replace").strip()
+                except FileNotFoundError:
+                    meta["profile"] = ""
+                except OSError as e:
+                    log("warn", op="read_profile", path=str(run_dir), err=repr(e))
+                    meta["profile"] = ""
                 projects = run_dir / "projects"
                 codex_sessions = run_dir / "sessions"
                 if projects.is_dir():

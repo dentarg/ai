@@ -526,6 +526,7 @@ const state = {
   showInternals: false,
   showIntermediateSteps: false,
   statsRange: "all",     // "all" | "30d" | "7d"
+  statsProfile: null,    // null = all profiles; "" = no saved profile
   currentAgent: "claude",
 };
 
@@ -1615,7 +1616,7 @@ function renderModelLegend(data, limit = 8) {
 
 function renderTokenChartBlock() {
   const range = state.statsRange;
-  const data = buildTokenChartData(state.sessions, range);
+  const data = buildTokenChartData(statsSessions(), range);
   const tab = (key, label) =>
     `<button data-range="${key}" class="${range===key?"active":""}">${label}</button>`;
   return {
@@ -1653,8 +1654,15 @@ function hookRangeTabs(root) {
 }
 
 // ---------- stats page ----------
+function statsSessions() {
+  return state.sessions.filter(s => state.statsProfile === null ||
+    (s.profile || "") === state.statsProfile);
+}
+
 function renderStatsPage() {
-  const ss = state.sessions;
+  const ss = statsSessions();
+  const profiles = [...new Set(state.sessions.filter(s => AGENTS.includes(s.tool))
+    .map(s => s.profile || ""))].sort();
   let totals = { sessions: 0, events: 0, tokens: 0, cost: 0 };
   const byDay = {}, byWeek = {}, byMonth = {}, byRepo = {}, byModel = {};
   const bump = (bucket, key, label, t, cost) => {
@@ -1687,6 +1695,13 @@ function renderStatsPage() {
   const chartBlock = renderTokenChartBlock();
   contentEl.innerHTML = `
     <div class="stats">
+      <div class="filters">
+        <label for="stats-profile">Profile</label>
+        <select id="stats-profile">
+          <option value="" ${state.statsProfile === null ? "selected" : ""}>All profiles</option>
+          ${profiles.map((profile, index) => `<option value="${index}" ${state.statsProfile === profile ? "selected" : ""}>${esc(profile || "Default / unspecified")}</option>`).join("")}
+        </select>
+      </div>
       <div class="stats-totals">
         <b>${totals.sessions}</b> sessions · <b>${fmtBytes(totals.events)}</b> events ·
         <b>${fmtTokens(totals.tokens)}</b> tokens · <b>${fmtCost(totals.cost)}</b>
@@ -1707,6 +1722,10 @@ function renderStatsPage() {
       <h2 id="stats-model">By model</h2> ${table(Object.values(byModel).sort(sortByCost),        cols("model"))}
     </div>
   `;
+  document.getElementById("stats-profile").addEventListener("change", e => {
+    state.statsProfile = e.target.value === "" ? null : profiles[Number(e.target.value)];
+    renderStatsPage();
+  });
   hookRangeTabs(contentEl);
   hookChartHover(contentEl, chartBlock.data);
 }

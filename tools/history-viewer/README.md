@@ -28,6 +28,11 @@ Flags: `--history PATH` (default `/history`), `--port N` (default 8765), `--host
 - Session titles skip generated context and slash-command wrappers, picking the first real user prompt; Codex sessions use the host working-directory name
 - Stats dashboard: tokens-per-day chart (line per model, with All time / Last 30 days / Last 7 days tabs and a per-model legend showing share, In/Out/cache tokens, and cost), plus breakdown tables by day / week / month / repo / model
 
+Stats default to **All profiles**. Use the Profile selector to scope totals,
+the chart, and every breakdown table to a saved account profile. Profiles come
+from each archived Claude or Codex run's `.profile` file; sessions without one
+(including Pi sessions) appear under **Default / unspecified**.
+
 Cost is estimated from published standard per-model pricing:
 [Anthropic](https://platform.claude.com/docs/en/about-claude/pricing) for Claude,
 [OpenAI](https://developers.openai.com/api/docs/pricing) for GPT models.
@@ -45,6 +50,8 @@ Pure Python stdlib + a single HTML file — no dependencies, no build step. The 
     cd tools/history-viewer
     python3 -m unittest test_viewer -v
     node --test test_transcript.cjs
+    node --test test_profiles.cjs  # requires chromium on PATH
 
-The Node test checks default transcript filtering and both detail toggles.
+The Node tests check profile-scoped stats, default transcript filtering, and both detail toggles.
+The browser test verifies the rendered profile selector, including switching back to all profiles.
 The Python tests cover Codex and Pi parsing and transcript normalisation, plus the pastehtml.dev create/update/fallback logic (stdlib only, no fixtures on disk).

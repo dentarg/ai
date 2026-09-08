@@ -28,6 +28,29 @@ def write_pi_session(events: list[dict]) -> Path:
     return write_rollout(events)
 
 
+class ManifestProfiles(unittest.TestCase):
+    def test_profiles_refresh_even_when_transcripts_are_cached(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for tool, relative in (("claude", "projects/app/session.jsonl"),
+                                   ("codex", "sessions/rollout-session.jsonl")):
+                run = root / "2026/09_Sep" / f"08_Tue_10-00_{tool}"
+                session = run / relative
+                session.parent.mkdir(parents=True)
+                session.write_text("", encoding="utf-8")
+                profile = run / ".profile"
+                profile.write_text("work\n", encoding="utf-8")
+            cache = {}
+            self.assertEqual([s["profile"] for s in viewer.build_manifest(root, cache)],
+                             ["work", "work"])
+            profile.write_text("personal\n", encoding="utf-8")
+            self.assertEqual({s["profile"] for s in viewer.build_manifest(root, cache)},
+                             {"work", "personal"})
+            profile.unlink()
+            self.assertEqual({s["profile"] for s in viewer.build_manifest(root, cache)},
+                             {"work", ""})
+
+
 class ModelPricing(unittest.TestCase):
     def test_current_models_include_cached_token_costs(self):
         codex_usage = {"input_tokens": 1000, "cached_input_tokens": 400,
