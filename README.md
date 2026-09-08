@@ -418,12 +418,21 @@ The GPU base includes a pinned llama.cpp build with Vulkan support. The
 `llama-cli` and `llama-server` commands run it in the compatible Fedora image,
 pass through `/dev/dri`, and mount both the current directory and `/share`.
 Models are deliberately not baked into the ephemeral VM; keep GGUF files under
-`/share` so they survive VM rebuilds. For example:
+`/share` so they survive VM rebuilds. `model-download` maps the models used by
+this project to pinned downloads, resumes partial files, and verifies their
+sizes. Available aliases are:
+
+| Alias | Model |
+| --- | --- |
+| `qwen3coder` | Qwen3-Coder-Next 80B-A3B Q5_K_M |
+| `gemma4` | Gemma 4 26B-A4B Q4_0 |
+| `qwen36` | Qwen3.6 27B Q5_K_M |
+| `qwen25tiny` | Qwen2.5 0.5B Instruct Q4_K_M |
+
+For example:
 
 ```shell
-mkdir -p /share/models
-curl -L -o /share/models/qwen2.5-0.5b-instruct-q4_k_m.gguf \
-  https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf
+model-download qwen25tiny /share/models
 llama-cli \
   --model /share/models/qwen2.5-0.5b-instruct-q4_k_m.gguf \
   --gpu-layers 99
@@ -435,6 +444,7 @@ paravirtualized Apple GPU. Qwen3.6-27B Q5_K_M runs reliably with 36 layers
 offloaded, CPU-side KV cache, and reduced batch sizes:
 
 ```shell
+model-download qwen36 /share/models
 GGML_VK_DISABLE_F16=1 llama-cli \
   --model /share/models/Qwen3.6-27B-Q5_K_M.gguf \
   --gpu-layers 36 \
@@ -450,20 +460,18 @@ through the VM's configured forwards.
 The GPU base runs a shared, authenticated llama.cpp router as
 `local-code-server.service`. Model instances load on demand and unload when a
 different model is selected, so multiple Pi sessions share one model allocation.
-Qwen3-Coder has one 32K slot and Gemma has one 64K slot. Qwen3-Coder is the
-default for focused repository work; use Gemma for bounded generation, review,
+Qwen3-Coder-Next has one 40K slot and Gemma has one 64K slot. Qwen3-Coder-Next
+is the default for repository work; use Gemma for bounded generation, review,
 and diagnosis.
 
 The `local-code` client is available in both the VM and the OCI image. It uses
-Qwen3-Coder 30B-A3B Q5_K_M by default and accepts `qwen3coder` and `gemma4`
-aliases:
+Qwen3-Coder-Next 80B-A3B Q5_K_M by default and accepts `qwen3coder` and
+`gemma4` aliases. Download either model before first use:
 
 ```shell
-curl -L -o /share/models/Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf \
-  https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF/resolve/b17cb02dd882d5b6ab62fc777ad2995f19668350/Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf
+model-download qwen3coder /share/models
 local-code
-curl -L -o /share/models/gemma-4-26B_q4_0-it.gguf \
-  https://huggingface.co/google/gemma-4-26B-A4B-it-qat-q4_0-gguf/resolve/main/gemma-4-26B_q4_0-it.gguf
+model-download gemma4 /share/models
 local-code --model gemma4
 ```
 
@@ -488,8 +496,9 @@ can inspect a broken JavaScript function, edit it, and pass its test:
 tools/test_local_code_model.sh
 ```
 
-The model presets use 36 GPU layers for `qwen3coder` and 20 for `gemma4`. To
-override the selected profile, stop the service and run the server directly:
+The model presets fully offload `qwen3coder` and use 20 GPU layers for
+`gemma4`. To override the selected profile, stop the service and run the server
+directly:
 
 ```shell
 sudo systemctl stop local-code-server
@@ -499,7 +508,8 @@ LOCAL_CODE_GPU_LAYERS=18 local-code-server
 The primary guest port still comes from `PORT` (1337 by default), but the VM
 launcher chooses a free loopback host port and prints it when the VM is ready.
 Set `AI_VM_HOST_PORT` to request a fixed primary host port. Explicit `--ports`
-mappings remain fixed. Resource defaults for `build_vm` can be changed with
+mappings remain fixed. GPU builds default to 24 CPUs and 80 GiB of memory;
+other builds default to 4 CPUs and 8 GiB. These defaults can be changed with
 `AI_VM_CPUS`, `AI_VM_MEMORY` (GiB), and `AI_VM_DISK` (GiB); `AI_VM_BASE`
 changes the base instance name for both building and launching.
 

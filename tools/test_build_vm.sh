@@ -121,6 +121,7 @@ CAPTURED_TEMPLATE="$captured_template" CAPTURED_ARCHIVES="$captured_archives" \
   "$REPO_DIR/build_vm" --gpu >/dev/null
 grep -F '<info>' "$log" >/dev/null
 grep -F '<create><--tty=false><--vm-type><krunkit><--name><ai-base-gpu>' "$log" >/dev/null
+grep -F '<--cpus><24><--memory><80><--disk><100>' "$log" >/dev/null
 grep -F '<start><--timeout><60m><ai-base-gpu>' "$log" >/dev/null
 grep -F '<stop><ai-base-gpu>' "$log" >/dev/null
 grep -F '<protect><ai-base-gpu>' "$log" >/dev/null
@@ -131,6 +132,7 @@ grep -F 'command -v tailcat' "$log" >/dev/null
 grep -F 'command -v terraform' "$log" >/dev/null
 grep -F 'command -v toxiproxy-server' "$log" >/dev/null
 grep -F 'command -v toxiproxy-cli' "$log" >/dev/null
+grep -F 'command -v model-download' "$log" >/dev/null
 grep -F 'command -v llama-cli' "$log" >/dev/null
 grep -F 'command -v llama-server' "$log" >/dev/null
 grep -F 'llama-cli --list-devices' "$log" >/dev/null
@@ -142,6 +144,7 @@ grep -F 'test -L /usr/local/bin/llama-server' "$log" >/dev/null
 grep -F 'test -s /workspace/.bashrc' "$log" >/dev/null
 grep -F 'test -s /usr/local/bin/cx' "$log" >/dev/null
 grep -F 'test -s /usr/local/bin/x' "$log" >/dev/null
+grep -F 'test -x /usr/local/bin/model-download' "$log" >/dev/null
 grep -F 'alias x=exit' "$log" >/dev/null
 grep -F 'swapon --show=NAME --noheadings' "$log" >/dev/null
 grep -F 'systemctl is-enabled --quiet docker.socket' "$log" >/dev/null
@@ -155,5 +158,12 @@ if [[ $(grep -Fc '<stop><ai-base-gpu>' "$log") -ne 2 ]]; then
   echo 'at=fatal msg="build_vm did not stop the GPU base after persistence verification"' >&2
   exit 1
 fi
+
+: > "$log"
+AI_VM_CPUS=20 AI_VM_MEMORY=72 \
+  CAPTURED_TEMPLATE="$captured_template" CAPTURED_ARCHIVES="$captured_archives" \
+  LIMACTL_LOG="$log" PATH="${fake_bin}:${PATH}" \
+  "$REPO_DIR/build_vm" --gpu >/dev/null
+grep -F '<--cpus><20><--memory><72><--disk><100>' "$log" >/dev/null
 
 echo 'at=info msg="build_vm tests passed"'

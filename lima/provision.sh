@@ -64,7 +64,7 @@ if [[ -c /dev/dri/renderD128 ]]; then
   systemctl enable local-code-server.service
   qwen_template_version=$(cat /tmp/ai-build/qwen-chat-template-version)
   curl --fail --location --silent --show-error \
-    "https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct/resolve/${qwen_template_version}/chat_template.jinja" \
+    "https://huggingface.co/Qwen/Qwen3-Coder-Next/resolve/${qwen_template_version}/chat_template.jinja" \
     --output /tmp/qwen-chat-template.jinja
   install -D -m 644 /tmp/qwen-chat-template.jinja \
     /usr/local/share/ai/qwen-chat-template.jinja
@@ -75,6 +75,9 @@ if [[ -c /dev/dri/renderD128 ]]; then
   install -D -m 644 /tmp/gemma-chat-template.jinja \
     /usr/local/share/ai/gemma-chat-template.jinja
 fi
+
+install -D -m 755 /tmp/ai-build/model-download \
+  /usr/local/bin/model-download
 
 bash /tmp/ai-build/install-chromium.sh /tmp/ai-build/chromium-packages.txt
 

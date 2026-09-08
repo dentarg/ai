@@ -12,8 +12,8 @@ done
 # shellcheck source=tools/build-common.sh
 . "${REPO_DIR}/tools/build-common.sh"
 
-VM_CPUS=${AI_VM_CPUS:-4}
-VM_MEMORY=${AI_VM_MEMORY:-8}
+VM_CPUS=${AI_VM_CPUS:-}
+VM_MEMORY=${AI_VM_MEMORY:-}
 VM_DISK=${AI_VM_DISK:-100}
 VM_BUILD_TIMEOUT=${AI_VM_BUILD_TIMEOUT:-60m}
 ASSET_MANIFEST=${REPO_DIR}/lima/assets/manifest.txt
@@ -49,6 +49,14 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+if [ "$GPU" -eq 1 ]; then
+  VM_CPUS=${VM_CPUS:-24}
+  VM_MEMORY=${VM_MEMORY:-80}
+else
+  VM_CPUS=${VM_CPUS:-4}
+  VM_MEMORY=${VM_MEMORY:-8}
+fi
 
 if [ "$GPU" -eq 1 ]; then
   BASE_NAME=${AI_VM_BASE:-ai-base-gpu}
@@ -169,6 +177,7 @@ limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" \
     command -v terraform
     command -v toxiproxy-server
     command -v toxiproxy-cli
+    command -v model-download
     test -s /workspace/.bashrc
     test -s /usr/local/bin/cx
     test -s /usr/local/bin/x
@@ -191,6 +200,7 @@ limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" bash -lc '
   test -s /workspace/.bashrc
   test -s /usr/local/bin/cx
   test -s /usr/local/bin/x
+  test -x /usr/local/bin/model-download
   grep -F "alias x=exit" /workspace/.bashrc >/dev/null
   swapon --show=NAME --noheadings | grep -Fx /dev/zram0 >/dev/null
   systemctl is-enabled --quiet docker.socket

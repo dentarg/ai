@@ -99,10 +99,16 @@ cat >"${runtime_dir}/models.json" <<EOF
       "models": [
         {
           "id": "qwen3coder",
-          "name": "Qwen3-Coder 30B-A3B Q5_K_M",
+          "name": "Qwen3-Coder-Next 80B-A3B Q5_K_M",
           "reasoning": false,
-          "contextWindow": 32768,
-          "maxTokens": 4096
+          "contextWindow": 40960,
+          "maxTokens": 4096,
+          "samplingParams": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "top_k": 40,
+            "min_p": 0
+          }
         },
         {
           "id": "gemma4",

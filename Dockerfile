@@ -52,6 +52,7 @@ FROM workspace AS runtime
 # Pi can use the shared llama.cpp server running in a GPU VM. The duration
 # extension keeps its per-task timing consistent in containers and VMs.
 COPY --chmod=755 tools/local-code.sh /usr/local/bin/local-code
+COPY --chmod=755 tools/model-download /usr/local/bin/model-download
 COPY --chmod=644 tools/pi-duration.ts /usr/local/share/ai/pi-duration.ts
 
 COPY inside_deps/install-utils.sh \

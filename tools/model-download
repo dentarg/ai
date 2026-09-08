@@ -1,0 +1,135 @@
+#!/bin/sh
+
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage: model-download --list
+       model-download ALIAS DIRECTORY
+
+Download a known GGUF model into DIRECTORY. Partial downloads are resumed.
+EOF
+}
+
+list_models() {
+  cat <<'EOF'
+qwen3coder  Qwen3-Coder-Next 80B-A3B Q5_K_M
+gemma4      Gemma 4 26B-A4B Q4_0
+qwen36      Qwen3.6 27B Q5_K_M
+qwen25tiny  Qwen2.5 0.5B Instruct Q4_K_M
+EOF
+}
+
+file_size() {
+  wc -c < "$1" | tr -d '[:space:]'
+}
+
+download_file() {
+  remote_path=$1
+  relative_path=$2
+  expected_size=$3
+  destination=${download_directory}/${relative_path}
+  partial=${destination}.part
+  url=https://huggingface.co/${model_repository}/resolve/${model_revision}/${remote_path}
+
+  mkdir -p "$(dirname "$destination")"
+
+  if [ -f "$destination" ] &&
+      [ "$(file_size "$destination")" = "$expected_size" ]; then
+    printf 'Already downloaded: %s\n' "$destination"
+    return
+  fi
+
+  if [ -f "$partial" ] &&
+      [ "$(file_size "$partial")" = "$expected_size" ]; then
+    mv -f "$partial" "$destination"
+    printf 'Downloaded: %s\n' "$destination"
+    return
+  fi
+
+  printf 'Downloading: %s\n' "$destination"
+  set -- curl \
+    --fail \
+    --location \
+    --retry 3 \
+    --retry-delay 2 \
+    --continue-at -
+  if [ -n "${HF_TOKEN:-}" ]; then
+    set -- "$@" --header "Authorization: Bearer ${HF_TOKEN}"
+  fi
+  "$@" --output "$partial" "$url"
+
+  actual_size=$(file_size "$partial")
+  if [ "$actual_size" != "$expected_size" ]; then
+    printf 'model-download: size mismatch for %s: expected %s bytes, got %s\n' \
+      "$relative_path" "$expected_size" "$actual_size" >&2
+    exit 1
+  fi
+
+  mv -f "$partial" "$destination"
+  printf 'Downloaded: %s\n' "$destination"
+}
+
+case "${1:-}" in
+  --list)
+    [ "$#" -eq 1 ] || {
+      usage >&2
+      exit 2
+    }
+    list_models
+    exit
+    ;;
+  -h|--help)
+    usage
+    exit
+    ;;
+esac
+
+if [ "$#" -ne 2 ]; then
+  usage >&2
+  exit 2
+fi
+
+model_alias=$1
+download_directory=${2%/}
+[ -n "$download_directory" ] || download_directory=/
+
+case "$model_alias" in
+  qwen3coder)
+    model_repository=Qwen/Qwen3-Coder-Next-GGUF
+    model_revision=b82fb7382639d97b38fa7672e526c760c2fb358e
+    model_files=$(cat <<'EOF'
+Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00001-of-00004.gguf|Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00001-of-00004.gguf|17813589920
+Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00002-of-00004.gguf|Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00002-of-00004.gguf|17479501728
+Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00003-of-00004.gguf|Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00003-of-00004.gguf|17226413600
+Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00004-of-00004.gguf|Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00004-of-00004.gguf|4190867520
+EOF
+    )
+    ;;
+  gemma4)
+    model_repository=google/gemma-4-26B-A4B-it-qat-q4_0-gguf
+    model_revision=d1c082be9cf3c8a514acf63b8761f4b41935842e
+    model_files='gemma-4-26B_q4_0-it.gguf|gemma-4-26B_q4_0-it.gguf|14439363584'
+    ;;
+  qwen36)
+    model_repository=unsloth/Qwen3.6-27B-GGUF
+    model_revision=82d411acf4a06cfb8d9b073a5211bf410bfc29bf
+    model_files='Qwen3.6-27B-Q5_K_M.gguf|Qwen3.6-27B-Q5_K_M.gguf|19509790944'
+    ;;
+  qwen25tiny)
+    model_repository=Qwen/Qwen2.5-0.5B-Instruct-GGUF
+    model_revision=9217f5db79a29953eb74d5343926648285ec7e67
+    model_files='qwen2.5-0.5b-instruct-q4_k_m.gguf|qwen2.5-0.5b-instruct-q4_k_m.gguf|491400032'
+    ;;
+  *)
+    printf 'model-download: unknown model alias: %s\n' "$model_alias" >&2
+    printf 'Run model-download --list to see available models.\n' >&2
+    exit 2
+    ;;
+esac
+
+mkdir -p "$download_directory"
+printf '%s\n' "$model_files" |
+  while IFS='|' read -r remote_path relative_path expected_size; do
+    download_file "$remote_path" "$relative_path" "$expected_size"
+  done

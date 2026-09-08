@@ -66,9 +66,15 @@ grep -F "\"apiKey\": \"\$LOCAL_CODE_API_KEY\"" "$models" >/dev/null
 jq -e \
   '.providers["llama-cpp"].models[] |
   select(.id == "qwen3coder") |
-  .name == "Qwen3-Coder 30B-A3B Q5_K_M" and
-  .contextWindow == 32768 and
-  .reasoning == false' \
+  .name == "Qwen3-Coder-Next 80B-A3B Q5_K_M" and
+  .contextWindow == 40960 and
+  .reasoning == false and
+  .samplingParams == {
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 40,
+    "min_p": 0
+  }' \
   "$models" >/dev/null
 jq -e \
   '.providers["llama-cpp"].models[] | select(.id == "gemma4") | .contextWindow == 65536' \
@@ -125,10 +131,11 @@ grep -F -- '--gpu-layers 18' "$log" >/dev/null
 
 grep -F '[qwen3coder]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
 qwen_preset=$(sed -n '/^\[qwen3coder\]/,/^\[gemma4\]/p' "$SCRIPT_DIR/../lima/local-code-models.ini")
-printf '%s\n' "$qwen_preset" | grep -Fx 'n-gpu-layers = 36' >/dev/null
-printf '%s\n' "$qwen_preset" | grep -Fx 'kv-unified-per-slot = 32768' >/dev/null
+printf '%s\n' "$qwen_preset" | grep -Fx 'n-gpu-layers = 99' >/dev/null
+printf '%s\n' "$qwen_preset" | grep -Fx 'kv-unified-per-slot = 40960' >/dev/null
+printf '%s\n' "$qwen_preset" | grep -Fx 'flash-attn = on' >/dev/null
 printf '%s\n' "$qwen_preset" | \
-  grep -Fx 'model = /share/models/Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf' >/dev/null
+  grep -Fx 'model = /share/models/Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00001-of-00004.gguf' >/dev/null
 printf '%s\n' "$qwen_preset" | \
   grep -Fx 'chat-template-file = /usr/local/share/ai/qwen-chat-template.jinja' >/dev/null
 if printf '%s\n' "$qwen_preset" | grep -q '^reasoning-'; then
@@ -150,7 +157,7 @@ grep -Fx 'pi-local-guard.ts tools/pi-local-guard.ts project' \
   "$SCRIPT_DIR/../lima/assets/manifest.txt" >/dev/null
 grep -Fx 'gemma-chat-template-version versions/gemma-chat-template project' \
   "$SCRIPT_DIR/../lima/assets/manifest.txt" >/dev/null
-grep -F 'Qwen/Qwen3-Coder-30B-A3B-Instruct/resolve/' \
+grep -F 'Qwen/Qwen3-Coder-Next/resolve/' \
   "$SCRIPT_DIR/../lima/provision.sh" >/dev/null
 grep -Eq '^[0-9a-f]{40}$' "$SCRIPT_DIR/../versions/qwen-chat-template"
 grep -F 'google/gemma-4-26B-A4B-it/resolve/' \
