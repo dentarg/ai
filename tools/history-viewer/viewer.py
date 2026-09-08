@@ -29,11 +29,16 @@ MONTHS = {m: i for i, m in enumerate(
      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], start=1)}
 
 # Per-model USD pricing per 1M tokens, from platform.claude.com/docs/en/about-claude/pricing
+# Standard rates checked 2026-09-07.
 # Tuple: (input, output, cache_read, cache_write_5m, cache_write_1h)
 PRICING_BY_MODEL: dict[str, tuple[float, float, float, float, float]] = {
-    # Fable: top tier, above Opus
+    # Fable / Mythos: top tier, above Opus
+    "claude-fable-5-1":  (10.00, 50.00, 0.25, 12.50, 20.00),
+    "claude-mythos-5-1": (10.00, 50.00, 0.25, 12.50, 20.00),
     "claude-fable-5":    (10.00, 50.00, 1.00, 12.50, 20.00),
+    "claude-mythos-5":   (10.00, 50.00, 1.00, 12.50, 20.00),
     # Opus 4.5+: reduced pricing
+    "claude-opus-5":     ( 5.00, 25.00, 0.50,  6.25, 10.00),
     "claude-opus-4-8":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
     "claude-opus-4-7":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
     "claude-opus-4-6":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
@@ -43,6 +48,7 @@ PRICING_BY_MODEL: dict[str, tuple[float, float, float, float, float]] = {
     "claude-opus-4":     (15.00, 75.00, 1.50, 18.75, 30.00),
     "claude-opus-3":     (15.00, 75.00, 1.50, 18.75, 30.00),
     # Sonnet
+    "claude-sonnet-5":   ( 2.00, 10.00, 0.20,  2.50,  4.00),
     "claude-sonnet-4-6": ( 3.00, 15.00, 0.30,  3.75,  6.00),
     "claude-sonnet-4-5": ( 3.00, 15.00, 0.30,  3.75,  6.00),
     "claude-sonnet-4":   ( 3.00, 15.00, 0.30,  3.75,  6.00),
@@ -54,9 +60,14 @@ PRICING_BY_MODEL: dict[str, tuple[float, float, float, float, float]] = {
 }
 
 # Per-model USD pricing per 1M tokens for OpenAI / Codex models, from
-# openai.com/api/pricing. Tuple: (input, output, cached_input). OpenAI has no
-# separate cache-write tiers, so the structure is simpler than the Claude one.
+# developers.openai.com/api/docs/pricing. Standard rates checked 2026-09-07.
+# Tuple: (input, output, cached_input). Codex cumulative usage does not break
+# out cache writes or per-request context lengths; use short-context rates.
 PRICING_BY_MODEL_OPENAI: dict[str, tuple[float, float, float]] = {
+    "gpt-6-astra":     (10.00, 50.00, 1.00),
+    "gpt-5.6-sol":     (4.00, 20.00, 0.40),
+    "gpt-5.6-terra":   (2.00, 12.00, 0.20),
+    "gpt-5.6-luna":    (0.20,  1.20, 0.02),
     "gpt-5.5":     (5.00, 30.00, 0.50),
     "gpt-5.4":     (2.50, 15.00, 0.25),
     "gpt-5.1":     (1.25, 10.00, 0.125),

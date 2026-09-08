@@ -28,6 +28,33 @@ def write_pi_session(events: list[dict]) -> Path:
     return write_rollout(events)
 
 
+class ModelPricing(unittest.TestCase):
+    def test_current_models_include_cached_token_costs(self):
+        codex_usage = {"input_tokens": 1000, "cached_input_tokens": 400,
+                       "output_tokens": 200}
+        claude_usage = {
+            "input_tokens": 600, "output_tokens": 200,
+            "cache_read_input_tokens": 400,
+            "cache_creation": {"ephemeral_5m_input_tokens": 100,
+                               "ephemeral_1h_input_tokens": 50},
+        }
+        cases = [
+            (viewer.codex_cost, codex_usage, "gpt-6-astra", 0.0164),
+            (viewer.codex_cost, codex_usage, "gpt-5.6-sol", 0.00656),
+            (viewer.codex_cost, codex_usage, "gpt-5.6-terra", 0.00368),
+            (viewer.codex_cost, codex_usage, "gpt-5.6-luna", 0.000368),
+            (viewer.event_cost, claude_usage, "claude-opus-5", 0.009325),
+            (viewer.event_cost, claude_usage, "claude-sonnet-5", 0.00373),
+            (viewer.event_cost, claude_usage, "claude-fable-5-1", 0.01835),
+            (viewer.event_cost, claude_usage, "claude-mythos-5-1", 0.01835),
+            (viewer.event_cost, claude_usage, "claude-mythos-5", 0.01865),
+        ]
+        for calculate, usage, model, expected in cases:
+            for suffix in ("", "-20260907"):
+                with self.subTest(model=model + suffix):
+                    self.assertAlmostEqual(calculate(model + suffix, usage), expected)
+
+
 class SummarizeCodexSession(unittest.TestCase):
     def test_metadata_tokens_and_cost(self):
         events = [

@@ -28,7 +28,15 @@ Flags: `--history PATH` (default `/history`), `--port N` (default 8765), `--host
 - Session titles skip generated context and slash-command wrappers, picking the first real user prompt; Codex sessions use the host working-directory name
 - Stats dashboard: tokens-per-day chart (line per model, with All time / Last 30 days / Last 7 days tabs and a per-model legend showing share, In/Out/cache tokens, and cost), plus breakdown tables by day / week / month / repo / model
 
-Cost is computed from each provider's published per-model pricing (Anthropic for Claude, OpenAI for the `gpt-5.x` family); update the `PRICING_BY_MODEL*` tables in `viewer.py` when prices change.
+Cost is estimated from published standard per-model pricing:
+[Anthropic](https://platform.claude.com/docs/en/about-claude/pricing) for Claude,
+[OpenAI](https://developers.openai.com/api/docs/pricing) for GPT models.
+Rates were checked on 2026-09-07, including GPT-6 Astra, GPT-5.6 Sol/Terra/Luna,
+Claude Opus 5, Sonnet 5, and Fable/Mythos 5.1. Update the `PRICING_BY_MODEL*`
+tables in `viewer.py` when prices change. Codex estimates use short-context
+rates and do not account for service-tier adjustments or separate cache-write
+charges; cumulative usage does not provide the required request breakdown.
+Pi sessions use their recorded costs.
 
 Pure Python stdlib + a single HTML file — no dependencies, no build step. The session endpoint resolves paths under `--history` and only serves recognised agent session paths.
 
