@@ -33,7 +33,7 @@ bash -c 'brew --version && mise --version && rv --version'
 while IFS= read -r tool; do
   bash -c 'mise use --global "$1"' _ "$tool"
 done < "$mise_tools_file"
-bash -c 'go version && python --version && rustc --version'
+bash -c 'fnox --version && go version && python --version && rustc --version'
 bash -c 'nvm install 22'
 
 mapfile -t brew_packages < "$brew_packages_file"

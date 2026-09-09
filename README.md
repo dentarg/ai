@@ -722,6 +722,7 @@ bin/setup-vm
 - [x] Rust
 - [x] Go
 - [x] ast-grep
+- [x] [fnox](https://fnox.jdx.dev/) — encrypted and remote secret manager
 - [x] tmux
 - [x] SSH (`ssh-keygen`, ...)
 - [x] SQLite

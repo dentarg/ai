@@ -2,3 +2,4 @@ bun
 go
 python
 rust
+fnox
