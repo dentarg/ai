@@ -357,7 +357,28 @@ also require 1Password biometric authorization.
 First enable **Settings > Developer > Integrate with 1Password CLI** in the
 1Password app. Verify the host integration with `op vault list`.
 
-Create `$HOME/ai/1password-bridge.json` on the host:
+Manage `$HOME/ai/1password-bridge.json` on the host with the CLI (Ruby required):
+
+```shell
+bin/1password-bridge --project /Users/me/src/example init my.1password.com
+bin/1password-bridge --project /Users/me/src/example set github-token op://Agent/GitHub/token
+bin/1password-bridge --project /Users/me/src/example show
+bin/1password-bridge --project /Users/me/src/example remove github-token
+bin/1password-bridge edit
+```
+
+`--project` defaults to the current directory and resolves its canonical path.
+`init` also updates an existing project's account while retaining its secrets;
+`set` adds or replaces an alias. `edit` opens the entire policy using `$VISUAL`,
+then `$EDITOR`, or `vi`. Changes are validated before an atomic save with mode
+`0600`; invalid edits leave the original policy untouched. The tool stores
+references only and does not retrieve secrets or invoke `op`.
+
+Set `AI_DIR` to change the default directory or use `--file PATH` to select a
+policy explicitly. Restart the bridge session after changing its policy.
+Run the CLI tests with `ruby tools/onepassword-bridge/test_config.rb`.
+
+The resulting policy has this structure:
 
 ```json
 {
