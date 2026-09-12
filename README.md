@@ -82,6 +82,9 @@ bin/ai <profile> --ports 9999,8888:7777
 # all launch/profile/resume/port options also work with the VM backend
 bin/ai --vm cx --ports 9999
 
+# expose a UDP port from a Lima VM (host port 41641 -> guest port 41641)
+bin/ai --vm --keep-vm --udp-ports 41641
+
 # enable Claude Code remote control for the session (off by default).
 # equivalently set AI_REMOTE=1 in your shell. see "Remote control" below.
 bin/ai <profile> --remote
@@ -200,6 +203,12 @@ progress-monitor limits.
 Runtime instances and guest hostnames use `ai-XX-<project>`, where `XX` is the
 first available two-digit suffix and `project` is the current directory name.
 Guests use UTC, matching the container backend.
+
+Lima runtime clones expose only loopback TCP ports by default. Use
+`--udp-ports HOST:CONTAINER` when a guest service needs an externally reachable
+UDP port, such as Tailscale's default `41641`. The host-side port must also be
+reachable through any outer firewall or NAT device. For Tailscale, use the same
+port on both sides and configure the guest daemon to listen on that port.
 
 Ubuntu's `docker.io`, `docker-buildx`, and `docker-compose-v2` packages provide
 a rootful Docker stack inside the guest. The normal Lima user belongs to the

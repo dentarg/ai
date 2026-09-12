@@ -66,7 +66,8 @@ launch_output="${tmpdir}/launch-output"
   LIMACTL_LOG="$log" \
   TERM=xterm-ghostty \
   PATH="${fake_bin}:${PATH}" \
-    "$REPO_DIR/bin/ai" --vm cx --ports 9999,8888:7777 >"$launch_output" 2>&1
+    "$REPO_DIR/bin/ai" --vm cx --ports 9999,8888:7777 \
+    --udp-ports 41642:41641 >"$launch_output" 2>&1
 )
 
 if grep -F 'terminfo setup noise' "$launch_output" >/dev/null; then
@@ -93,6 +94,7 @@ grep -F '"location":"'"$project"'"' "$log" >/dev/null
 grep -F '"guestPort":1337,"hostPort":45555' "$log" >/dev/null
 grep -F '"guestPort":9999,"hostPort":9999' "$log" >/dev/null
 grep -F '"guestPort":7777,"hostPort":8888' "$log" >/dev/null
+grep -F '"guestPort":41641,"hostPort":41642,"guestIP":"0.0.0.0","hostIP":"0.0.0.0","proto":"udp"' "$log" >/dev/null
 grep -F '<AI_AUTO_LAUNCH=1>' "$log" >/dev/null
 grep -F '<HOST_WORKDIR=/host-workdir/project with spaces>' "$log" >/dev/null
 grep -F '<CODEX_AUTO_START=1>' "$log" >/dev/null
@@ -114,6 +116,10 @@ if (
     "$REPO_DIR/bin/ai" --vm >"$failure_output" 2>&1
 ); then
   echo 'at=fatal msg="failed Lima console returned success"' >&2
+  exit 1
+fi
+if grep -F '"proto":"udp"' "$log" >/dev/null; then
+  echo 'at=fatal msg="UDP forwarding was enabled without --udp-ports"' >&2
   exit 1
 fi
 if grep -F '<stop>' "$log" >/dev/null || grep -F '<delete>' "$log" >/dev/null; then

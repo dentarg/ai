@@ -32,6 +32,8 @@ ephemeral Lima VM.
 Options:
   -r, --resume <id>   Resume a prior Claude or Codex session
       --ports <list>  Publish comma-separated PORT or HOST:CONTAINER ports
+      --udp-ports <list>
+                       Publish comma-separated UDP PORT or HOST:CONTAINER ports
       --vm            Use an ephemeral Lima VM instead of a Podman container
       --keep-vm       Keep the Lima VM after exit (implies --vm)
       --gpu           Use the GPU-enabled Lima base VM
@@ -70,6 +72,8 @@ is_true() {
 #                        Claude works with or without a profile (`c` auto-detects it).
 #   --ports <list>       extra ports to publish, comma-separated. Each entry is
 #                        "PORT" (host==container) or "SRC:DST" (host:container).
+#   --udp-ports <list>   extra UDP ports to publish, with the same syntax as
+#                        --ports.
 #   --vm                 use an ephemeral Lima VM instead of Podman.
 #   --keep-vm            retain the Lima VM after exit; implies --vm.
 #   --gpu                use the GPU-enabled Lima base VM.
@@ -86,6 +90,7 @@ PROFILE=""
 CODEX_PROFILE=""
 RESUME=""
 PORTS=""
+UDP_PORTS=""
 CODEX_AUTO_START=""
 REMOTE=${AI_REMOTE:-}
 FAST=${AI_FAST:-}
@@ -122,6 +127,14 @@ while [ $# -gt 0 ]; do
       ;;
     --ports=*)
       PORTS=${1#--ports=}
+      ;;
+    --udp-ports)
+      shift
+      [ $# -gt 0 ] || { echo "at=fatal msg=\"--udp-ports requires an argument\"" >&2; exit 1; }
+      UDP_PORTS=$1
+      ;;
+    --udp-ports=*)
+      UDP_PORTS=${1#--udp-ports=}
       ;;
     --vm)
       VM_BACKEND=1
@@ -259,12 +272,16 @@ is_true "$REMOTE" && REMOTE_ENV="--env AI_REMOTE=1"
 FAST_ENV=""
 is_true "$FAST" && FAST_ENV="--env AI_FAST=1"
 
-# Build extra "--publish SRC:DST" flags from --ports.
+# Build extra publish flags from --ports and --udp-ports.
 PUBLISH_PORTS=""
-if [ -n "$PORTS" ]; then
+append_podman_ports() {
+  port_list=$1
+  protocol=$2
+  [ -n "$port_list" ] || return 0
+
   OLD_IFS=$IFS
   IFS=,
-  for spec in $PORTS; do
+  for spec in $port_list; do
     IFS=$OLD_IFS
     case "$spec" in
       *:*) src=${spec%%:*}; dst=${spec##*:} ;;
@@ -272,11 +289,13 @@ if [ -n "$PORTS" ]; then
     esac
     case "$src" in ''|*[!0-9]*) echo "at=fatal msg=\"invalid port spec\" spec=$spec" >&2; exit 1 ;; esac
     case "$dst" in ''|*[!0-9]*) echo "at=fatal msg=\"invalid port spec\" spec=$spec" >&2; exit 1 ;; esac
-    PUBLISH_PORTS="$PUBLISH_PORTS --publish ${src}:${dst}"
+    PUBLISH_PORTS="$PUBLISH_PORTS --publish ${src}:${dst}${protocol}"
     IFS=,
   done
   IFS=$OLD_IFS
-fi
+}
+append_podman_ports "$PORTS" ""
+append_podman_ports "$UDP_PORTS" "/udp"
 
 CWD_LABEL=$(pwd)
 case "$CWD_LABEL" in
@@ -458,6 +477,32 @@ free_host_port() {
   fi
 }
 
+append_lima_forwards() {
+  port_list=$1
+  protocol=$2
+  guest_ip=$3
+  host_ip=$4
+  [ -n "$port_list" ] || return 0
+
+  OLD_IFS=$IFS
+  IFS=,
+  for spec in $port_list; do
+    IFS=$OLD_IFS
+    case "$spec" in
+      *:*) src=${spec%%:*}; dst=${spec##*:} ;;
+      *)   src=$spec; dst=$spec ;;
+    esac
+    case "$src" in ''|*[!0-9]*) echo "at=fatal msg=\"invalid port spec\" spec=$spec" >&2; exit 1 ;; esac
+    case "$dst" in ''|*[!0-9]*) echo "at=fatal msg=\"invalid port spec\" spec=$spec" >&2; exit 1 ;; esac
+    forwards_json=$(printf '%s' "$forwards_json" | jq -c \
+      --argjson src "$src" --argjson dst "$dst" \
+      --arg proto "$protocol" --arg guest_ip "$guest_ip" --arg host_ip "$host_ip" \
+      '. + [{guestPort:$dst, hostPort:$src, guestIP:$guest_ip, hostIP:$host_ip, proto:$proto, static:true}]')
+    IFS=,
+  done
+  IFS=$OLD_IFS
+}
+
 next_vm_name() {
   project_name=$(basename "$(pwd -P)" | tr '[:upper:]' '[:lower:]')
   project_name=$(printf '%s' "$project_name" | sed \
@@ -576,22 +621,8 @@ run_lima_vm() {
     --argjson host "$primary_host_port" \
     '[{guestPort:$guest, hostPort:$host, guestIP:"127.0.0.1", hostIP:"127.0.0.1", static:true}]')
 
-  if [ -n "$PORTS" ]; then
-    OLD_IFS=$IFS
-    IFS=,
-    for spec in $PORTS; do
-      IFS=$OLD_IFS
-      case "$spec" in
-        *:*) src=${spec%%:*}; dst=${spec##*:} ;;
-        *) src=$spec; dst=$spec ;;
-      esac
-      forwards_json=$(printf '%s' "$forwards_json" | jq -c \
-        --argjson src "$src" --argjson dst "$dst" \
-        '. + [{guestPort:$dst, hostPort:$src, guestIP:"127.0.0.1", hostIP:"127.0.0.1", static:true}]')
-      IFS=,
-    done
-    IFS=$OLD_IFS
-  fi
+  append_lima_forwards "$PORTS" tcp 127.0.0.1 127.0.0.1
+  append_lima_forwards "$UDP_PORTS" udp 0.0.0.0 0.0.0.0
 
   config_expression=".mounts = ${mounts_json} | .portForwards = ${forwards_json} | .timezone = \"UTC\""
   set -- clone --tty=false
