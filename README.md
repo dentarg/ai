@@ -204,6 +204,11 @@ Runtime instances and guest hostnames use `ai-XX-<project>`, where `XX` is the
 first available two-digit suffix and `project` is the current directory name.
 Guests use UTC, matching the container backend.
 
+VZ runtime clones use Apple's native `vzNAT` networking to avoid Lima's
+user-mode TCP forwarding limits. The launcher configures this when cloning,
+so existing base VMs do not need rebuilding. Other VM drivers keep their
+existing network configuration.
+
 Lima runtime clones expose only loopback TCP ports by default. Use
 `--udp-ports HOST:CONTAINER` when a guest service needs an externally reachable
 UDP port, such as Tailscale's default `41641`. The host-side port must also be

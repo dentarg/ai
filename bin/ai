@@ -624,11 +624,14 @@ run_lima_vm() {
   append_lima_forwards "$PORTS" tcp 127.0.0.1 127.0.0.1
   append_lima_forwards "$UDP_PORTS" udp 0.0.0.0 0.0.0.0
 
+  base_vm_type=$(limactl list "$base_name" --format '{{.VMType}}')
   config_expression=".mounts = ${mounts_json} | .portForwards = ${forwards_json} | .timezone = \"UTC\""
   set -- clone --tty=false
   [ "$NESTED_VIRT" -eq 1 ] && set -- "$@" --nested-virt
   [ -n "$VM_CPUS" ] && set -- "$@" --cpus "$VM_CPUS"
   [ -n "$VM_MEMORY" ] && set -- "$@" --memory "$VM_MEMORY"
+  # Use native NAT for VZ clones to avoid the user-mode TCP forwarder's limits.
+  [ "$base_vm_type" = vz ] && set -- "$@" --network=vzNAT
   set -- "$@" --set "$config_expression" "$base_name" "$VM_NAME"
   limactl "$@"
   limactl start "$VM_NAME"

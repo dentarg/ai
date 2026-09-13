@@ -39,7 +39,16 @@ cat > "${fake_bin}/limactl" <<'EOF'
 } >> "$LIMACTL_LOG"
 
 case "${1:-}" in
-  list) printf '%s\n' ai-base ai-base-gpu ;;
+  list)
+    if [[ "$*" == *'{{.VMType}}'* ]]; then
+      case "$2" in
+        ai-base-gpu) printf '%s\n' krunkit ;;
+        *) printf '%s\n' "${BASE_VM_TYPE:-vz}" ;;
+      esac
+    else
+      printf '%s\n' ai-base ai-base-gpu
+    fi
+    ;;
   shell)
     case "$*" in
       *'/workspace/.ai-op-token'*) cat >/dev/null ;;
@@ -74,7 +83,7 @@ if grep -F 'terminfo setup noise' "$launch_output" >/dev/null; then
   echo 'at=fatal msg="successful terminfo installation was noisy"' >&2
   exit 1
 fi
-grep -F '<clone>' "$log" >/dev/null
+grep -F '<clone>' "$log" | grep -F '<--network=vzNAT>' >/dev/null
 grep -F '<clone> <--tty=false>' "$log" >/dev/null
 if grep -F '<--nested-virt>' "$log" >/dev/null; then
   echo 'at=fatal msg="Lima launcher enabled nested virtualization by default"' >&2
@@ -136,6 +145,7 @@ grep -F 'limactl delete --force ai-00-project-with-spaces' "$failure_output" >/d
   HOME="${tmpdir}/home" \
   AI_DIR="$ai_dir" \
   AI_VM_HOST_PORT=45556 \
+  BASE_VM_TYPE=qemu \
   LIMACTL_LOG="$log" \
   PATH="${fake_bin}:${PATH}" \
     "$REPO_DIR/bin/ai" --keep-vm >/dev/null 2>&1
@@ -143,6 +153,10 @@ grep -F 'limactl delete --force ai-00-project-with-spaces' "$failure_output" >/d
 
 if grep -F '<delete>' "$log" >/dev/null; then
   echo 'at=fatal msg="--keep-vm deleted the Lima VM"' >&2
+  exit 1
+fi
+if grep -F '<--network=vzNAT>' "$log" >/dev/null; then
+  echo 'at=fatal msg="vzNAT was enabled for QEMU"' >&2
   exit 1
 fi
 
@@ -178,6 +192,11 @@ fi
 
 grep -F '<clone> <--tty=false>' "$log" | \
   grep -F '<ai-base-gpu> <ai-00-project-with-spaces>' >/dev/null
+
+if grep -F '<--network=vzNAT>' "$log" >/dev/null; then
+  echo 'at=fatal msg="vzNAT was enabled for krunkit"' >&2
+  exit 1
+fi
 
 if HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:${PATH}" \
   "$REPO_DIR/bin/ai" --gpu >/dev/null 2>&1; then
