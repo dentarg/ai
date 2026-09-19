@@ -154,6 +154,7 @@ COPY ./tools/exit.sh /usr/local/bin/x
 COPY ./tools/loki.sh /usr/local/bin/loki
 COPY ./tools/op-read.sh /usr/local/bin/op-read
 COPY ./tools/claude-hook.sh /usr/local/bin/claude-hook
+COPY ./tools/claude-permission-hook.sh /usr/local/bin/claude-permission-hook
 COPY ./tools/claude-login.sh /usr/local/bin/claude-login
 COPY dot.bashrc $HOME/.bashrc
 COPY .gitconfig /etc/gitconfig
@@ -171,6 +172,7 @@ RUN chmod +x /usr/local/bin/start.sh \
              /usr/local/bin/loki \
              /usr/local/bin/op-read \
              /usr/local/bin/claude-hook \
+             /usr/local/bin/claude-permission-hook \
              /usr/local/bin/claude-login \
              /usr/local/bin/codex-login \
              /usr/local/bin/refresh-tokens

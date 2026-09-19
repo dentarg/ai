@@ -6,6 +6,8 @@ A disposable Podman container or Lima virtual machine for running coding agents 
 
 Agents work best when they can freely run shell commands, edit files, install packages, and poke at databases — but you don't want them doing that against your host. This image gives each session its own throwaway Linux environment with:
 
+- A Claude Code `PermissionRequest` hook that approves Bash requests, including
+  the critical-path `rm` safeguard that bypass-permissions mode leaves enabled.
 - The project you're working on mounted at `/app`.
 - Language runtimes, databases (PostgreSQL, LavinMQ, Redis), and common tools preinstalled, so agents don't spend turns bootstrapping.
 - OAuth credentials and API keys mounted from `~/ai/settings`, with multi-profile support and automatic token refresh.

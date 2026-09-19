@@ -45,6 +45,7 @@ exit.sh tools/exit.sh project
 loki.sh tools/loki.sh project
 op-read.sh tools/op-read.sh project
 claude-hook.sh tools/claude-hook.sh project
+claude-permission-hook.sh tools/claude-permission-hook.sh project
 claude-login.sh tools/claude-login.sh project
 codex-login bin/codex-login project
 refresh-tokens bin/refresh-tokens project
