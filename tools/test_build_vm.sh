@@ -75,6 +75,8 @@ grep -F 'Pin-Priority: 100' "$archive_dir/install-chromium.sh" >/dev/null
 grep -F 'Package: chromium chromium-common' \
   "$archive_dir/install-chromium.sh" >/dev/null
 grep -F 'Pin-Priority: 990' "$archive_dir/install-chromium.sh" >/dev/null
+grep -Fx 'poppler-utils' "$archive_dir/ubuntu-packages.txt" >/dev/null
+grep -Fx 'tesseract-ocr' "$archive_dir/ubuntu-packages.txt" >/dev/null
 grep -F 'systemctl disable docker.service' "$archive_dir/provision.sh" >/dev/null
 grep -F 'systemctl enable --now docker.socket' "$archive_dir/provision.sh" >/dev/null
 while read -r destination source archive; do

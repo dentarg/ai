@@ -29,6 +29,7 @@ netcat-openbsd
 openjdk-21-jdk-headless
 openssh-client
 pandoc
+poppler-utils
 postgresql
 ragel
 rdap
@@ -43,6 +44,7 @@ strace
 sudo
 systemd
 systemd-sysv
+tesseract-ocr
 tmux
 tree
 unminimize
