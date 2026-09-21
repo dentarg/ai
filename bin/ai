@@ -491,7 +491,7 @@ start_host_browser() {
     --remote-debugging-port=0 \
     --no-first-run \
     --no-default-browser-check \
-    about:blank >> "$browser_log" 2>&1 &
+    --no-startup-window >> "$browser_log" 2>&1 &
   HOST_BROWSER_PID=$!
 
   devtools_port_file="${browser_profile}/DevToolsActivePort"

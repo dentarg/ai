@@ -18,6 +18,7 @@ EOF
 
 cat > "${fake_bin}/chrome-canary" <<'EOF'
 #!/bin/sh
+printf '%s\n' "$@" > "$CHROME_ARGS_FILE"
 for argument do
   case "$argument" in
     --user-data-dir=*) profile=${argument#--user-data-dir=} ;;
@@ -36,6 +37,7 @@ EOF
 chmod +x "${fake_bin}/uname" "${fake_bin}/chrome-canary" "${fake_bin}/podman"
 
 export PODMAN_ARGS_FILE="${tmpdir}/podman-args"
+export CHROME_ARGS_FILE="${tmpdir}/chrome-args"
 output=$(
   HOME="${tmpdir}/home" \
   AI_DIR="$ai_dir" \
@@ -52,6 +54,11 @@ grep -Fx -- NODE_EXTRA_CA_CERTS "$PODMAN_ARGS_FILE" >/dev/null
 grep -E '^.*/host-browser\.[^/]+/bridge:/run/host-browser:ro$' "$PODMAN_ARGS_FILE" >/dev/null
 grep -F 'PassEnvironment=HOST_BROWSER_URL HOST_BROWSER_TOKEN HOST_BROWSER_CA NODE_EXTRA_CA_CERTS' \
   "$REPO_DIR/Dockerfile" >/dev/null
+grep -Fx -- --no-startup-window "$CHROME_ARGS_FILE" >/dev/null
+if grep -Fx -- about:blank "$CHROME_ARGS_FILE" >/dev/null; then
+  echo 'at=fatal msg="host browser opened a foreground startup page"' >&2
+  exit 1
+fi
 
 if grep -E '^HOST_BROWSER_TOKEN=' "$PODMAN_ARGS_FILE" >/dev/null; then
   echo 'at=fatal msg="host browser token was exposed in podman arguments"' >&2

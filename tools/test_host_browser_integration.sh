@@ -26,7 +26,7 @@ chromium \
   --no-sandbox \
   --user-data-dir="${tmpdir}/profile" \
   --remote-debugging-port=0 \
-  about:blank >/dev/null 2>&1 &
+  --no-startup-window >/dev/null 2>&1 &
 chrome_pid=$!
 
 for _attempt in {1..100}; do
@@ -63,7 +63,7 @@ HOST_BROWSER_TOKEN=integration-token \
         browserURL: process.env.HOST_BROWSER_URL,
         wsOptions: {headers: {Authorization: authorization}},
       });
-      const page = await browser.newPage();
+      const page = await browser.newPage({background: true});
       await page.goto("data:text/html,<title>host-browser-ok</title>");
       if (await page.title() !== "host-browser-ok") process.exitCode = 1;
       await browser.disconnect();

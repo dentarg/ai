@@ -389,7 +389,7 @@ const browser = await puppeteer.connect({
   wsOptions: {headers: {Authorization: authorization}},
 });
 
-const page = await browser.newPage();
+const page = await browser.newPage({background: true});
 await page.goto("https://example.com");
 await browser.disconnect();
 ```
@@ -399,6 +399,11 @@ Run the script with the globally installed package on Node's module path:
 ```shell
 NODE_PATH="$(npm root -g)" node browser-script.cjs
 ```
+
+Canary starts without an initial window so launching it does not activate the
+application. Always create pages with `{background: true}` and do not call
+`page.bringToFront()`; foreground targets can cause macOS to switch focus to
+Canary. Select Canary yourself when you want to inspect its windows.
 
 Chrome Canary must be installed at its normal application path. Override it
 with `AI_CHROME_CANARY_PATH` when necessary. Set `AI_HOST_BROWSER=1` instead
