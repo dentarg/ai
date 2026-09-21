@@ -65,17 +65,36 @@ esac
 EOF
 chmod +x "${fake_bin}/limactl"
 
+cat > "${fake_bin}/uname" <<'EOF'
+#!/bin/sh
+echo Darwin
+EOF
+cat > "${fake_bin}/chrome-canary" <<'EOF'
+#!/bin/sh
+for argument do
+  case "$argument" in
+    --user-data-dir=*) profile=${argument#--user-data-dir=} ;;
+  esac
+done
+mkdir -p "$profile"
+printf '9222\n/devtools/browser/test\n' > "${profile}/DevToolsActivePort"
+trap 'exit 0' TERM INT
+while :; do sleep 1; done
+EOF
+chmod +x "${fake_bin}/uname" "${fake_bin}/chrome-canary"
+
 launch_output="${tmpdir}/launch-output"
 (
   cd "$project"
   HOME="${tmpdir}/home" \
   AI_DIR="$ai_dir" \
+  AI_CHROME_CANARY_PATH="${fake_bin}/chrome-canary" \
   AI_VM_HOST_PORT=45555 \
   GHOSTTY_RESOURCES_DIR="$ghostty_resources" \
   LIMACTL_LOG="$log" \
   TERM=xterm-ghostty \
   PATH="${fake_bin}:${PATH}" \
-    "$REPO_DIR/bin/ai" --vm cx --ports 9999,8888:7777 \
+    "$REPO_DIR/bin/ai" --vm cx --host-browser --ports 9999,8888:7777 \
     --udp-ports 41642:41641 >"$launch_output" 2>&1
 )
 
@@ -99,6 +118,7 @@ if grep -F '<--yes>' "$log" >/dev/null; then
 fi
 grep -F '"mountPoint":"/app"' "$log" >/dev/null
 grep -F '"mountPoint":"/host-workdir/project with spaces"' "$log" >/dev/null
+grep -F '"mountPoint":"/run/host-browser"' "$log" >/dev/null
 grep -F '"location":"'"$project"'"' "$log" >/dev/null
 grep -F '"guestPort":1337,"hostPort":45555' "$log" >/dev/null
 grep -F '"guestPort":9999,"hostPort":9999' "$log" >/dev/null
@@ -107,6 +127,11 @@ grep -F '"guestPort":41641,"hostPort":41642,"guestIP":"0.0.0.0","hostIP":"0.0.0.
 grep -F '<AI_AUTO_LAUNCH=1>' "$log" >/dev/null
 grep -F '<HOST_WORKDIR=/host-workdir/project with spaces>' "$log" >/dev/null
 grep -F '<CODEX_AUTO_START=1>' "$log" >/dev/null
+grep -F '<HOST_BROWSER_URL=https://host.lima.internal:' "$log" >/dev/null
+grep -F '<HOST_BROWSER_CA=/run/host-browser/ca.pem>' "$log" >/dev/null
+grep -F '<NODE_EXTRA_CA_CERTS=/run/host-browser/ca.pem>' "$log" >/dev/null
+grep -F '<HOST_BROWSER_TOKEN_FILE=/workspace/.ai-host-browser-token>' "$log" >/dev/null
+grep -F '/workspace/.ai-host-browser-token' "$log" >/dev/null
 grep -F '<shell> <--workdir> </app>' "$log" >/dev/null
 grep -F 'Lima clone is missing the provisioned shell or tools' "$log" >/dev/null
 grep -F '<stop>' "$log" >/dev/null

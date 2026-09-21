@@ -41,6 +41,7 @@ Options:
       --cpus <count>  Override CPU count for the Lima VM
       --memory <GiB>  Override memory in GiB for the Lima VM
       --1password     Enable approved, allowlisted 1Password reads
+      --host-browser  Launch and expose an isolated host Chrome Canary
       --remote        Enable Claude Code remote control
       --fast          Enable Claude Code fast mode
   -h, --help          Show this help
@@ -48,6 +49,9 @@ Options:
 Environment:
   AI_DIR              Directory for persistent AI data (default: \$HOME/ai)
   AI_1PASSWORD        Enable the 1Password bridge when truthy
+  AI_HOST_BROWSER     Enable the host browser when truthy
+  AI_CHROME_CANARY_PATH
+                      Chrome Canary executable path
   AI_REMOTE           Enable remote control when set to 1, true, yes, or on
   AI_FAST             Enable fast mode when set to 1, true, yes, or on
   PORT                Primary published port (default: 1337)
@@ -81,6 +85,7 @@ is_true() {
 #   --cpus <count>       override the cloned Lima VM's CPU count.
 #   --memory <GiB>       override the cloned Lima VM's memory.
 #   --1password          start the approved, allowlisted 1Password bridge.
+#   --host-browser       launch host Chrome Canary with an isolated profile.
 #   --remote             enable Claude Code remote control; passed to `c --remote`.
 #                        Also enabled when AI_REMOTE is truthy (1/true/yes/on).
 #   --fast               enable fast mode; passed to `c --fast`.
@@ -95,6 +100,7 @@ CODEX_AUTO_START=""
 REMOTE=${AI_REMOTE:-}
 FAST=${AI_FAST:-}
 ONEPASSWORD=${AI_1PASSWORD:-}
+HOST_BROWSER=${AI_HOST_BROWSER:-}
 VM_BACKEND=0
 KEEP_VM=0
 GPU=0
@@ -169,6 +175,9 @@ while [ $# -gt 0 ]; do
       ;;
     --1password)
       ONEPASSWORD=1
+      ;;
+    --host-browser)
+      HOST_BROWSER=1
       ;;
     --remote)
       REMOTE=1
@@ -316,6 +325,11 @@ BROKER_PID=""
 BROKER_SESSION_DIR=""
 ONEPASSWORD_ENV=""
 ONEPASSWORD_VOLUME=""
+HOST_BROWSER_PID=""
+HOST_BROWSER_PROXY_PID=""
+HOST_BROWSER_SESSION_DIR=""
+HOST_BROWSER_ENV=""
+HOST_BROWSER_VOLUME=""
 VM_NAME=""
 VM_SESSION_STATUS=0
 
@@ -326,6 +340,20 @@ cleanup_onepassword_bridge() {
   fi
   if [ -n "$BROKER_SESSION_DIR" ] && [ -d "$BROKER_SESSION_DIR" ]; then
     rm -rf "$BROKER_SESSION_DIR"
+  fi
+}
+
+cleanup_host_browser() {
+  if [ -n "$HOST_BROWSER_PROXY_PID" ]; then
+    kill "$HOST_BROWSER_PROXY_PID" 2>/dev/null || true
+    wait "$HOST_BROWSER_PROXY_PID" 2>/dev/null || true
+  fi
+  if [ -n "$HOST_BROWSER_PID" ]; then
+    kill "$HOST_BROWSER_PID" 2>/dev/null || true
+    wait "$HOST_BROWSER_PID" 2>/dev/null || true
+  fi
+  if [ -n "$HOST_BROWSER_SESSION_DIR" ] && [ -d "$HOST_BROWSER_SESSION_DIR" ]; then
+    rm -rf "$HOST_BROWSER_SESSION_DIR"
   fi
 }
 
@@ -346,6 +374,7 @@ cleanup_vm() {
 
 cleanup() {
   cleanup_vm
+  cleanup_host_browser
   cleanup_onepassword_bridge
 }
 
@@ -428,6 +457,112 @@ start_onepassword_bridge() {
 }
 
 is_true "$ONEPASSWORD" && start_onepassword_bridge
+
+start_host_browser() {
+  if [ "$(uname -s)" != "Darwin" ]; then
+    echo 'at=fatal msg="the host browser requires a macOS host"' >&2
+    exit 1
+  fi
+
+  chrome_path=${AI_CHROME_CANARY_PATH:-/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary}
+  if [ ! -x "$chrome_path" ]; then
+    echo "at=fatal msg=\"Google Chrome Canary not found\" path=\"$chrome_path\"" >&2
+    exit 1
+  fi
+  command -v ruby >/dev/null 2>&1 || {
+    echo 'at=fatal msg="ruby is required for the host browser proxy"' >&2
+    exit 1
+  }
+
+  run_dir="${AI_DIR}/run"
+  log_dir="${AI_DIR}/logs"
+  mkdir -p "$run_dir" "$log_dir"
+  chmod 700 "$run_dir" "$log_dir"
+  HOST_BROWSER_SESSION_DIR=$(mktemp -d "${run_dir}/host-browser.XXXXXX")
+  chmod 700 "$HOST_BROWSER_SESSION_DIR"
+  browser_profile="${HOST_BROWSER_SESSION_DIR}/profile"
+  browser_bridge="${HOST_BROWSER_SESSION_DIR}/bridge"
+  mkdir -p "$browser_profile" "$browser_bridge"
+  chmod 700 "$browser_profile" "$browser_bridge"
+
+  browser_log="${log_dir}/host-browser.log"
+  "$chrome_path" \
+    --user-data-dir="$browser_profile" \
+    --remote-debugging-port=0 \
+    --no-first-run \
+    --no-default-browser-check \
+    about:blank >> "$browser_log" 2>&1 &
+  HOST_BROWSER_PID=$!
+
+  devtools_port_file="${browser_profile}/DevToolsActivePort"
+  attempts=0
+  while [ ! -s "$devtools_port_file" ]; do
+    if ! kill -0 "$HOST_BROWSER_PID" 2>/dev/null; then
+      echo "at=fatal msg=\"Chrome Canary failed to start\" log=\"$browser_log\"" >&2
+      tail -20 "$browser_log" >&2
+      exit 1
+    fi
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge 200 ]; then
+      echo "at=fatal msg=\"timed out starting Chrome Canary\" log=\"$browser_log\"" >&2
+      exit 1
+    fi
+    sleep 0.05
+  done
+  HOST_BROWSER_UPSTREAM_PORT=$(sed -n '1p' "$devtools_port_file")
+  case "$HOST_BROWSER_UPSTREAM_PORT" in
+    ''|*[!0-9]*)
+      echo 'at=fatal msg="Chrome Canary returned an invalid debugging port"' >&2
+      exit 1
+      ;;
+  esac
+
+  HOST_BROWSER_TOKEN=$(ruby -rsecurerandom -e 'print SecureRandom.hex(32)')
+  if [ "$VM_BACKEND" -eq 1 ]; then
+    HOST_BROWSER_ADVERTISED_HOST=host.lima.internal
+  else
+    HOST_BROWSER_ADVERTISED_HOST=host.containers.internal
+  fi
+  HOST_BROWSER_CA_FILE="${browser_bridge}/ca.pem"
+  HOST_BROWSER_PORT_FILE="${browser_bridge}/port"
+  export HOST_BROWSER_UPSTREAM_PORT HOST_BROWSER_TOKEN
+  export HOST_BROWSER_ADVERTISED_HOST HOST_BROWSER_CA_FILE HOST_BROWSER_PORT_FILE
+
+  ruby "${REPO_DIR}/tools/host-browser-proxy.rb" >> "$browser_log" 2>&1 &
+  HOST_BROWSER_PROXY_PID=$!
+  attempts=0
+  while [ ! -s "$HOST_BROWSER_PORT_FILE" ]; do
+    if ! kill -0 "$HOST_BROWSER_PROXY_PID" 2>/dev/null; then
+      echo "at=fatal msg=\"host browser proxy failed to start\" log=\"$browser_log\"" >&2
+      tail -20 "$browser_log" >&2
+      exit 1
+    fi
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge 100 ]; then
+      echo "at=fatal msg=\"timed out starting host browser proxy\" log=\"$browser_log\"" >&2
+      exit 1
+    fi
+    sleep 0.05
+  done
+
+  host_browser_port=$(cat "$HOST_BROWSER_PORT_FILE")
+  case "$host_browser_port" in
+    ''|*[!0-9]*)
+      echo 'at=fatal msg="host browser proxy returned an invalid port"' >&2
+      exit 1
+      ;;
+  esac
+  HOST_BROWSER_URL="https://${HOST_BROWSER_ADVERTISED_HOST}:${host_browser_port}"
+  HOST_BROWSER_CA=/run/host-browser/ca.pem
+  export HOST_BROWSER_URL HOST_BROWSER_CA
+  NODE_EXTRA_CA_CERTS=$HOST_BROWSER_CA
+  export NODE_EXTRA_CA_CERTS
+  HOST_BROWSER_ENV="--env HOST_BROWSER_URL --env HOST_BROWSER_TOKEN --env HOST_BROWSER_CA --env NODE_EXTRA_CA_CERTS"
+  HOST_BROWSER_VOLUME="--volume ${browser_bridge}:/run/host-browser:ro"
+  echo "at=info msg=\"host browser ready\" browser=\"Google Chrome Canary\"" >&2
+}
+
+is_true "$HOST_BROWSER" && start_host_browser
 
 # Keep the shared OAuth token fresh on the host before launching, so every
 # container session reuses it instead of re-authenticating. Silently refresh
@@ -615,6 +750,11 @@ run_lima_vm() {
       --arg location "$BROKER_SESSION_DIR" \
       '. + [{location:$location, mountPoint:"/run/1password-bridge", writable:false}]')
   fi
+  if [ -n "$HOST_BROWSER_SESSION_DIR" ]; then
+    mounts_json=$(printf '%s' "$mounts_json" | jq -c \
+      --arg location "${HOST_BROWSER_SESSION_DIR}/bridge" \
+      '. + [{location:$location, mountPoint:"/run/host-browser", writable:false}]')
+  fi
 
   forwards_json=$(jq -cn \
     --argjson guest "$PORT" \
@@ -642,6 +782,10 @@ run_lima_vm() {
     # Keep the token out of process arguments and Lima configuration/logs.
     printf '%s' "$OP_BRIDGE_TOKEN" | \
       limactl shell --workdir /app "$VM_NAME" sh -c 'umask 077; cat > /workspace/.ai-op-token'
+  fi
+  if [ -n "$HOST_BROWSER_SESSION_DIR" ]; then
+    printf '%s' "$HOST_BROWSER_TOKEN" | \
+      limactl shell --workdir /app "$VM_NAME" sh -c 'umask 077; cat > /workspace/.ai-host-browser-token'
   fi
 
   echo "at=info msg=\"Lima VM ready\" vm=$VM_NAME port=$primary_host_port guest_port=$PORT" >&2
@@ -671,6 +815,13 @@ run_lima_vm() {
       OP_BRIDGE_CA=/run/1password-bridge/ca.pem \
       OP_BRIDGE_TOKEN_FILE=/workspace/.ai-op-token
   fi
+  if [ -n "$HOST_BROWSER_SESSION_DIR" ]; then
+    set -- "$@" \
+      HOST_BROWSER_URL="$HOST_BROWSER_URL" \
+      HOST_BROWSER_CA=/run/host-browser/ca.pem \
+      NODE_EXTRA_CA_CERTS=/run/host-browser/ca.pem \
+      HOST_BROWSER_TOKEN_FILE=/workspace/.ai-host-browser-token
+  fi
   set -- "$@" bash -c '
     if [ ! -s /workspace/.bashrc ] || [ ! -s /usr/local/bin/cx ] || \
       [ ! -s /usr/local/bin/x ] || \
@@ -680,6 +831,9 @@ run_lima_vm() {
     fi
     if [ -n "${OP_BRIDGE_TOKEN_FILE:-}" ]; then
       export OP_BRIDGE_TOKEN=$(cat "$OP_BRIDGE_TOKEN_FILE")
+    fi
+    if [ -n "${HOST_BROWSER_TOKEN_FILE:-}" ]; then
+      export HOST_BROWSER_TOKEN=$(cat "$HOST_BROWSER_TOKEN_FILE")
     fi
     cd /app
     exec bash --rcfile /workspace/.bashrc -i
@@ -692,6 +846,9 @@ run_lima_vm() {
   fi
   if [ -n "$BROKER_SESSION_DIR" ]; then
     limactl shell --workdir /app "$VM_NAME" sh -c 'rm -f /workspace/.ai-op-token' >/dev/null 2>&1 || true
+  fi
+  if [ -n "$HOST_BROWSER_SESSION_DIR" ]; then
+    limactl shell --workdir /app "$VM_NAME" sh -c 'rm -f /workspace/.ai-host-browser-token' >/dev/null 2>&1 || true
   fi
   return "$session_status"
 }
@@ -719,6 +876,7 @@ podman run --rm --interactive --tty \
   ${REMOTE_ENV:-} \
   ${FAST_ENV:-} \
   ${ONEPASSWORD_ENV:-} \
+  ${HOST_BROWSER_ENV:-} \
   --volume ${BUNDLE_DIR}:/bundle \
   --volume ${COMMAND_HISTORY_DIR}:/commandhistory \
   --volume ${HISTORY_DIR}:/history \
@@ -726,6 +884,7 @@ podman run --rm --interactive --tty \
   --volume ${SETTINGS_DIR}:/settings \
   --volume ${SHARE_DIR}:/share \
   ${ONEPASSWORD_VOLUME:-} \
+  ${HOST_BROWSER_VOLUME:-} \
   --volume ${REPO_DIR}/claude:/claude:ro \
   --volume $(pwd):/app \
   --volume "$(pwd):${HOST_WORKDIR}" \
