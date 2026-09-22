@@ -13,6 +13,7 @@ Usage: ai profile <command> [arguments]
 Commands:
   list
   create <name>
+  remove <name>
   set-model <name> codex|claude <model>
   login <name> codex|claude
 EOF
@@ -94,6 +95,25 @@ create_profile() {
   echo "at=info msg=\"profile created\" profile=$name"
 }
 
+remove_profile() {
+  name=$1
+  require_name "$name"
+
+  codex_home="${SETTINGS_DIR}/codex_${name}"
+  claude_home="${SETTINGS_DIR}/claude_${name}"
+  claude_credentials="${SETTINGS_DIR}/.credentials.${name}.json"
+  if [ ! -e "$codex_home" ] && [ ! -L "$codex_home" ] && \
+    [ ! -e "$claude_home" ] && [ ! -L "$claude_home" ] && \
+    [ ! -e "$claude_credentials" ] && [ ! -L "$claude_credentials" ]; then
+    echo "at=fatal msg=\"profile not found\" profile=$name" >&2
+    return 1
+  fi
+
+  rm -rf "$codex_home" "$claude_home"
+  rm -f "$claude_credentials"
+  echo "at=info msg=\"profile removed\" profile=$name"
+}
+
 set_model() {
   name=$1
   agent=$2
@@ -105,6 +125,7 @@ set_model() {
       return 1
       ;;
   esac
+  "$SCRIPT_DIR/ai-models" validate "$agent" "$model"
 
   case "$agent" in
     codex)
@@ -180,6 +201,10 @@ case "$command" in
   create)
     [ $# -eq 1 ] || { usage >&2; exit 1; }
     create_profile "$1"
+    ;;
+  remove)
+    [ $# -eq 1 ] || { usage >&2; exit 1; }
+    remove_profile "$1"
     ;;
   set-model)
     [ $# -eq 3 ] || { usage >&2; exit 1; }

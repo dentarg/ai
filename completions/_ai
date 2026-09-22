@@ -1,0 +1,81 @@
+#compdef ai bin/ai ./bin/ai
+
+if (( ! $+functions[compdef] )); then
+  autoload -Uz compinit
+  compinit
+fi
+
+_ai_profiles() {
+  local command=$words[1]
+  local -a profiles
+  profiles=("${(@f)$("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')}" )
+  _describe profile profiles
+}
+
+_ai_models() {
+  local command=$words[1]
+  local agent=$words[5]
+  local -a models
+  models=("${(@f)$("$command" models list "$agent" 2>/dev/null)}")
+  _describe model models
+}
+
+_ai_commands_profiles_options() {
+  local command=$words[1]
+  local -a commands profiles options values
+  commands=(profile models completion cx)
+  profiles=("${(@f)$("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')}" )
+  options=(
+    --resume --ports --udp-ports --vm --keep-vm --gpu --nested-virt
+    --cpus --memory --1password --host-browser --remote --fast --help
+  )
+  values=("${commands[@]}" "${profiles[@]}" "${options[@]}")
+  compadd -V ai-arguments -- "${values[@]}"
+}
+
+_ai_profiles_options() {
+  local command=$words[1]
+  local -a profiles options values
+  profiles=("${(@f)$("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')}" )
+  options=(
+    --resume --ports --udp-ports --vm --keep-vm --gpu --nested-virt
+    --cpus --memory --1password --host-browser --help
+  )
+  values=("${profiles[@]}" "${options[@]}")
+  compadd -V ai-arguments -- "${values[@]}"
+}
+
+_ai() {
+  local first=${words[2]:-}
+  local action=${words[3]:-}
+
+  case "$CURRENT" in
+    2)
+      _ai_commands_profiles_options
+      ;;
+    3)
+      case "$first" in
+        profile) _values command list create remove set-model login --help ;;
+        models) _values command list refresh --help ;;
+        completion) _values shell bash zsh ;;
+        cx) _ai_profiles_options ;;
+      esac
+      ;;
+    4)
+      case "$first:$action" in
+        profile:remove|profile:set-model|profile:login) _ai_profiles ;;
+        models:list) _values agent codex claude ;;
+      esac
+      ;;
+    5)
+      [[ "$first" == profile && \
+        ( "$action" == set-model || "$action" == login ) ]] && \
+        _values agent codex claude
+      ;;
+    6)
+      [[ "$first" == profile && "$action" == set-model ]] && _ai_models
+      ;;
+  esac
+}
+
+compdef _ai ai bin/ai ./bin/ai

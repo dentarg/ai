@@ -25,12 +25,15 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [profile | cx [profile]] [options]
        $(basename "$0") profile <command> [arguments]
+       $(basename "$0") models <command> [arguments]
+       $(basename "$0") completion bash|zsh
 
 Start the AI development environment, optionally launching Claude Code with a
 profile or Codex with "cx [profile]". Podman is the default; --vm uses an
 ephemeral Lima VM.
 
-Run $(basename "$0") profile --help to manage agent profiles.
+Run $(basename "$0") profile --help to manage agent profiles or
+$(basename "$0") models --help to manage the cached model catalog.
 
 Options:
   -r, --resume <id>   Resume a prior Claude or Codex session
@@ -63,10 +66,20 @@ Environment:
 EOF
 }
 
-if [ "${1:-}" = profile ]; then
-  shift
-  exec "$SCRIPT_DIR/ai-profile" "$@"
-fi
+case "${1:-}" in
+  profile)
+    shift
+    exec "$SCRIPT_DIR/ai-profile" "$@"
+    ;;
+  models)
+    shift
+    exec "$SCRIPT_DIR/ai-models" "$@"
+    ;;
+  completion)
+    shift
+    exec "$SCRIPT_DIR/ai-completion" "$@"
+    ;;
+esac
 
 is_true() {
   case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in

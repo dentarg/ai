@@ -52,6 +52,16 @@ class ManifestProfiles(unittest.TestCase):
 
 
 class ModelPricing(unittest.TestCase):
+    def test_refreshed_catalog_overrides_bundled_pricing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            catalog = Path(tmp) / "models.json"
+            catalog.write_text(json.dumps({"models": [{
+                "id": "gpt-test", "provider": "openai",
+                "pricing": {"input": 1, "output": 2, "cache_read": 0.1},
+            }]}), encoding="utf-8")
+            _anthropic, openai = viewer.load_model_pricing([catalog])
+            self.assertEqual(openai["gpt-test"], (1, 2, 0.1))
+
     def test_current_models_include_cached_token_costs(self):
         codex_usage = {"input_tokens": 1000, "cached_input_tokens": 400,
                        "output_tokens": 200}

@@ -8,6 +8,7 @@ REPO_DIR=$(dirname "$SCRIPT_DIR")
 
 AI_DIR=${AI_DIR:-"${HOME}/ai"}
 HISTORY_DIR=${AI_DIR}/history
+MODEL_CACHE_DIR=${AI_DIR}/cache
 
 PORT=${PORT:-8765}
 
@@ -15,12 +16,17 @@ if [ ! -d "$HISTORY_DIR" ]; then
   echo "at=error msg=\"history dir not found\" path=${HISTORY_DIR}" >&2
   exit 1
 fi
+mkdir -p "$MODEL_CACHE_DIR"
 
 echo "at=info msg=\"history viewer listening\" url=http://127.0.0.1:${PORT}/"
 
 podman run --rm --interactive --tty \
   --volume ${HISTORY_DIR}:/history:ro \
+  --volume ${MODEL_CACHE_DIR}:/model-cache:ro \
+  --volume ${REPO_DIR}/models:/models:ro \
   --volume ${REPO_DIR}/tools/history-viewer:/viewer:ro \
+  --env MODEL_CATALOG=/model-cache/models.json \
+  --env MODEL_CATALOG_FALLBACK=/models/catalog.json \
   --publish 127.0.0.1:${PORT}:8765 \
   ai:latest \
   bash -lc "python3 /viewer/viewer.py --history /history --host 0.0.0.0 --port 8765"

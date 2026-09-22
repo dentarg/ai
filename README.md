@@ -30,6 +30,12 @@ Claude profile settings are stored as
 `$HOME/ai/settings/claude_<profile>/settings.json` and are merged over the
 baked defaults at launch.
 
+Profile model values are validated against a small bundled catalog. Run
+`bin/ai models refresh` to download RubyLLM's model registry, retain only the
+OpenAI and Anthropic fields used here, and cache the compact result under
+`$HOME/ai/cache/models.json`. Launching, completing commands, and setting a
+model never downloads the registry.
+
 Optionally, add `AGENTS.md` to `$HOME/ai/settings` — it becomes `CLAUDE.md`
 for Claude Code, `GEMINI.md` for Gemini CLI, and is copied into Codex's
 session config.
@@ -42,6 +48,9 @@ Optionally, add `sentry.token` to `$HOME/ai/settings` to enable the
 # create configuration files for a named Codex and Claude profile
 bin/ai profile create <profile>
 
+# remove a profile's Codex settings, Claude settings, and credentials
+bin/ai profile remove <profile>
+
 # authenticate either agent for the profile
 bin/ai profile login <profile> codex
 bin/ai profile login <profile> claude
@@ -50,8 +59,15 @@ bin/ai profile login <profile> claude
 bin/ai profile set-model <profile> codex gpt-6-astra
 bin/ai profile set-model <profile> claude claude-opus-4-8
 
+# refresh the cached OpenAI and Anthropic model catalog
+bin/ai models refresh
+
 # show configured profiles and authentication status
 bin/ai profile list
+
+# enable command, profile, agent, and model completion
+source <(bin/ai completion zsh)
+# use "bash" instead of "zsh" when appropriate
 
 # start podman and share the current working directory
 bin/ai

@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -eu
+
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+REPO_DIR=$(dirname "$SCRIPT_DIR")
+
+case "${1:-}" in
+  bash) cat "${REPO_DIR}/completions/ai.bash" ;;
+  zsh) cat "${REPO_DIR}/completions/_ai" ;;
+  *)
+    echo "Usage: ai completion bash|zsh" >&2
+    exit 1
+    ;;
+esac

@@ -1,0 +1,130 @@
+#!/bin/sh
+
+set -eu
+
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+REPO_DIR=$(dirname "$SCRIPT_DIR")
+AI_DIR=${AI_DIR:-"${HOME}/ai"}
+CATALOG_URL=${AI_MODELS_URL:-https://rubyllm.com/models.json}
+FALLBACK_CATALOG=${AI_MODELS_FALLBACK:-"${REPO_DIR}/models/catalog.json"}
+CACHE_CATALOG=${AI_MODELS_CACHE:-"${AI_DIR}/cache/models.json"}
+
+usage() {
+  cat <<EOF
+Usage: ai models <command> [arguments]
+
+Commands:
+  list codex|claude
+  refresh
+EOF
+}
+
+provider_for() {
+  case "$1" in
+    codex) printf '%s\n' openai ;;
+    claude) printf '%s\n' anthropic ;;
+    *)
+      echo "at=fatal msg=\"unknown agent\" agent=$1" >&2
+      return 1
+      ;;
+  esac
+}
+
+list_models() {
+  provider=$(provider_for "$1")
+  if [ ! -f "$FALLBACK_CATALOG" ] && [ ! -f "$CACHE_CATALOG" ]; then
+    echo 'at=fatal msg="model catalog not found"' >&2
+    return 1
+  fi
+  for catalog in "$FALLBACK_CATALOG" "$CACHE_CATALOG"; do
+    [ -f "$catalog" ] || continue
+    jq -r --arg provider "$provider" '
+      .models[]
+      | select(.provider == $provider and .selectable == true)
+      | .id
+    ' "$catalog"
+  done | sort -u
+}
+
+validate_model() {
+  agent=$1
+  model=$2
+  provider=$(provider_for "$agent")
+  if [ ! -f "$FALLBACK_CATALOG" ] && [ ! -f "$CACHE_CATALOG" ]; then
+    echo 'at=fatal msg="model catalog not found"' >&2
+    return 1
+  fi
+  for catalog in "$FALLBACK_CATALOG" "$CACHE_CATALOG"; do
+    [ -f "$catalog" ] || continue
+    if jq -e --arg provider "$provider" --arg model "$model" '
+      any(.models[];
+        .provider == $provider and .id == $model and .selectable == true)
+    ' "$catalog" >/dev/null; then
+      return 0
+    fi
+  done
+  echo "at=fatal msg=\"model is not available for agent\" agent=$agent model=$model" >&2
+  return 1
+}
+
+refresh_catalog() {
+  cache_dir=${CACHE_CATALOG%/*}
+  mkdir -p "$cache_dir"
+  raw=$(mktemp "${cache_dir}/models.raw.XXXXXX")
+  filtered=$(mktemp "${cache_dir}/models.filtered.XXXXXX")
+  trap 'rm -f "$raw" "$filtered"' EXIT HUP INT TERM
+
+  curl --fail --location --silent --show-error "$CATALOG_URL" > "$raw"
+  jq --arg source "$CATALOG_URL" '
+    {
+      source: $source,
+      models: [
+        .[]
+        | select(.provider == "openai" or .provider == "anthropic")
+        | {
+            id,
+            provider,
+            family,
+            selectable: true,
+            pricing: {
+              input: (.pricing.text_tokens.standard.input_per_million // null),
+              output: (.pricing.text_tokens.standard.output_per_million // null),
+              cache_read: (.pricing.text_tokens.standard.cache_read_input_per_million // null),
+              cache_write: (.pricing.text_tokens.standard.cache_write_input_per_million // null)
+            }
+          }
+        | .pricing |= with_entries(select(.value != null))
+      ]
+    }
+  ' "$raw" > "$filtered"
+  jq -e '.models | length > 0' "$filtered" >/dev/null
+  chmod 600 "$filtered"
+  mv "$filtered" "$CACHE_CATALOG"
+  rm -f "$raw"
+  trap - EXIT HUP INT TERM
+  echo "at=info msg=\"model catalog refreshed\" path=$CACHE_CATALOG"
+}
+
+command=${1:-}
+[ $# -gt 0 ] && shift
+case "$command" in
+  list)
+    [ $# -eq 1 ] || { usage >&2; exit 1; }
+    list_models "$1"
+    ;;
+  validate)
+    [ $# -eq 2 ] || { usage >&2; exit 1; }
+    validate_model "$1" "$2"
+    ;;
+  refresh)
+    [ $# -eq 0 ] || { usage >&2; exit 1; }
+    refresh_catalog
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac

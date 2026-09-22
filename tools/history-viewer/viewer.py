@@ -28,53 +28,56 @@ MONTHS = {m: i for i, m in enumerate(
     ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], start=1)}
 
-# Per-model USD pricing per 1M tokens, from platform.claude.com/docs/en/about-claude/pricing
-# Standard rates checked 2026-09-07.
-# Tuple: (input, output, cache_read, cache_write_5m, cache_write_1h)
-PRICING_BY_MODEL: dict[str, tuple[float, float, float, float, float]] = {
-    # Fable / Mythos: top tier, above Opus
-    "claude-fable-5-1":  (10.00, 50.00, 0.25, 12.50, 20.00),
-    "claude-mythos-5-1": (10.00, 50.00, 0.25, 12.50, 20.00),
-    "claude-fable-5":    (10.00, 50.00, 1.00, 12.50, 20.00),
-    "claude-mythos-5":   (10.00, 50.00, 1.00, 12.50, 20.00),
-    # Opus 4.5+: reduced pricing
-    "claude-opus-5":     ( 5.00, 25.00, 0.50,  6.25, 10.00),
-    "claude-opus-4-8":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
-    "claude-opus-4-7":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
-    "claude-opus-4-6":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
-    "claude-opus-4-5":   ( 5.00, 25.00, 0.50,  6.25, 10.00),
-    # Opus (older, deprecated pricing)
-    "claude-opus-4-1":   (15.00, 75.00, 1.50, 18.75, 30.00),
-    "claude-opus-4":     (15.00, 75.00, 1.50, 18.75, 30.00),
-    "claude-opus-3":     (15.00, 75.00, 1.50, 18.75, 30.00),
-    # Sonnet
-    "claude-sonnet-5":   ( 2.00, 10.00, 0.20,  2.50,  4.00),
-    "claude-sonnet-4-6": ( 3.00, 15.00, 0.30,  3.75,  6.00),
-    "claude-sonnet-4-5": ( 3.00, 15.00, 0.30,  3.75,  6.00),
-    "claude-sonnet-4":   ( 3.00, 15.00, 0.30,  3.75,  6.00),
-    "claude-sonnet-3-7": ( 3.00, 15.00, 0.30,  3.75,  6.00),
-    # Haiku
-    "claude-haiku-4-5":  ( 1.00,  5.00, 0.10,  1.25,  2.00),
-    "claude-haiku-3-5":  ( 0.80,  4.00, 0.08,  1.00,  1.60),
-    "claude-haiku-3":    ( 0.25,  1.25, 0.03,  0.30,  0.50),
-}
+def pricing_catalog_paths() -> list[Path]:
+    """Return bundled pricing followed by the optional refreshed cache."""
+    fallback = os.environ.get("MODEL_CATALOG_FALLBACK")
+    if fallback:
+        paths = [Path(fallback)]
+    else:
+        paths = [SCRIPT_DIR.parent.parent / "models" / "catalog.json"]
 
-# Per-model USD pricing per 1M tokens for OpenAI / Codex models, from
-# developers.openai.com/api/docs/pricing. Standard rates checked 2026-09-07.
-# Tuple: (input, output, cached_input). Codex cumulative usage does not break
-# out cache writes or per-request context lengths; use short-context rates.
-PRICING_BY_MODEL_OPENAI: dict[str, tuple[float, float, float]] = {
-    "gpt-6-astra":     (10.00, 50.00, 1.00),
-    "gpt-5.6-sol":     (4.00, 20.00, 0.40),
-    "gpt-5.6-terra":   (2.00, 12.00, 0.20),
-    "gpt-5.6-luna":    (0.20,  1.20, 0.02),
-    "gpt-5.5":     (5.00, 30.00, 0.50),
-    "gpt-5.4":     (2.50, 15.00, 0.25),
-    "gpt-5.1":     (1.25, 10.00, 0.125),
-    "gpt-5":       (1.25, 10.00, 0.125),
-    "gpt-5-mini":  (0.25,  2.00, 0.025),
-    "gpt-5-nano":  (0.05,  0.40, 0.005),
-}
+    cache = os.environ.get("MODEL_CATALOG")
+    if not cache:
+        cache = str(Path(os.environ.get("AI_DIR", Path.home() / "ai")) /
+                    "cache" / "models.json")
+    cache_path = Path(cache)
+    if cache_path not in paths:
+        paths.append(cache_path)
+    return paths
+
+
+def load_model_pricing(paths: list[Path]) -> tuple[
+        dict[str, tuple[float, float, float, float, float]],
+        dict[str, tuple[float, float, float]]]:
+    """Load per-million-token prices, with later catalogs taking precedence."""
+    anthropic = {}
+    openai = {}
+    for path in paths:
+        try:
+            catalog = json.loads(path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            continue
+        for model in catalog.get("models", []):
+            pricing = model.get("pricing") or {}
+            model_id = model.get("id")
+            if not model_id or "input" not in pricing or "output" not in pricing:
+                continue
+            cache_read = pricing.get("cache_read", pricing["input"])
+            if model.get("provider") == "anthropic":
+                cache_write = pricing.get("cache_write", pricing["input"] * 1.25)
+                anthropic[model_id] = (
+                    pricing["input"], pricing["output"], cache_read,
+                    cache_write, cache_write * 1.6,
+                )
+            elif model.get("provider") == "openai":
+                openai[model_id] = (
+                    pricing["input"], pricing["output"], cache_read,
+                )
+    return anthropic, openai
+
+
+PRICING_BY_MODEL, PRICING_BY_MODEL_OPENAI = load_model_pricing(
+    pricing_catalog_paths())
 
 
 def pricing_for(model: str) -> tuple[float, float, float, float, float] | None:

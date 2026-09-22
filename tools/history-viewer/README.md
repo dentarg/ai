@@ -33,15 +33,13 @@ the chart, and every breakdown table to a saved account profile. Profiles come
 from each archived Claude or Codex run's `.profile` file; sessions without one
 (including Pi sessions) appear under **Default / unspecified**.
 
-Cost is estimated from published standard per-model pricing:
-[Anthropic](https://platform.claude.com/docs/en/about-claude/pricing) for Claude,
-[OpenAI](https://developers.openai.com/api/docs/pricing) for GPT models.
-Rates were checked on 2026-09-07, including GPT-6 Astra, GPT-5.6 Sol/Terra/Luna,
-Claude Opus 5, Sonnet 5, and Fable/Mythos 5.1. Update the `PRICING_BY_MODEL*`
-tables in `viewer.py` when prices change. Codex estimates use short-context
-rates and do not account for service-tier adjustments or separate cache-write
-charges; cumulative usage does not provide the required request breakdown.
-Pi sessions use their recorded costs.
+Cost is estimated from the shared model catalog. A bundled catalog provides
+offline defaults; `bin/ai models refresh` caches current OpenAI and Anthropic
+models and pricing from [RubyLLM](https://rubyllm.com/models.json). The viewer
+loads that cache automatically. Codex estimates use short-context rates and do
+not account for service-tier adjustments or separate cache-write charges;
+cumulative usage does not provide the required request breakdown. Pi sessions
+use their recorded costs.
 
 Pure Python stdlib + a single HTML file — no dependencies, no build step. The session endpoint resolves paths under `--history` and only serves recognised agent session paths.
 
