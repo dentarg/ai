@@ -3,6 +3,8 @@
 set -e
 
 HISTORY_ROOT=${HISTORY_ROOT:-/history}
+SETTINGS_ROOT=${SETTINGS_ROOT:-/settings}
+CLAUDE_SETTINGS_FILE=${CLAUDE_SETTINGS_FILE:-/claude/settings.json}
 PLUGIN_ROOT=${PLUGIN_ROOT:-/opt/claude-plugins/enabled}
 PLUGIN_BLOCKLIST=${PLUGIN_BLOCKLIST:-/opt/claude-plugins/blocklist}
 
@@ -23,6 +25,30 @@ enable_setting () {
   tmp=$(mktemp)
   jq "$filter" "$file" > "$tmp"
   mv "$tmp" "$file"
+}
+
+install_claude_settings () {
+  local base=$1
+  local profile=$2
+  local destination=$3
+  local tmp
+
+  tmp=$(mktemp "${destination}.tmp.XXXXXX")
+  if [[ -f "$profile" ]] && ! jq empty "$profile"; then
+    rm -f "$tmp"
+    echo "at=fatal msg=\"invalid Claude profile settings\" path=$profile" >&2
+    return 1
+  fi
+  if [[ -f "$base" && -f "$profile" ]]; then
+    jq -s '.[0] * .[1]' "$base" "$profile" > "$tmp"
+  elif [[ -f "$profile" ]]; then
+    cp "$profile" "$tmp"
+  elif [[ -f "$base" ]]; then
+    cp "$base" "$tmp"
+  else
+    printf '%s\n' '{}' > "$tmp"
+  fi
+  mv "$tmp" "$destination"
 }
 
 history_dir () {
@@ -157,6 +183,7 @@ main () {
   local saved
   local settings_claude_home
   local settings_file
+  local profile_settings
   local settings_credentials
   local sentry_token
   local sentry_host
@@ -285,12 +312,14 @@ main () {
     mv "$tmp" "$settings_claude_home/claude.json"
   fi
 
-  # claude/settings.json -> ~/.claude/settings.json (via ~/.claude symlink)
-  if [[ -f /claude/settings.json ]]; then
-    cp -f /claude/settings.json "$settings_claude_home/settings.json"
-  fi
-
   settings_file="$settings_claude_home/settings.json"
+  if [[ -n "$profile" ]]; then
+    profile_settings="${SETTINGS_ROOT}/claude_${profile}/settings.json"
+  else
+    profile_settings="${SETTINGS_ROOT}/claude/settings.json"
+  fi
+  install_claude_settings \
+    "$CLAUDE_SETTINGS_FILE" "$profile_settings" "$settings_file"
 
   block_image_plugins "$settings_file"
 
@@ -302,7 +331,7 @@ main () {
 
   # Opt-in fast mode (--fast or AI_FAST truthy). Off by default: it draws from
   # usage credits at a higher rate with separate rate limits. Needs Opus 4.6+,
-  # which the launch model below satisfies.
+  # which the base settings select.
   #
   # The persisted setting is evaluated once at startup while the async fast-mode
   # availability check is still "pending", so in a fresh container it resolves
@@ -330,8 +359,6 @@ main () {
 
   exec claude \
     --dangerously-skip-permissions \
-    --model claude-opus-4-8 \
-    --effort xhigh \
     "${resume_flag[@]}" \
     "${debug_flag[@]}"
 }

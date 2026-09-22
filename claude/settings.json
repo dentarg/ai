@@ -1,4 +1,6 @@
 {
+  "model": "claude-opus-4-8",
+  "effortLevel": "xhigh",
   "skipDangerousModePermissionPrompt": true,
   "spinnerTipsEnabled": false,
   "env": {

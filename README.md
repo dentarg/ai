@@ -26,6 +26,9 @@ into `~/.claude/` when you launch claude with a matching profile. See the
 
 Codex profiles are stored as `$HOME/ai/settings/codex_<profile>/auth.json`.
 The unprofiled default remains `$HOME/ai/settings/codex/auth.json`.
+Claude profile settings are stored as
+`$HOME/ai/settings/claude_<profile>/settings.json` and are merged over the
+baked defaults at launch.
 
 Optionally, add `AGENTS.md` to `$HOME/ai/settings` — it becomes `CLAUDE.md`
 for Claude Code, `GEMINI.md` for Gemini CLI, and is copied into Codex's
@@ -36,6 +39,20 @@ Optionally, add `sentry.token` to `$HOME/ai/settings` to enable the
 [MCP Servers](#mcp-servers).
 
 ```shell
+# create configuration files for a named Codex and Claude profile
+bin/ai profile create <profile>
+
+# authenticate either agent for the profile
+bin/ai profile login <profile> codex
+bin/ai profile login <profile> claude
+
+# set the model each agent starts with for this profile
+bin/ai profile set-model <profile> codex gpt-6-astra
+bin/ai profile set-model <profile> claude claude-opus-4-8
+
+# show configured profiles and authentication status
+bin/ai profile list
+
 # start podman and share the current working directory
 bin/ai
 
@@ -626,9 +643,10 @@ claude plugin list
 claude plugin enable code-simplifier@skills-dir
 ```
 
-`c` rewrites the session's `settings.json` from `claude/settings.json` on every
-launch, so removing a name from the blocklist re-enables it next time — nothing
-to undo.
+`c` rewrites the session's `settings.json` on every launch by merging
+`claude/settings.json` with the selected profile's
+`~/ai/settings/claude_<profile>/settings.json`. Removing a name from the
+blocklist therefore re-enables it next time — nothing to undo.
 
 ### Why not `claude plugin install`
 

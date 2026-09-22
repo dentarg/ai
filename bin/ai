@@ -24,10 +24,13 @@ fatal_unexpected_arg() {
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [profile | cx [profile]] [options]
+       $(basename "$0") profile <command> [arguments]
 
 Start the AI development environment, optionally launching Claude Code with a
 profile or Codex with "cx [profile]". Podman is the default; --vm uses an
 ephemeral Lima VM.
+
+Run $(basename "$0") profile --help to manage agent profiles.
 
 Options:
   -r, --resume <id>   Resume a prior Claude or Codex session
@@ -59,6 +62,11 @@ Environment:
   AI_VM_HOST_PORT     Primary host port (default: choose a free port)
 EOF
 }
+
+if [ "${1:-}" = profile ]; then
+  shift
+  exec "$SCRIPT_DIR/ai-profile" "$@"
+fi
 
 is_true() {
   case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
