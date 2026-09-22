@@ -110,6 +110,8 @@ grep -F 'status_line = ["current-dir",' \
 
 mkdir -p "${SETTINGS_ROOT}/codex"
 printf '%s\n' '{"profile":"default"}' > "${SETTINGS_ROOT}/codex/auth.json"
+printf '%s\n' 'model = "gpt-profile"' > \
+  "${SETTINGS_ROOT}/codex/default.config.toml"
 output=$(
   HOME="${tmpdir}/home" \
   HOST_DIR=$(basename "$run_dir") \
@@ -120,5 +122,11 @@ output=$(
     main
 )
 printf '%s\n' "$output" | grep -F -- 'example_codex [default]' >/dev/null
+assert_equal "default" "$(printf '%s\n' "$output" | sed -n '2p')" \
+  "Codex default config profile was not selected"
+assert_equal 'model = "gpt-profile"' "$(printf '%s\n' "$output" | sed -n '3p')" \
+  "Codex default config profile was not installed"
+grep -F 'model = "gpt-6-astra"' \
+  "${tmpdir}/home/.codex/config.toml" >/dev/null
 
 echo 'at=info msg="codex resume lookup tests passed"'

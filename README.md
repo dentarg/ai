@@ -140,7 +140,11 @@ so Codex's terminal title and project/status fields show the host directory
 name instead of `app`. Its generated statusline shows the project and OAuth
 profile as `<project> [<profile>]`, followed by the git branch,
 model/reasoning, context used, and thread id. TUI notifications are disabled
-for quieter terminal sessions.
+for quieter terminal sessions. Codex defaults to `gpt-6-astra`. To override
+the default for an OAuth profile, add native Codex configuration such as
+`model = "gpt-6-sol"` to
+`~/ai/settings/codex_<oauth-profile>/default.config.toml`. Use
+`~/ai/settings/codex/default.config.toml` for the unprofiled account.
 `cx --resume <id>` searches archived Codex rollouts under `/history` and
 reuses the original Codex home before launching `codex resume <id>`.
 

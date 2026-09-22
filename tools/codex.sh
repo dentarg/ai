@@ -222,6 +222,10 @@ main () {
 
   shared_codex_home=$(codex_settings_home "$profile")
   shared_auth="${shared_codex_home}/auth.json"
+  if [[ -z "$config_profile" && \
+    -f "${shared_codex_home}/default.config.toml" ]]; then
+    config_profile=default
+  fi
   config_profile_path="${shared_codex_home}/${config_profile}.config.toml"
   if [[ ! -f "$shared_auth" ]]; then
     echo "at=error msg=\"codex auth file not found\" path=$shared_auth"
@@ -300,6 +304,7 @@ main () {
   # directory?" prompt. The .codex home is recreated on each launch, so the
   # trust answer is never persisted otherwise.
   cat > "$HOME/.codex/config.toml" <<EOF
+model = "gpt-6-astra"
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
 check_for_update_on_startup = false
