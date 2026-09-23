@@ -225,7 +225,52 @@ bin/setup-vm
 ./build_vm --gpu --force
 ```
 
-### Lima VM backend
+### macOS Lima VM backend
+
+On an Apple-silicon Mac with Lima 2.1 or later and `jq`, build a separate
+macOS base and launch an ephemeral session:
+
+```shell
+./build_vm --macos
+bin/ai --macos
+bin/ai --macos cx work
+bin/ai --macos work --ports 9999,8888:7777
+```
+
+The default base is `ai-base-macos`. If tool installation fails, run
+`./build_vm --macos --resume` to resend the current build assets and rerun
+provisioning in the existing VM, preserving its installed OS and packages.
+`--force` deletes and rebuilds it instead; these options cannot be combined.
+The existing
+`--update-agents`, `--update-claude`, `--update-codex`, and `--update-plugins`
+options also work. `AI_VM_BASE`, `AI_VM_CPUS`, `AI_VM_MEMORY`, and `AI_VM_DISK`
+override the build defaults. `AI_VM_BUILD_TIMEOUT` controls each Lima startup
+(default `60m`); subsequent tool installation streams directly over SSH.
+The host must support the macOS 26 restore image supplied by the installed
+Lima template and run the same or a newer macOS version.
+
+Provisioning installs Homebrew, native language tools, the pinned Claude and
+Codex versions, Codex plugins, and the shared agent wrappers. The guest user
+gets passwordless sudo inside this disposable VM. The build reboots to activate
+macOS synthetic links for `/workspace`, `/app`, and the other shared paths,
+then verifies the installed tools after another restart before protecting the
+base. No desktop login or Lima 2.3 `suppressFirstLoginSetup` setting is required
+by this SSH workflow. The virtual display remains enabled as required by Lima.
+
+Profiles, resume, `--keep-vm`, CPU/memory overrides, and the opt-in host bridges
+use the existing launcher. TCP ports are forwarded over an SSH tunnel bound to
+host loopback; the tunnel closes when the launcher exits, even with `--keep-vm`.
+UDP forwarding, `--gpu`, and `--nested-virt` are rejected for this backend.
+Native gem caches live in `$AI_DIR/bundle-macos`, separate from Linux gems.
+`s` starts native PostgreSQL, Redis, and LavinMQ as system launch daemons running
+as the guest user, then runs Bundler. The Linux Docker stack and Chromium setup
+are not installed in macOS guests; use `--host-browser` for the host browser.
+
+The macOS backend is experimental. Its build/launch command flow is covered by
+`bash tools/test_macos_vm.sh`; full installation and agent login still require
+verification on an Apple-silicon Mac. See [Lima's macOS guest documentation](https://lima-vm.io/docs/usage/guests/macos/).
+
+### Linux Lima VM backend
 
 `build_vm` provisions the expensive language runtimes and development tools
 once, verifies Docker and the coding agents, stops the resulting `ai-base`

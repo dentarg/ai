@@ -41,6 +41,7 @@ Options:
       --udp-ports <list>
                        Publish comma-separated UDP PORT or HOST:CONTAINER ports
       --vm            Use an ephemeral Lima VM instead of a Podman container
+      --macos         Use a macOS Lima VM (implies --vm)
       --keep-vm       Keep the Lima VM after exit (implies --vm)
       --gpu           Use the GPU-enabled Lima base VM
       --nested-virt   Enable nested virtualization in the Lima VM
@@ -128,6 +129,7 @@ ONEPASSWORD=${AI_1PASSWORD:-}
 HOST_BROWSER=${AI_HOST_BROWSER:-}
 HOST_BROWSER_PROFILE=${AI_HOST_BROWSER_PROFILE:-default}
 VM_BACKEND=0
+MACOS=0
 KEEP_VM=0
 GPU=0
 NESTED_VIRT=0
@@ -167,6 +169,10 @@ while [ $# -gt 0 ]; do
       ;;
     --udp-ports=*)
       UDP_PORTS=${1#--udp-ports=}
+      ;;
+    --macos)
+      VM_BACKEND=1
+      MACOS=1
       ;;
     --vm)
       VM_BACKEND=1
@@ -247,6 +253,18 @@ if [ "$GPU" -eq 1 ] || [ "$NESTED_VIRT" -eq 1 ] || \
     echo 'at=fatal msg="--gpu, --nested-virt, --cpus, and --memory require --vm"' >&2
     exit 1
   fi
+fi
+
+if [ "$MACOS" -eq 1 ]; then
+  if [ "$(uname -s)" != Darwin ] || [ "$(uname -m)" != arm64 ]; then
+    echo 'at=fatal msg="macOS VMs require an Apple-silicon Mac"' >&2
+    exit 1
+  fi
+  if [ "$GPU" -eq 1 ] || [ "$NESTED_VIRT" -eq 1 ] || [ -n "$UDP_PORTS" ]; then
+    echo 'at=fatal msg="--macos does not support --gpu, --nested-virt, or --udp-ports"' >&2
+    exit 1
+  fi
+  BUNDLE_DIR=${AI_DIR}/bundle-macos
 fi
 
 case "$CODEX_PROFILE" in
@@ -370,6 +388,7 @@ HOST_BROWSER_ENV=""
 HOST_BROWSER_VOLUME=""
 VM_NAME=""
 VM_SESSION_STATUS=0
+VM_TUNNEL_DIR=""
 
 cleanup_onepassword_bridge() {
   if [ -n "$BROKER_PID" ]; then
@@ -401,6 +420,10 @@ cleanup_host_browser() {
 }
 
 cleanup_vm() {
+  if [ -n "$VM_TUNNEL_DIR" ]; then
+    ssh -S "$VM_TUNNEL_DIR/control" -O exit "lima-$VM_NAME" >/dev/null 2>&1 || true
+    rm -rf "$VM_TUNNEL_DIR"
+  fi
   [ -n "$VM_NAME" ] || return 0
   if [ "$KEEP_VM" -eq 1 ]; then
     if [ "$VM_SESSION_STATUS" -ne 0 ]; then
@@ -761,15 +784,32 @@ install_host_terminfo() {
   [ -n "${TERM:-}" ] || return 1
   host_terminfo=$(host_terminfo_source) || return 1
 
+  if [ "$MACOS" -eq 1 ]; then
+    set -- /opt/homebrew/opt/ncurses/bin/tic -x -o /workspace/.terminfo /dev/stdin
+  else
+    set -- sudo tic -x -o /etc/terminfo /dev/stdin
+  fi
   terminfo_error=$(
     printf '%s\n' "$host_terminfo" | \
       limactl shell --workdir /app "$VM_NAME" -- \
-        sudo tic -x -o /etc/terminfo /dev/stdin \
+        "$@" \
         2>&1 >/dev/null
   ) || {
     printf '%s\n' "$terminfo_error" >&2
     return 1
   }
+}
+
+start_macos_forwards() {
+  VM_TUNNEL_DIR=$(mktemp -d "${TMPDIR:-/tmp}/ai-vm-ssh.XXXXXX")
+  ssh_config=$(limactl list "$VM_NAME" --format '{{.SSHConfigFile}}')
+  set -- ssh -F "$ssh_config" -M -S "$VM_TUNNEL_DIR/control" \
+    -o ControlMaster=yes -o ControlPersist=no -o ExitOnForwardFailure=yes -f -N
+  port_pairs=$(printf '%s' "$forwards_json" | jq -r '.[] | "\(.hostPort):\(.guestPort)"')
+  for pair in $port_pairs; do
+    set -- "$@" -L "127.0.0.1:${pair%:*}:127.0.0.1:${pair#*:}"
+  done
+  "$@" "lima-$VM_NAME"
 }
 
 run_lima_vm() {
@@ -785,13 +825,15 @@ run_lima_vm() {
     ''|*[!0-9]*) echo 'at=fatal msg="PORT must be numeric for --vm"' >&2; exit 1 ;;
   esac
 
-  if [ "$GPU" -eq 1 ]; then
+  if [ "$MACOS" -eq 1 ]; then
+    base_name=${AI_VM_BASE:-ai-base-macos}
+  elif [ "$GPU" -eq 1 ]; then
     base_name=${AI_VM_BASE:-ai-base-gpu}
   else
     base_name=${AI_VM_BASE:-ai-base}
   fi
   if ! limactl list --format '{{.Name}}' | grep -Fx "$base_name" >/dev/null 2>&1; then
-    echo "at=fatal msg=\"Lima base VM not found; run ./build_vm first\" vm=$base_name" >&2
+    echo "at=fatal msg=\"Lima base VM not found; run ./build_vm (with --macos for macOS) first\" vm=$base_name" >&2
     exit 1
   fi
 
@@ -829,6 +871,11 @@ run_lima_vm() {
       '. + [{location:$location, mountPoint:"/run/host-browser", writable:false}]')
   fi
 
+  if [ "$MACOS" -eq 1 ]; then
+    mounts_json=$(printf '%s' "$mounts_json" | jq -c \
+      'map(.mountPoint = ("/Users/Shared/ai" + .mountPoint))')
+  fi
+
   forwards_json=$(jq -cn \
     --argjson guest "$PORT" \
     --argjson host "$primary_host_port" \
@@ -838,7 +885,13 @@ run_lima_vm() {
   append_lima_forwards "$UDP_PORTS" udp 0.0.0.0 0.0.0.0
 
   base_vm_type=$(limactl list "$base_name" --format '{{.VMType}}')
-  config_expression=".mounts = ${mounts_json} | .portForwards = ${forwards_json} | .timezone = \"UTC\""
+  if [ "$MACOS" -eq 1 ]; then
+    # macOS guests have no Lima port forwarder; establish SSH tunnels below.
+    lima_forwards='[]'
+  else
+    lima_forwards=$forwards_json
+  fi
+  config_expression=".mounts = ${mounts_json} | .portForwards = ${lima_forwards} | .timezone = \"UTC\""
   set -- clone --tty=false
   [ "$NESTED_VIRT" -eq 1 ] && set -- "$@" --nested-virt
   [ -n "$VM_CPUS" ] && set -- "$@" --cpus "$VM_CPUS"
@@ -848,7 +901,12 @@ run_lima_vm() {
   set -- "$@" --set "$config_expression" "$base_name" "$VM_NAME"
   limactl "$@"
   limactl start "$VM_NAME"
-  limactl shell --workdir /app "$VM_NAME" sudo hostnamectl set-hostname "$VM_NAME"
+  if [ "$MACOS" -eq 1 ]; then
+    limactl shell --workdir /app "$VM_NAME" sudo scutil --set HostName "$VM_NAME"
+    start_macos_forwards
+  else
+    limactl shell --workdir /app "$VM_NAME" sudo hostnamectl set-hostname "$VM_NAME"
+  fi
   guest_term=${TERM:-xterm-256color}
   if ! install_host_terminfo; then
     if [ "$guest_term" != xterm-256color ]; then
@@ -901,7 +959,9 @@ run_lima_vm() {
       NODE_EXTRA_CA_CERTS=/run/host-browser/ca.pem \
       HOST_BROWSER_TOKEN_FILE=/workspace/.ai-host-browser-token
   fi
-  set -- "$@" bash -c '
+  guest_bash=bash
+  [ "$MACOS" -eq 1 ] && guest_bash=/opt/homebrew/bin/bash
+  set -- "$@" "$guest_bash" -c '
     if [ ! -s /workspace/.bashrc ] || [ ! -s /usr/local/bin/cx ] || \
       [ ! -s /usr/local/bin/x ] || \
       ! grep -F "alias x=exit" /workspace/.bashrc >/dev/null; then
@@ -915,7 +975,7 @@ run_lima_vm() {
       export HOST_BROWSER_TOKEN=$(cat "$HOST_BROWSER_TOKEN_FILE")
     fi
     cd /app
-    exec bash --rcfile /workspace/.bashrc -i
+    exec "$BASH" --rcfile /workspace/.bashrc -i
   '
   session_status=0
   limactl shell --workdir /app "$VM_NAME" "$@" || session_status=$?

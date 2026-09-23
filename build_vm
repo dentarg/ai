@@ -4,6 +4,11 @@ set -eu
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_DIR=$SCRIPT_DIR
+for argument do
+  if [ "$argument" = --macos ]; then
+    exec sh "$REPO_DIR/lima/macos/build.sh" "$@"
+  fi
+done
 # shellcheck source=tools/build-common.sh
 . "${REPO_DIR}/tools/build-common.sh"
 
@@ -26,8 +31,8 @@ trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
 usage () {
-  echo "Usage: ./build_vm [--force] [--gpu] [--update-claude] [--update-codex] [--update-plugins]" >&2
-  echo "       ./build_vm [--force] [--gpu] --update-agents" >&2
+  echo "Usage: ./build_vm [--force] [--gpu | --macos] [--update-claude] [--update-codex] [--update-plugins]" >&2
+  echo "       ./build_vm [--force] [--gpu | --macos] --update-agents" >&2
   exit "${1:-1}"
 }
 

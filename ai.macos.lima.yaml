@@ -1,0 +1,41 @@
+minimumLimaVersion: 2.1.0
+base:
+  - template:_images/macos-26
+vmType: vz
+os: Darwin
+arch: aarch64
+cpus: 4
+memory: 8GiB
+disk: 100GiB
+mounts: []
+video:
+  display: default
+containerd:
+  system: false
+  user: false
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      [ ! -f /var/db/ai-macos-bootstrap ] || exit 0
+      user='{{.User}}'
+      guest_home=$(dscl . -read "/Users/$user" NFSHomeDirectory | cut -d ' ' -f2-)
+      # macOS seals its root volume. Synthetic links expose the paths shared
+      # with our Linux shell scripts; mount targets live on the data volume.
+      mkdir -p /Users/Shared/ai/host-workdir /Users/Shared/ai/run
+      for name in app bundle commandhistory history repos settings share claude host-workdir run; do
+        if ! grep -q "^${name}[[:space:]]" /etc/synthetic.conf 2>/dev/null; then
+          printf '%s\tUsers/Shared/ai/%s\n' "$name" "$name" >> /etc/synthetic.conf
+        fi
+      done
+      if ! grep -q '^workspace[[:space:]]' /etc/synthetic.conf; then
+        printf 'workspace\t%s\n' "${guest_home#/}" >> /etc/synthetic.conf
+      fi
+      chown -R "$user":staff /Users/Shared/ai
+      # Match the Linux development guest: agents can administer their own VM.
+      mkdir -p /etc/sudoers.d
+      printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$user" > /etc/sudoers.d/ai
+      chmod 440 /etc/sudoers.d/ai
+      visudo -cf /etc/sudoers.d/ai
+      touch /var/db/ai-macos-bootstrap
