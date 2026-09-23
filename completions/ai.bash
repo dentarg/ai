@@ -1,3 +1,12 @@
+_ai_browser_profile_options() {
+  local path
+  printf '%s\n' --host-browser=default
+  for path in "${AI_DIR:-${HOME}/ai}/host-browser/profiles"/*; do
+    [[ -d "$path" ]] || continue
+    printf '%s\n' "--host-browser=${path##*/}"
+  done
+}
+
 _ai_complete() {
   local command=${COMP_WORDS[0]}
   local current=${COMP_WORDS[COMP_CWORD]}
@@ -11,6 +20,7 @@ _ai_complete() {
       values="profile models completion cx --resume --ports --udp-ports --vm
         --keep-vm --gpu --nested-virt --cpus --memory --1password
         --host-browser --remote --fast --help
+        $(_ai_browser_profile_options)
         $("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')"
       ;;
     2)
@@ -22,6 +32,7 @@ _ai_complete() {
           values="$("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')
             --resume --vm --keep-vm --gpu --nested-virt --cpus --memory
             --ports --udp-ports --1password --host-browser --help"
+          values="$values $(_ai_browser_profile_options)"
           ;;
       esac
       ;;

@@ -10,7 +10,8 @@ trap 'rm -rf "$tmpdir"' EXIT
 
 ai_dir="${tmpdir}/ai"
 mkdir -p "${ai_dir}/settings/codex_alpha" \
-  "${ai_dir}/settings/claude_alpha"
+  "${ai_dir}/settings/claude_alpha" \
+  "${ai_dir}/host-browser/profiles/work"
 printf '%s\n' '{}' > "${ai_dir}/settings/claude_alpha/settings.json"
 printf '%s\n' '# defaults' > \
   "${ai_dir}/settings/codex_alpha/default.config.toml"
@@ -68,6 +69,10 @@ COMP_WORDS=(ai profile rem)
 COMP_CWORD=2
 _ai_complete
 [[ ${COMPREPLY[*]} == remove ]]
+COMP_WORDS=(ai --host-browser=w)
+COMP_CWORD=1
+AI_DIR="$ai_dir" _ai_complete
+[[ ${COMPREPLY[*]} == --host-browser=work ]]
 COMP_WORDS=("$REPO_DIR/bin/ai" profile set-model alpha codex gpt-)
 COMP_CWORD=5
 AI_DIR="$ai_dir" _ai_complete
@@ -87,6 +92,7 @@ AI_DIR="$ai_dir" REPO_DIR="$REPO_DIR" zsh -dfc '
   CURRENT=2
   candidates=("${(@f)$(_ai)}")
   [[ $candidates[1] == *ai-arguments*profile*--host-browser* ]]
+  [[ $candidates[1] == *--host-browser=work* ]]
   words=(ai profile set)
   CURRENT=3
   [[ $(_ai) == *set-model* ]]

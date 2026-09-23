@@ -9,6 +9,12 @@ require_relative "host-browser-proxy"
 class HostBrowserProxyTest < Minitest::Test
   TOKEN = "session-token"
 
+  def test_certificate_remains_valid_for_long_running_sessions
+    certificate, = HostBrowserProxy.certificate
+
+    assert_operator certificate.not_after, :>, Time.now + (364 * 24 * 60 * 60)
+  end
+
   def setup
     @requests = Queue.new
     @upstream = TCPServer.new("127.0.0.1", 0)

@@ -47,7 +47,8 @@ Options:
       --cpus <count>  Override CPU count for the Lima VM
       --memory <GiB>  Override memory in GiB for the Lima VM
       --1password     Enable approved, allowlisted 1Password reads
-      --host-browser  Launch and expose an isolated host Chrome Canary
+      --host-browser[=<name>]
+                       Launch host Chrome Canary with a persistent profile
       --remote        Enable Claude Code remote control
       --fast          Enable Claude Code fast mode
   -h, --help          Show this help
@@ -56,6 +57,8 @@ Environment:
   AI_DIR              Directory for persistent AI data (default: \$HOME/ai)
   AI_1PASSWORD        Enable the 1Password bridge when truthy
   AI_HOST_BROWSER     Enable the host browser when truthy
+  AI_HOST_BROWSER_PROFILE
+                      Persistent browser profile name (default: default)
   AI_CHROME_CANARY_PATH
                       Chrome Canary executable path
   AI_REMOTE           Enable remote control when set to 1, true, yes, or on
@@ -106,7 +109,8 @@ is_true() {
 #   --cpus <count>       override the cloned Lima VM's CPU count.
 #   --memory <GiB>       override the cloned Lima VM's memory.
 #   --1password          start the approved, allowlisted 1Password bridge.
-#   --host-browser       launch host Chrome Canary with an isolated profile.
+#   --host-browser[=name]
+#                        launch host Chrome Canary with a persistent profile.
 #   --remote             enable Claude Code remote control; passed to `c --remote`.
 #                        Also enabled when AI_REMOTE is truthy (1/true/yes/on).
 #   --fast               enable fast mode; passed to `c --fast`.
@@ -122,6 +126,7 @@ REMOTE=${AI_REMOTE:-}
 FAST=${AI_FAST:-}
 ONEPASSWORD=${AI_1PASSWORD:-}
 HOST_BROWSER=${AI_HOST_BROWSER:-}
+HOST_BROWSER_PROFILE=${AI_HOST_BROWSER_PROFILE:-default}
 VM_BACKEND=0
 KEEP_VM=0
 GPU=0
@@ -200,6 +205,10 @@ while [ $# -gt 0 ]; do
     --host-browser)
       HOST_BROWSER=1
       ;;
+    --host-browser=*)
+      HOST_BROWSER=1
+      HOST_BROWSER_PROFILE=${1#--host-browser=}
+      ;;
     --remote)
       REMOTE=1
       ;;
@@ -222,6 +231,15 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+if is_true "$HOST_BROWSER"; then
+  case "$HOST_BROWSER_PROFILE" in
+    ''|.|..|*[!A-Za-z0-9._-]*)
+      echo "at=fatal msg=\"invalid host browser profile\" profile=$HOST_BROWSER_PROFILE" >&2
+      exit 1
+      ;;
+  esac
+fi
 
 if [ "$GPU" -eq 1 ] || [ "$NESTED_VIRT" -eq 1 ] || \
   [ -n "$VM_CPUS" ] || [ -n "$VM_MEMORY" ]; then
@@ -349,6 +367,7 @@ ONEPASSWORD_VOLUME=""
 HOST_BROWSER_PID=""
 HOST_BROWSER_PROXY_PID=""
 HOST_BROWSER_SESSION_DIR=""
+HOST_BROWSER_PROFILE_LOCK=""
 HOST_BROWSER_ENV=""
 HOST_BROWSER_VOLUME=""
 VM_NAME=""
@@ -375,6 +394,11 @@ cleanup_host_browser() {
   fi
   if [ -n "$HOST_BROWSER_SESSION_DIR" ] && [ -d "$HOST_BROWSER_SESSION_DIR" ]; then
     rm -rf "$HOST_BROWSER_SESSION_DIR"
+  fi
+  if [ -n "$HOST_BROWSER_PROFILE_LOCK" ] && \
+    [ -d "$HOST_BROWSER_PROFILE_LOCK" ]; then
+    rm -f "${HOST_BROWSER_PROFILE_LOCK}/owner"
+    rmdir "$HOST_BROWSER_PROFILE_LOCK" 2>/dev/null || true
   fi
 }
 
@@ -497,16 +521,50 @@ start_host_browser() {
 
   run_dir="${AI_DIR}/run"
   log_dir="${AI_DIR}/logs"
-  mkdir -p "$run_dir" "$log_dir"
-  chmod 700 "$run_dir" "$log_dir"
+  browser_dir="${AI_DIR}/host-browser"
+  browser_profiles_dir="${browser_dir}/profiles"
+  mkdir -p "$run_dir" "$log_dir" "$browser_dir" "$browser_profiles_dir"
+  chmod 700 "$run_dir" "$log_dir" "$browser_dir" "$browser_profiles_dir"
+
+  if [ "$HOST_BROWSER_PROFILE" = default ]; then
+    browser_profile="${browser_dir}/profile"
+    browser_profile_lock="${browser_dir}/profile.lock"
+  else
+    browser_profile="${browser_profiles_dir}/${HOST_BROWSER_PROFILE}"
+    browser_profile_lock="${browser_profiles_dir}/${HOST_BROWSER_PROFILE}.lock"
+  fi
+  if ! mkdir "$browser_profile_lock" 2>/dev/null; then
+    lock_owner=$(cat "${browser_profile_lock}/owner" 2>/dev/null || true)
+    lock_command=""
+    case "$lock_owner" in
+      ''|*[!0-9]*) ;;
+      *) lock_command=$(ps -p "$lock_owner" -o command= 2>/dev/null || true) ;;
+    esac
+    case "$lock_command" in
+      *bin/ai*)
+        echo 'at=fatal msg="host browser profile is already in use"' >&2
+        exit 1
+        ;;
+    esac
+    rm -f "${browser_profile_lock}/owner"
+    rmdir "$browser_profile_lock" 2>/dev/null || {
+      echo 'at=fatal msg="could not reclaim host browser profile lock"' >&2
+      exit 1
+    }
+    mkdir "$browser_profile_lock"
+  fi
+  HOST_BROWSER_PROFILE_LOCK=$browser_profile_lock
+  printf '%s\n' "$$" > "${HOST_BROWSER_PROFILE_LOCK}/owner"
+
   HOST_BROWSER_SESSION_DIR=$(mktemp -d "${run_dir}/host-browser.XXXXXX")
   chmod 700 "$HOST_BROWSER_SESSION_DIR"
-  browser_profile="${HOST_BROWSER_SESSION_DIR}/profile"
   browser_bridge="${HOST_BROWSER_SESSION_DIR}/bridge"
   mkdir -p "$browser_profile" "$browser_bridge"
   chmod 700 "$browser_profile" "$browser_bridge"
 
   browser_log="${log_dir}/host-browser.log"
+  devtools_port_file="${browser_profile}/DevToolsActivePort"
+  rm -f "$devtools_port_file"
   "$chrome_path" \
     --user-data-dir="$browser_profile" \
     --remote-debugging-port=0 \
@@ -515,7 +573,6 @@ start_host_browser() {
     --no-startup-window >> "$browser_log" 2>&1 &
   HOST_BROWSER_PID=$!
 
-  devtools_port_file="${browser_profile}/DevToolsActivePort"
   attempts=0
   while [ ! -s "$devtools_port_file" ]; do
     if ! kill -0 "$HOST_BROWSER_PID" 2>/dev/null; then
@@ -580,7 +637,7 @@ start_host_browser() {
   export NODE_EXTRA_CA_CERTS
   HOST_BROWSER_ENV="--env HOST_BROWSER_URL --env HOST_BROWSER_TOKEN --env HOST_BROWSER_CA --env NODE_EXTRA_CA_CERTS"
   HOST_BROWSER_VOLUME="--volume ${browser_bridge}:/run/host-browser:ro"
-  echo "at=info msg=\"host browser ready\" browser=\"Google Chrome Canary\"" >&2
+  echo "at=info msg=\"host browser ready\" browser=\"Google Chrome Canary\" profile=$HOST_BROWSER_PROFILE" >&2
 }
 
 is_true "$HOST_BROWSER" && start_host_browser

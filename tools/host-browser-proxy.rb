@@ -6,6 +6,7 @@ require "socket"
 require "uri"
 
 module HostBrowserProxy
+  CERTIFICATE_LIFETIME = 365 * 24 * 60 * 60
   MAX_HEADER_BYTES = 64 * 1024
 
   class Server
@@ -241,7 +242,7 @@ module HostBrowserProxy
     certificate.issuer = certificate.subject
     certificate.public_key = key.public_key
     certificate.not_before = Time.now - 60
-    certificate.not_after = Time.now + 86_400
+    certificate.not_after = Time.now + CERTIFICATE_LIFETIME
 
     extensions = OpenSSL::X509::ExtensionFactory.new
     extensions.subject_certificate = certificate

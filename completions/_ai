@@ -20,6 +20,14 @@ _ai_models() {
   _describe model models
 }
 
+_ai_browser_profile_options() {
+  local path
+  print -r -- --host-browser=default
+  for path in "${AI_DIR:-${HOME}/ai}/host-browser/profiles"/*(N/); do
+    print -r -- "--host-browser=${path:t}"
+  done
+}
+
 _ai_commands_profiles_options() {
   local command=$words[1]
   local -a commands profiles options values
@@ -28,6 +36,7 @@ _ai_commands_profiles_options() {
   options=(
     --resume --ports --udp-ports --vm --keep-vm --gpu --nested-virt
     --cpus --memory --1password --host-browser --remote --fast --help
+    "${(@f)$(_ai_browser_profile_options)}"
   )
   values=("${commands[@]}" "${profiles[@]}" "${options[@]}")
   compadd -V ai-arguments -- "${values[@]}"
@@ -40,6 +49,7 @@ _ai_profiles_options() {
   options=(
     --resume --ports --udp-ports --vm --keep-vm --gpu --nested-virt
     --cpus --memory --1password --host-browser --help
+    "${(@f)$(_ai_browser_profile_options)}"
   )
   values=("${profiles[@]}" "${options[@]}")
   compadd -V ai-arguments -- "${values[@]}"
