@@ -240,7 +240,7 @@ fi
 )
 
 grep -F '<clone> <--tty=false>' "$log" | \
-  grep -F '<ai-base-gpu> <ai-00-project-with-spaces>' >/dev/null
+  grep -F '<ai-base-gpu> <ai-gpu-00-project-with-spaces>' >/dev/null
 
 if grep -F '<--network=vzNAT>' "$log" >/dev/null; then
   echo 'at=fatal msg="vzNAT was enabled for krunkit"' >&2

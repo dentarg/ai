@@ -738,19 +738,26 @@ append_lima_forwards() {
 }
 
 next_vm_name() {
+  name_prefix=ai
+  if [ "$MACOS" -eq 1 ]; then
+    name_prefix=ai-macos
+  elif [ "$GPU" -eq 1 ]; then
+    name_prefix=ai-gpu
+  fi
+  project_limit=$((63 - ${#name_prefix} - 4))
   project_name=$(basename "$(pwd -P)" | tr '[:upper:]' '[:lower:]')
   project_name=$(printf '%s' "$project_name" | sed \
     -e 's/[^a-z0-9-]/-/g' \
     -e 's/--*/-/g' \
     -e 's/^-//' \
-    -e 's/-$//' | cut -c1-57)
+    -e 's/-$//' | cut -c1-"$project_limit")
   project_name=${project_name%-}
   [ -n "$project_name" ] || project_name=workspace
 
   existing_names=$(limactl list --format '{{.Name}}' 2>/dev/null)
   index=0
   while [ "$index" -lt 100 ]; do
-    candidate=$(printf 'ai-%02d-%s' "$index" "$project_name")
+    candidate=$(printf '%s-%02d-%s' "$name_prefix" "$index" "$project_name")
     if ! printf '%s\n' "$existing_names" | grep -Fx "$candidate" >/dev/null 2>&1; then
       printf '%s\n' "$candidate"
       return 0

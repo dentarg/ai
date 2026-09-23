@@ -286,8 +286,11 @@ provisioning runs separately from Lima's boot scripts, and `build_vm` streams
 its output. This avoids Lima's fixed ten-minute boot-script and cloud-init
 progress-monitor limits.
 
-Runtime instances and guest hostnames use `ai-XX-<project>`, where `XX` is the
-first available two-digit suffix and `project` is the current directory name.
+Runtime instances and guest hostnames use `ai-XX-<project>` for standard Linux
+VMs, `ai-gpu-XX-<project>` for GPU VMs, and `ai-macos-XX-<project>` for macOS VMs.
+`XX` is the first available two-digit index for that type and project, and
+`project` is the sanitized current directory name, truncated to keep the VM
+name within 63 characters.
 Guests use UTC, matching the container backend.
 
 VZ runtime clones use Apple's native `vzNAT` networking to avoid Lima's

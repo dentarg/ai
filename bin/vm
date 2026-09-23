@@ -18,19 +18,21 @@ project_name() {
     -e 's/[^a-z0-9-]/-/g' \
     -e 's/--*/-/g' \
     -e 's/^-//' \
-    -e 's/-$//' | cut -c1-57)
+    -e 's/-$//' | cut -c1-"${1:-57}")
   name=${name%-}
   printf '%s\n' "${name:-workspace}"
 }
 
 resolve_current() {
   project=$(project_name)
+  gpu_project=$(project_name 53)
+  macos_project=$(project_name 51)
   running=""
   fallback=""
 
   while read -r name; do
     case "$name" in
-      ai-[0-9][0-9]-"$project")
+      ai-[0-9][0-9]-"$project"|ai-gpu-[0-9][0-9]-"$gpu_project"|ai-macos-[0-9][0-9]-"$macos_project")
         fallback=$name
         status=$(limactl list "$name" --format '{{.Status}}' 2>/dev/null || true)
         [ "$status" = Running ] && running=$name
@@ -54,7 +56,7 @@ resolve_last() {
 
   while read -r name; do
     case "$name" in
-      ai-[0-9][0-9]-*)
+      ai-[0-9][0-9]-*|ai-gpu-[0-9][0-9]-*|ai-macos-[0-9][0-9]-*)
         fallback=$name
         status=$(limactl list "$name" --format '{{.Status}}' 2>/dev/null || true)
         [ "$status" = Running ] && running=$name

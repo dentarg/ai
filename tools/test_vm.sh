@@ -27,6 +27,11 @@ if [[ "${1:-}" == list && "${2:-}" == --quiet ]]; then
     ai-00-other \
     ai-00-project-with-spaces \
     ai-01-project-with-spaces
+  if [[ -n "${TEST_VM_NAME:-}" ]]; then
+    printf '%s\n' "$TEST_VM_NAME"
+  fi
+elif [[ "${1:-}" == list && -n "${TEST_VM_NAME:-}" && "${2:-}" == "$TEST_VM_NAME" ]]; then
+  printf '%s\n' Running
 elif [[ "${1:-}" == list && "${2:-}" == ai-00-project-with-spaces ]]; then
   printf '%s\n' Stopped
 elif [[ "${1:-}" == list && "${2:-}" == ai-01-project-with-spaces ]]; then
@@ -73,5 +78,33 @@ LIMACTL_LOG="$log" TERM=xterm-ghostty TERMINFO_STATUS=1 \
   >"$fallback_output" 2>&1
 grep -F '<env> <TERM=xterm-256color>' "$log" >/dev/null
 grep -F 'falling back to xterm-256color' "$fallback_output" >/dev/null
+
+for variant in gpu macos; do
+  vm_name="ai-${variant}-00-project-with-spaces"
+  for mode in current last; do
+    : > "$log"
+    (
+      cd "$project"
+      export TEST_VM_NAME="$vm_name" LIMACTL_LOG="$log" PATH="${fake_bin}:${PATH}"
+      if [[ "$mode" == current ]]; then
+        "$REPO_DIR/bin/vm"
+      else
+        "$REPO_DIR/bin/vm" last
+      fi
+    )
+    grep -F "<shell> <--workdir> </app> <$vm_name>" "$log" >/dev/null
+  done
+  long_project=$(printf '%060d' 0)
+  mkdir -p "$tmpdir/$long_project"
+  limit=53
+  [[ "$variant" == macos ]] && limit=51
+  vm_name="ai-${variant}-00-${long_project:0:$limit}"
+  : > "$log"
+  (
+    cd "$tmpdir/$long_project"
+    TEST_VM_NAME="$vm_name" LIMACTL_LOG="$log" PATH="${fake_bin}:${PATH}" "$REPO_DIR/bin/vm"
+  )
+  grep -F "<shell> <--workdir> </app> <$vm_name>" "$log" >/dev/null
+done
 
 echo 'at=info msg="Lima VM helper tests passed"'
