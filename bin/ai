@@ -703,19 +703,18 @@ host_terminfo_source() {
 }
 
 install_host_terminfo() {
-  [ -n "${TERM:-}" ] || return 0
+  [ -n "${TERM:-}" ] || return 1
+  host_terminfo=$(host_terminfo_source) || return 1
 
-  if host_terminfo=$(host_terminfo_source); then
-    terminfo_error=$(
-      printf '%s\n' "$host_terminfo" | \
-        limactl shell --workdir /app "$VM_NAME" -- \
-          sudo tic -x -o /etc/terminfo /dev/stdin \
-          2>&1 >/dev/null
-    ) || {
-      printf '%s\n' "$terminfo_error" >&2
-      return 1
-    }
-  fi
+  terminfo_error=$(
+    printf '%s\n' "$host_terminfo" | \
+      limactl shell --workdir /app "$VM_NAME" -- \
+        sudo tic -x -o /etc/terminfo /dev/stdin \
+        2>&1 >/dev/null
+  ) || {
+    printf '%s\n' "$terminfo_error" >&2
+    return 1
+  }
 }
 
 run_lima_vm() {
@@ -797,7 +796,13 @@ run_lima_vm() {
   limactl "$@"
   limactl start "$VM_NAME"
   limactl shell --workdir /app "$VM_NAME" sudo hostnamectl set-hostname "$VM_NAME"
-  install_host_terminfo
+  guest_term=${TERM:-xterm-256color}
+  if ! install_host_terminfo; then
+    if [ "$guest_term" != xterm-256color ]; then
+      echo "at=warning msg=\"host terminal definition unavailable; falling back to xterm-256color\" terminal=$guest_term" >&2
+    fi
+    guest_term=xterm-256color
+  fi
 
   if [ -n "$BROKER_SESSION_DIR" ]; then
     # Keep the token out of process arguments and Lima configuration/logs.
@@ -814,6 +819,7 @@ run_lima_vm() {
   set -- env \
     HOME=/workspace \
     BASH_ENV=/workspace/.bash_profile \
+    TERM="$guest_term" \
     HOST_DIR="$HOST_DIR_NAME" \
     HOST_WORKDIR="$HOST_WORKDIR" \
     PORT="$PORT" \

@@ -23,6 +23,7 @@ mkdir -p \
 
 cat > "${fake_bin}/infocmp" <<'EOF'
 #!/bin/sh
+[ "${INFOCMP_STATUS:-0}" -eq 0 ] || exit "$INFOCMP_STATUS"
 [ "$1" = -x ] || exit 1
 [ "${2:-}" = -A ] || exit 1
 printf '%s\n' 'xterm-ghostty|Ghostty,' '  colors#256,'
@@ -112,6 +113,7 @@ grep -F '<ai-base> <ai-00-project-with-spaces>' "$log" >/dev/null
 grep -F '.timezone = "UTC"' "$log" >/dev/null
 grep -F '<shell> <--workdir> </app> <ai-00-project-with-spaces> <sudo> <hostnamectl> <set-hostname> <ai-00-project-with-spaces>' "$log" >/dev/null
 grep -F '<shell> <--workdir> </app> <ai-00-project-with-spaces> <--> <sudo> <tic> <-x> <-o> </etc/terminfo> </dev/stdin>' "$log" >/dev/null
+grep -F '<TERM=xterm-ghostty>' "$log" >/dev/null
 if grep -F '<--yes>' "$log" >/dev/null; then
   echo 'at=fatal msg="Lima launcher used deprecated --yes flag"' >&2
   exit 1
@@ -136,6 +138,26 @@ grep -F '<shell> <--workdir> </app>' "$log" >/dev/null
 grep -F 'Lima clone is missing the provisioned shell or tools' "$log" >/dev/null
 grep -F '<stop>' "$log" >/dev/null
 grep -F '<delete> <--force>' "$log" >/dev/null
+
+: > "$log"
+fallback_output="${tmpdir}/fallback-output"
+(
+  cd "$project"
+  HOME="${tmpdir}/home" \
+  AI_DIR="$ai_dir" \
+  AI_VM_HOST_PORT=45560 \
+  INFOCMP_STATUS=1 \
+  LIMACTL_LOG="$log" \
+  TERM=xterm-ghostty \
+  PATH="${fake_bin}:${PATH}" \
+    "$REPO_DIR/bin/ai" --vm >"$fallback_output" 2>&1
+)
+grep -F '<TERM=xterm-256color>' "$log" >/dev/null
+grep -F 'falling back to xterm-256color' "$fallback_output" >/dev/null
+if grep -F '<tic>' "$log" >/dev/null; then
+  echo 'at=fatal msg="terminfo compilation ran without a source"' >&2
+  exit 1
+fi
 
 : > "$log"
 failure_output="${tmpdir}/failure-output"

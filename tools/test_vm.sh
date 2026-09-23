@@ -33,6 +33,8 @@ elif [[ "${1:-}" == list && "${2:-}" == ai-01-project-with-spaces ]]; then
   printf '%s\n' Running
 elif [[ "${1:-}" == list && "${2:-}" == ai-00-other ]]; then
   printf '%s\n' Running
+elif [[ "${1:-}" == shell && "$*" == *' infocmp '* ]]; then
+  exit "${TERMINFO_STATUS:-0}"
 fi
 EOF
 chmod +x "${fake_bin}/limactl"
@@ -46,7 +48,8 @@ if grep -F '<list> <ai-base-gpu> <--format> <{{.Status}}>' "$log" >/dev/null; th
   echo 'at=fatal msg="vm helper inspected an unrelated base VM"' >&2
   exit 1
 fi
-grep -F '<shell> <--workdir> </app> <ai-01-project-with-spaces> <bash> <--rcfile> </workspace/.bashrc> <-i>' "$log" >/dev/null
+grep -F '<shell> <--workdir> </app> <ai-01-project-with-spaces> <env> <TERM=' "$log" | \
+  grep -F '<bash> <--rcfile> </workspace/.bashrc> <-i>' >/dev/null
 if grep -F '<start>' "$log" >/dev/null; then
   echo 'at=fatal msg="vm helper restarted a running VM"' >&2
   exit 1
@@ -56,10 +59,19 @@ fi
 LIMACTL_LOG="$log" PATH="${fake_bin}:${PATH}" \
   "$REPO_DIR/bin/vm" ai-00-project-with-spaces uname -a
 grep -F '<start> <ai-00-project-with-spaces>' "$log" >/dev/null
-grep -F '<shell> <--workdir> </app> <ai-00-project-with-spaces> <uname> <-a>' "$log" >/dev/null
+grep -F '<shell> <--workdir> </app> <ai-00-project-with-spaces> <env> <TERM=' "$log" | \
+  grep -F '<uname> <-a>' >/dev/null
 
 : > "$log"
 LIMACTL_LOG="$log" PATH="${fake_bin}:${PATH}" "$REPO_DIR/bin/vm" last
 grep -F '<shell> <--workdir> </app> <ai-01-project-with-spaces>' "$log" >/dev/null
+
+: > "$log"
+fallback_output="${tmpdir}/fallback-output"
+LIMACTL_LOG="$log" TERM=xterm-ghostty TERMINFO_STATUS=1 \
+  PATH="${fake_bin}:${PATH}" "$REPO_DIR/bin/vm" last \
+  >"$fallback_output" 2>&1
+grep -F '<env> <TERM=xterm-256color>' "$log" >/dev/null
+grep -F 'falling back to xterm-256color' "$fallback_output" >/dev/null
 
 echo 'at=info msg="Lima VM helper tests passed"'

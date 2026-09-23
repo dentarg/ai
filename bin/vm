@@ -107,7 +107,17 @@ if [ "$status" != Running ]; then
   limactl start "$instance"
 fi
 
+guest_term=${TERM:-xterm-256color}
+if ! limactl shell --workdir /app "$instance" -- \
+  infocmp -x "$guest_term" >/dev/null 2>&1; then
+  if [ "$guest_term" != xterm-256color ]; then
+    echo "at=warning msg=\"terminal definition unavailable; falling back to xterm-256color\" terminal=$guest_term vm=$instance" >&2
+  fi
+  guest_term=xterm-256color
+fi
+
 if [ $# -eq 0 ]; then
   set -- bash --rcfile /workspace/.bashrc -i
 fi
-exec limactl shell --workdir /app "$instance" "$@"
+exec limactl shell --workdir /app "$instance" \
+  env TERM="$guest_term" "$@"
