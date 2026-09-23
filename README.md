@@ -168,13 +168,12 @@ cx --resume <session-id>
 x
 ```
 
-`bin/ai` mounts the project at both `/app` and a host-named path used by `cx`,
-so Codex's terminal title and project/status fields show the host directory
-name instead of `app`. Its generated statusline shows the project and OAuth
-profile as `<project> [<profile>]`, followed by the git branch,
-model/reasoning, context used, and thread id. TUI notifications are disabled
-for quieter terminal sessions. Codex defaults to `gpt-6-astra`. To override
-the default for an OAuth profile, add native Codex configuration such as
+`bin/ai` mounts the project at `/app`, and `cx` preserves that working
+directory when it launches Codex. Its generated statusline shows the current
+directory, git branch, model/reasoning, context used, and thread id. TUI
+notifications are disabled for quieter terminal sessions. Codex defaults to
+`gpt-6-astra`. To override the default for an OAuth profile, add native Codex
+configuration such as
 `model = "gpt-6-sol"` to
 `~/ai/settings/codex_<oauth-profile>/default.config.toml`. Use
 `~/ai/settings/codex/default.config.toml` for the unprofiled account.

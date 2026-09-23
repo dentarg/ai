@@ -131,16 +131,7 @@ main () {
   local shared_codex_home
   local shared_auth
   local config_profile_path
-  local host_dir
   local codex_cwd
-  local project_cwd
-  local host_workdir_parent=""
-  local host_workdir
-  local status_profile
-  local status_workdir
-  local status_workdir_parent
-  local pwd_toml
-  local project_cwd_toml
   local codex_cwd_toml
   local status
   local -a codex_cmd=()
@@ -258,46 +249,7 @@ main () {
   fi
   [[ -f "$SETTINGS_ROOT/AGENTS.md" ]] && cp "$SETTINGS_ROOT/AGENTS.md" "$HOME/.codex"
 
-  host_dir="${HOST_DIR:-$(basename "$PWD")}"
-  case "$host_dir" in
-    ""|*/*) host_dir=$(basename "$PWD") ;;
-  esac
-
   codex_cwd="$PWD"
-  if [[ -n "${HOST_WORKDIR:-}" && -d "$HOST_WORKDIR" && \
-    "$(basename "$HOST_WORKDIR")" == "$host_dir" ]]; then
-    codex_cwd=$HOST_WORKDIR
-  elif host_workdir_parent=$(mktemp -d /tmp/codex-host-cwd.XXXXXX); then
-    host_workdir="$host_workdir_parent/$host_dir"
-    if ln -s "$PWD" "$host_workdir"; then
-      codex_cwd="$host_workdir"
-    else
-      echo "at=warn msg=\"failed to create host-named codex cwd\" path=$host_workdir" >&2
-      rmdir "$host_workdir_parent" 2>/dev/null || true
-      host_workdir_parent=""
-    fi
-  else
-    echo "at=warn msg=\"failed to create temporary codex cwd parent\"" >&2
-  fi
-
-  project_cwd=$codex_cwd
-  status_profile=${profile:-default}
-  status_workdir_parent=$HOME
-  status_workdir="${status_workdir_parent}/${host_dir} [${status_profile}]"
-  if [[ -e "$status_workdir" && ! -L "$status_workdir" ]]; then
-    status_workdir_parent="$HOME/.cx"
-    status_workdir="${status_workdir_parent}/${host_dir} [${status_profile}]"
-  fi
-  mkdir -p "$status_workdir_parent"
-  if [[ ! -e "$status_workdir" || -L "$status_workdir" ]]; then
-    ln -sfn "$project_cwd" "$status_workdir"
-    codex_cwd=$status_workdir
-  else
-    echo "at=warn msg=\"Codex status workdir already exists\" path=\"$status_workdir\"" >&2
-  fi
-
-  pwd_toml=$(printf '%s' "$PWD" | jq -Rs .)
-  project_cwd_toml=$(printf '%s' "$project_cwd" | jq -Rs .)
   codex_cwd_toml=$(printf '%s' "$codex_cwd" | jq -Rs .)
 
   # Pre-trust the working directory so codex skips the "Do you trust this
@@ -314,25 +266,9 @@ notifications = false
 status_line = ["current-dir", "git-branch", "model-with-reasoning", "context-used", "thread-id"]
 terminal_title = ["project-name"]
 
-[projects.$pwd_toml]
-trust_level = "trusted"
-EOF
-
-  if [[ "$project_cwd" != "$PWD" ]]; then
-    cat >> "$HOME/.codex/config.toml" <<EOF
-
-[projects.$project_cwd_toml]
-trust_level = "trusted"
-EOF
-  fi
-
-  if [[ "$codex_cwd" != "$PWD" ]]; then
-    cat >> "$HOME/.codex/config.toml" <<EOF
-
 [projects.$codex_cwd_toml]
 trust_level = "trusted"
 EOF
-  fi
 
   install_image_plugins
 
@@ -347,15 +283,6 @@ EOF
 
   cleanup() {
     sync_auth_back
-    if [[ -n "$host_workdir_parent" ]]; then
-      rm -rf "$host_workdir_parent"
-    fi
-    if [[ -L "$status_workdir" ]]; then
-      rm -f "$status_workdir"
-      if [[ "$status_workdir_parent" != "$HOME" ]]; then
-        rmdir "$status_workdir_parent" 2>/dev/null || true
-      fi
-    fi
   }
 
   trap 'cleanup' EXIT

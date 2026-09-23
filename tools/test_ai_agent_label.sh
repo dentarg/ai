@@ -35,8 +35,11 @@ PATH="${fake_bin}:${REPO_DIR}/bin:${PATH}" \
 assert_label codex
 project_name=$(basename "$(pwd)")
 grep -Fx "HOST_DIR=$project_name" "$PODMAN_ARGS_FILE" >/dev/null
-grep -Fx "HOST_WORKDIR=/host-workdir/$project_name" "$PODMAN_ARGS_FILE" >/dev/null
-grep -Fx "$(pwd):/host-workdir/$project_name" "$PODMAN_ARGS_FILE" >/dev/null
+grep -Fx "$(pwd):/app" "$PODMAN_ARGS_FILE" >/dev/null
+if grep -F '/host-workdir/' "$PODMAN_ARGS_FILE" >/dev/null; then
+  echo 'at=fatal msg="project was mounted at a second working directory"' >&2
+  exit 1
+fi
 
 mkdir -p "${ai_dir}/settings/codex_alpha"
 printf '{}\n' > "${ai_dir}/settings/codex_alpha/auth.json"

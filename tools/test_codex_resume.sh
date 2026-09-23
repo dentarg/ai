@@ -89,9 +89,8 @@ assert_equal "alpha" "$(printf '%s\n' "$output" | sed -n '2p')" \
 
 printf '%s\n' 'model = "gpt-test"' > "${SETTINGS_ROOT}/codex_alpha/work.config.toml"
 output=$(
+  cd "$run_dir"
   HOME="${tmpdir}/home" \
-  HOST_DIR=$(basename "$run_dir") \
-  HOST_WORKDIR="$run_dir" \
   HISTORY_ROOT="$tmpdir" \
   SETTINGS_ROOT="$SETTINGS_ROOT" \
   PATH="${tmpdir}/bin:$PATH" \
@@ -103,8 +102,10 @@ assert_equal 'model = "gpt-test"' "$(printf '%s\n' "$output" | sed -n '4p')" \
   "Codex config profile was not installed"
 printf '%s\n' "$output" | grep -Fx -- '--profile' >/dev/null
 printf '%s\n' "$output" | grep -Fx -- 'work' >/dev/null
-printf '%s\n' "$output" | grep -Fx -- '--cd' >/dev/null
-printf '%s\n' "$output" | grep -F -- 'example_codex [alpha]' >/dev/null
+codex_cwd=$(printf '%s\n' "$output" | awk \
+  'previous == "--cd" { print; exit } { previous = $0 }')
+assert_equal "$run_dir" "$codex_cwd" \
+  "Codex did not preserve the project working directory"
 grep -F 'status_line = ["current-dir",' \
   "${tmpdir}/home/.codex/config.toml" >/dev/null
 
@@ -113,15 +114,17 @@ printf '%s\n' '{"profile":"default"}' > "${SETTINGS_ROOT}/codex/auth.json"
 printf '%s\n' 'model = "gpt-profile"' > \
   "${SETTINGS_ROOT}/codex/default.config.toml"
 output=$(
+  cd "$run_dir"
   HOME="${tmpdir}/home" \
-  HOST_DIR=$(basename "$run_dir") \
-  HOST_WORKDIR="$run_dir" \
   HISTORY_ROOT="$tmpdir" \
   SETTINGS_ROOT="$SETTINGS_ROOT" \
   PATH="${tmpdir}/bin:$PATH" \
     main
 )
-printf '%s\n' "$output" | grep -F -- 'example_codex [default]' >/dev/null
+codex_cwd=$(printf '%s\n' "$output" | awk \
+  'previous == "--cd" { print; exit } { previous = $0 }')
+assert_equal "$run_dir" "$codex_cwd" \
+  "default Codex launch did not preserve the project working directory"
 assert_equal "default" "$(printf '%s\n' "$output" | sed -n '2p')" \
   "Codex default config profile was not selected"
 assert_equal 'model = "gpt-profile"' "$(printf '%s\n' "$output" | sed -n '3p')" \

@@ -25,7 +25,7 @@ Flags: `--history PATH` (default `/history`), `--port N` (default 8765), `--host
 - Transcript rendering: prompts and final answers by default; "show intermediate steps" reveals progress messages, thinking, tool calls, and results. A separate "show internals" toggle reveals metadata. Older transcripts without final-answer markers use the last prose response between prompts. Codex rollouts and Pi's branching session format are normalised into the same view
 - Export to markdown — **clean** (just the user/assistant prose) or **full** (thinking, tool calls, results, meta wrappers)
 - Publish to [pastehtml.dev](https://pastehtml.dev) — renders the transcript as currently shown (internals toggle included) into a self-contained HTML page and publishes it to a private shareable link (2 MB limit). The paste's `update_token` is kept in the browser's `localStorage`, so re-publishing the same session updates the existing paste and the shared link stays current. The server proxies the API (`POST /api/publish`, pastehtml.dev sends no CORS headers), so it needs outbound network access; point `PASTEHTML_API` at a self-hosted instance to override
-- Session titles skip generated context and slash-command wrappers, picking the first real user prompt; Codex sessions use the host working-directory name
+- Session titles skip generated context and slash-command wrappers, picking the first real user prompt; Codex sessions use their recorded working-directory name
 - Stats dashboard: tokens-per-day chart (line per model, with All time / Last 30 days / Last 7 days tabs and a per-model legend showing share, In/Out/cache tokens, and cost), plus breakdown tables by day / week / month / repo / model
 
 Stats default to **All profiles**. Use the Profile selector to scope totals,

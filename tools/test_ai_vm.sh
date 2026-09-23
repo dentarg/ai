@@ -119,7 +119,10 @@ if grep -F '<--yes>' "$log" >/dev/null; then
   exit 1
 fi
 grep -F '"mountPoint":"/app"' "$log" >/dev/null
-grep -F '"mountPoint":"/host-workdir/project with spaces"' "$log" >/dev/null
+if grep -F '"mountPoint":"/host-workdir/' "$log" >/dev/null; then
+  echo 'at=fatal msg="project was mounted at a second VM working directory"' >&2
+  exit 1
+fi
 grep -F '"mountPoint":"/run/host-browser"' "$log" >/dev/null
 grep -F '"location":"'"$project"'"' "$log" >/dev/null
 grep -F '"guestPort":1337,"hostPort":45555' "$log" >/dev/null
@@ -127,7 +130,6 @@ grep -F '"guestPort":9999,"hostPort":9999' "$log" >/dev/null
 grep -F '"guestPort":7777,"hostPort":8888' "$log" >/dev/null
 grep -F '"guestPort":41641,"hostPort":41642,"guestIP":"0.0.0.0","hostIP":"0.0.0.0","proto":"udp"' "$log" >/dev/null
 grep -F '<AI_AUTO_LAUNCH=1>' "$log" >/dev/null
-grep -F '<HOST_WORKDIR=/host-workdir/project with spaces>' "$log" >/dev/null
 grep -F '<CODEX_AUTO_START=1>' "$log" >/dev/null
 grep -F '<HOST_BROWSER_URL=https://host.lima.internal:' "$log" >/dev/null
 grep -F '<HOST_BROWSER_CA=/run/host-browser/ca.pem>' "$log" >/dev/null

@@ -351,8 +351,6 @@ case "$CWD_LABEL" in
   "$HOME"/*) CWD_LABEL="~/${CWD_LABEL#$HOME/}" ;;
 esac
 HOST_DIR_NAME=$(basename "$(pwd)")
-HOST_WORKDIR="/host-workdir/${HOST_DIR_NAME}"
-
 mkdir -p $BUNDLE_DIR
 mkdir -p $COMMAND_HISTORY_DIR
 mkdir -p $HISTORY_DIR
@@ -809,7 +807,6 @@ run_lima_vm() {
     --arg share "$SHARE_DIR" \
     --arg claude "${REPO_DIR}/claude" \
     --arg app "$(pwd -P)" \
-    --arg host_workdir "$HOST_WORKDIR" \
     '[
       {location:$bundle, mountPoint:"/bundle", writable:true},
       {location:$commands, mountPoint:"/commandhistory", writable:true},
@@ -818,8 +815,7 @@ run_lima_vm() {
       {location:$settings, mountPoint:"/settings", writable:true},
       {location:$share, mountPoint:"/share", writable:true},
       {location:$claude, mountPoint:"/claude", writable:false},
-      {location:$app, mountPoint:"/app", writable:true},
-      {location:$app, mountPoint:$host_workdir, writable:true}
+      {location:$app, mountPoint:"/app", writable:true}
     ]')
 
   if [ -n "$BROKER_SESSION_DIR" ]; then
@@ -878,7 +874,6 @@ run_lima_vm() {
     BASH_ENV=/workspace/.bash_profile \
     TERM="$guest_term" \
     HOST_DIR="$HOST_DIR_NAME" \
-    HOST_WORKDIR="$HOST_WORKDIR" \
     PORT="$PORT" \
     AI_AUTO_LAUNCH=1
   [ -n "$PROFILE" ] && set -- "$@" CLAUDE_PROFILE="$PROFILE"
@@ -951,7 +946,6 @@ podman run --rm --interactive --tty \
   --cap-add=NET_RAW \
   --cap-add=SYS_PTRACE \
   --env HOST_DIR="$HOST_DIR_NAME" \
-  --env HOST_WORKDIR="$HOST_WORKDIR" \
   --env PORT=${PORT} \
   ${PROFILE_ENV:-} \
   ${CODEX_PROFILE_ENV:-} \
@@ -971,7 +965,6 @@ podman run --rm --interactive --tty \
   ${HOST_BROWSER_VOLUME:-} \
   --volume ${REPO_DIR}/claude:/claude:ro \
   --volume $(pwd):/app \
-  --volume "$(pwd):${HOST_WORKDIR}" \
   --workdir /app \
   --publish ${PORT} \
   ${PUBLISH_PORTS:-} \
