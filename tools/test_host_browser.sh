@@ -25,6 +25,13 @@ for argument do
   esac
 done
 mkdir -p "$profile"
+ruby -rjson - "${profile}/Default/Preferences" <<'RUBY'
+preferences = JSON.parse(File.read(ARGV.fetch(0)))
+abort "translation prompts enabled" unless preferences.dig("translate", "enabled") == false
+abort "password saving enabled" unless preferences["credentials_enable_service"] == false
+abort "password manager enabled" unless preferences.dig("profile", "password_manager_enabled") == false
+RUBY
+if [ "$?" -ne 0 ]; then exit 1; fi
 if [ -f "${profile}/persisted-state" ]; then
   printf '%s\n' reused > "$PROFILE_REUSED_FILE"
 fi
@@ -86,6 +93,10 @@ if find "${ai_dir}/run" -mindepth 1 -print -quit | grep . >/dev/null; then
 fi
 test -f "${ai_dir}/host-browser/profile/persisted-state"
 
+cat > "${ai_dir}/host-browser/profile/Default/Preferences" <<'EOF'
+{"translate":{"enabled":true,"recent_target":"sv"},"credentials_enable_service":true,"profile":{"password_manager_enabled":true,"name":"Existing"},"homepage":"https://example.com"}
+EOF
+
 mkdir "${ai_dir}/host-browser/profile.lock"
 printf '%s\n' 999999 > "${ai_dir}/host-browser/profile.lock/owner"
 HOME="${tmpdir}/home" \
@@ -94,6 +105,12 @@ AI_CHROME_CANARY_PATH="${fake_bin}/chrome-canary" \
 PATH="${fake_bin}:${PATH}" \
   "$REPO_DIR/bin/ai" --host-browser >/dev/null 2>&1
 test -f "$PROFILE_REUSED_FILE"
+ruby -rjson - "${ai_dir}/host-browser/profile/Default/Preferences" <<'RUBY'
+preferences = JSON.parse(File.read(ARGV.fetch(0)))
+abort "translation preferences lost" unless preferences.dig("translate", "recent_target") == "sv"
+abort "profile preferences lost" unless preferences.dig("profile", "name") == "Existing"
+abort "homepage lost" unless preferences["homepage"] == "https://example.com"
+RUBY
 
 named_reused_file="${tmpdir}/named-profile-reused"
 HOME="${tmpdir}/home" \

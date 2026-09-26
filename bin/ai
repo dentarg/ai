@@ -583,6 +583,22 @@ start_host_browser() {
   mkdir -p "$browser_profile" "$browser_bridge"
   chmod 700 "$browser_profile" "$browser_bridge"
 
+  # Merge preferences before Chrome opens the profile and takes ownership of it.
+  ruby -rjson -rfileutils -rtempfile - "$browser_profile" <<'RUBY'
+profile_dir = File.join(ARGV.fetch(0), "Default")
+FileUtils.mkdir_p(profile_dir, mode: 0700)
+path = File.join(profile_dir, "Preferences")
+preferences = File.exist?(path) ? JSON.parse(File.read(path)) : {}
+(preferences["translate"] ||= {})["enabled"] = false
+preferences["credentials_enable_service"] = false
+(preferences["profile"] ||= {})["password_manager_enabled"] = false
+Tempfile.create(["Preferences", ".tmp"], profile_dir) do |file|
+  file.write(JSON.generate(preferences) + "\n")
+  file.flush
+  File.rename(file.path, path)
+end
+RUBY
+
   browser_log="${log_dir}/host-browser.log"
   devtools_port_file="${browser_profile}/DevToolsActivePort"
   rm -f "$devtools_port_file"

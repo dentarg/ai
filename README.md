@@ -458,6 +458,10 @@ exits. The profile remains under `$HOME/ai/host-browser/profile`, preserving
 browser state such as cookies, logins, and extensions across sessions and host
 reboots. Only one host-browser session may use the profile at a time.
 
+On every launch, translation offers and password-saving prompts are disabled
+for both new and existing profiles. Other preferences and saved browser state
+are preserved.
+
 Use a named profile to run isolated browser identities concurrently. Named
 profiles remain under `$HOME/ai/host-browser/profiles/<name>`:
 
