@@ -1,0 +1,122 @@
+#!/bin/sh
+
+set -eu
+
+usage() {
+  cat <<'USAGE'
+Usage: browser-recorder [options]
+
+Record the authenticated host browser to JSONL files.
+
+Options:
+  --id ID                         Use ID in the output filename
+  --output-dir DIR                Set output directory (default: current directory)
+  --dom-snapshots MODE            Set snapshot mode: none, actions, or all
+  --capture-high-frequency-events Include pointer and mouse movement events
+  --no-request-bodies             Omit request bodies
+  --no-response-bodies            Omit response bodies
+  --no-form-values                Omit typed form values
+  --no-clipboard                  Omit clipboard contents
+  --no-file-contents              Omit selected file contents
+  -h, --help                      Show this help
+
+With no options, the recorder captures available data in the current directory.
+USAGE
+}
+
+fail() {
+  printf 'browser-recorder: %s\n\n' "$1" >&2
+  usage >&2
+  exit 2
+}
+
+set_value() {
+  variable=$1
+  value=$2
+  case "$variable" in
+    RECORDING_ID) RECORDING_ID=$value; export RECORDING_ID ;;
+    RECORDING_OUTPUT_DIR) RECORDING_OUTPUT_DIR=$value; export RECORDING_OUTPUT_DIR ;;
+    DOM_SNAPSHOTS) DOM_SNAPSHOTS=$value; export DOM_SNAPSHOTS ;;
+    CAPTURE_HIGH_FREQUENCY_EVENTS)
+      CAPTURE_HIGH_FREQUENCY_EVENTS=$value
+      export CAPTURE_HIGH_FREQUENCY_EVENTS
+      ;;
+    CAPTURE_REQUEST_BODIES) CAPTURE_REQUEST_BODIES=$value; export CAPTURE_REQUEST_BODIES ;;
+    CAPTURE_RESPONSE_BODIES) CAPTURE_RESPONSE_BODIES=$value; export CAPTURE_RESPONSE_BODIES ;;
+    CAPTURE_FORM_VALUES) CAPTURE_FORM_VALUES=$value; export CAPTURE_FORM_VALUES ;;
+    CAPTURE_CLIPBOARD) CAPTURE_CLIPBOARD=$value; export CAPTURE_CLIPBOARD ;;
+    CAPTURE_FILE_CONTENTS) CAPTURE_FILE_CONTENTS=$value; export CAPTURE_FILE_CONTENTS ;;
+    *) printf 'browser-recorder: invalid internal option\n' >&2; exit 2 ;;
+  esac
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --id|--output-dir|--dom-snapshots)
+      option=$1
+      [ "$#" -ge 2 ] || fail "missing value for $option"
+      value=$2
+      case "$option" in
+        --id) set_value RECORDING_ID "$value" ;;
+        --output-dir) set_value RECORDING_OUTPUT_DIR "$value" ;;
+        --dom-snapshots)
+          case "$value" in
+            none|actions|all) set_value DOM_SNAPSHOTS "$value" ;;
+            *) fail "invalid DOM snapshot mode: $value" ;;
+          esac
+          ;;
+      esac
+      shift 2
+      ;;
+    --capture-high-frequency-events)
+      set_value CAPTURE_HIGH_FREQUENCY_EVENTS true
+      shift
+      ;;
+    --no-request-bodies)
+      set_value CAPTURE_REQUEST_BODIES false
+      shift
+      ;;
+    --no-response-bodies)
+      set_value CAPTURE_RESPONSE_BODIES false
+      shift
+      ;;
+    --no-form-values)
+      set_value CAPTURE_FORM_VALUES false
+      shift
+      ;;
+    --no-clipboard)
+      set_value CAPTURE_CLIPBOARD false
+      shift
+      ;;
+    --no-file-contents)
+      set_value CAPTURE_FILE_CONTENTS false
+      shift
+      ;;
+    --*) fail "unknown option: $1" ;;
+    *) fail "unexpected argument: $1" ;;
+  esac
+done
+
+command -v node >/dev/null 2>&1 || {
+  printf 'browser-recorder: node is required\n' >&2
+  exit 127
+}
+
+if [ -z "${NODE_PATH:-}" ]; then
+  command -v npm >/dev/null 2>&1 || {
+    printf 'browser-recorder: npm is required to locate global puppeteer-core\n' >&2
+    exit 127
+  }
+  NODE_PATH=$(npm root -g) || exit
+elif command -v npm >/dev/null 2>&1; then
+  global_node_path=$(npm root -g) || exit
+  NODE_PATH="$global_node_path:$NODE_PATH"
+fi
+export NODE_PATH
+
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+exec node "$script_dir/record.cjs"
