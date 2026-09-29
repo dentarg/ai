@@ -72,7 +72,7 @@ find_matching_codex_resume_jsonl () {
           ;;
       esac
     done < <(find "$sessions_dir" -type f -name "$name_pattern" -print 2>/dev/null)
-  done < <(find "$history_root" -maxdepth 4 -type d -path '*_codex/sessions' -print 2>/dev/null)
+  done < <(find -H "$history_root" -maxdepth 4 -type d -path '*_codex/sessions' -print 2>/dev/null)
 
   return 1
 }
@@ -133,6 +133,9 @@ main () {
   local config_profile_path
   local codex_cwd
   local codex_cwd_toml
+  local codex_backup
+  local sqlite_home
+  local session_key
   local status
   local -a codex_cmd=()
 
@@ -230,8 +233,16 @@ main () {
     exit 1
   fi
 
-  rm -f "$HOME/.codex" # should be a symlink
   mkdir -p "$settings_home"
+  # Codex can create a real home directory before the wrapper's first launch.
+  # Keep its contents intact when switching to the shared session history.
+  if [[ -d "$HOME/.codex" && ! -L "$HOME/.codex" ]]; then
+    codex_backup=$(mktemp -d "$HOME/.codex-backup.XXXXXX")
+    mv "$HOME/.codex" "$codex_backup/.codex"
+    echo "at=info msg=\"saved existing Codex home\" path=\"$codex_backup/.codex\"" >&2
+  else
+    rm -f "$HOME/.codex"
+  fi
   ln -s "$settings_home" "$HOME/.codex"
 
   install -m 600 "$shared_auth" "$HOME/.codex/auth.json"
@@ -290,6 +301,15 @@ EOF
   codex_cmd=(
     codex
   )
+  if [[ "$(uname -s)" == Darwin ]]; then
+    # macOS VM history lives on virtiofs. Keep SQLite on the guest disk,
+    # separate from the shared transcripts and from other session homes.
+    session_key=$(printf '%s' "$settings_home" | shasum -a 256 | cut -d ' ' -f 1)
+    sqlite_home="$HOME/.codex-state/$session_key"
+    mkdir -p "$sqlite_home"
+    # A CLI override avoids writing a guest-specific path to shared config.
+    codex_cmd+=(-c "sqlite_home=$(printf '%s' "$sqlite_home" | jq -Rs .)")
+  fi
   [[ -n "$config_profile" ]] && codex_cmd+=(--profile "$config_profile")
   codex_cmd+=(
     --cd "$codex_cwd"

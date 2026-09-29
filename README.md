@@ -277,6 +277,9 @@ use the existing launcher. TCP ports are forwarded over an SSH tunnel bound to
 host loopback; the tunnel closes when the launcher exits, even with `--keep-vm`.
 UDP forwarding, `--gpu`, and `--nested-virt` are rejected for this backend.
 Native gem caches live in `$AI_DIR/bundle-macos`, separate from Linux gems.
+Codex transcripts remain in shared history, while its SQLite runtime databases
+live under `~/.codex-state` on the macOS guest disk to avoid shared-filesystem
+I/O errors. These local databases are discarded with an ephemeral VM.
 `s` starts native PostgreSQL, Redis, and LavinMQ as system launch daemons running
 as the guest user, then runs Bundler. The Linux Docker stack and Chromium setup
 are not installed in macOS guests; use `--host-browser` for the host browser.

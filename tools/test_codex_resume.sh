@@ -46,6 +46,11 @@ assert_equal "$expected" "$actual" "resume lookup selected wrong transcript"
 actual=$(find_codex_resume_jsonl "$tmpdir" "${session_id:0:8}")
 assert_equal "$expected" "$actual" "resume prefix lookup selected wrong transcript"
 
+ln -s "$tmpdir" "$tmpdir/history-link"
+actual=$(find_codex_resume_jsonl "$tmpdir/history-link" "$session_id" || true)
+assert_equal "$tmpdir/history-link/${expected#"$tmpdir/"}" "$actual" \
+  "resume lookup did not follow the macOS history root symlink"
+
 printf '{"type":"session_meta","payload":{"id":"%s"}}\n' "$legacy_id" > "$legacy_expected"
 actual=$(find_codex_resume_jsonl "$tmpdir" "legacy")
 assert_equal "$legacy_expected" "$actual" "resume lookup did not use session metadata fallback"
@@ -75,6 +80,9 @@ printf '%s\n' "$@"
 EOF
 chmod +x "${tmpdir}/bin/start.sh" "${tmpdir}/bin/codex"
 
+mkdir -p "${tmpdir}/home/.codex/sessions"
+printf '%s\n' 'existing local session' > "${tmpdir}/home/.codex/sessions/local.jsonl"
+
 output=$(
   HOME="${tmpdir}/home" \
   HISTORY_ROOT="$tmpdir" \
@@ -86,6 +94,13 @@ assert_equal "alpha" "$(printf '%s\n' "$output" | sed -n '1p')" \
   "resume did not load the saved Codex profile auth"
 assert_equal "alpha" "$(printf '%s\n' "$output" | sed -n '2p')" \
   "resume did not preserve the saved Codex profile"
+test -L "${tmpdir}/home/.codex"
+assert_equal "$run_dir" "$(readlink "${tmpdir}/home/.codex")" \
+  "resume did not link the selected session home"
+backups=("${tmpdir}/home"/.codex-backup.*/.codex/sessions/local.jsonl)
+assert_equal 1 "${#backups[@]}" "resume created multiple Codex home backups"
+assert_equal 'existing local session' "$(cat "${backups[0]}")" \
+  "resume did not preserve the existing Codex directory"
 
 printf '%s\n' 'model = "gpt-test"' > "${SETTINGS_ROOT}/codex_alpha/work.config.toml"
 output=$(
@@ -131,5 +146,41 @@ assert_equal 'model = "gpt-profile"' "$(printf '%s\n' "$output" | sed -n '3p')" 
   "Codex default config profile was not installed"
 grep -F 'model = "gpt-6-astra"' \
   "${tmpdir}/home/.codex/config.toml" >/dev/null
+
+# macOS shared mounts must not host SQLite's runtime files. Keep the
+# transcript shared, but use a stable local database across repeated resumes.
+cat > "${tmpdir}/bin/uname" <<'EOF'
+#!/bin/sh
+echo "${TEST_CODEX_OS:-Darwin}"
+EOF
+chmod +x "${tmpdir}/bin/uname"
+printf '%s\n' 'shared database must remain untouched' > "$run_dir/state_5.sqlite"
+previous_sqlite_home=""
+for guest_os in Darwin Darwin Linux; do
+  output=$(
+    HOME="${tmpdir}/home" HISTORY_ROOT="$tmpdir" SETTINGS_ROOT="$SETTINGS_ROOT" \
+    TEST_CODEX_OS="$guest_os" PATH="${tmpdir}/bin:$PATH" main --resume "$session_id"
+  )
+  sqlite_override=$(printf '%s\n' "$output" | sed -n 's/^sqlite_home=//p')
+  if [[ "$guest_os" == Darwin ]]; then
+    [[ -n "$sqlite_override" ]] || {
+      echo 'at=fatal msg="macOS resume did not move SQLite off shared history"' >&2
+      exit 1
+    }
+    sqlite_home=$(printf '%s' "$sqlite_override" | jq -r .)
+    [[ "$sqlite_home" == "$tmpdir/home/.codex-state/"* ]]
+    test -d "$sqlite_home"
+    if [[ -n "$previous_sqlite_home" ]]; then
+      assert_equal "$previous_sqlite_home" "$sqlite_home" "resume changed SQLite location"
+    fi
+    previous_sqlite_home=$sqlite_home
+  else
+    assert_equal "" "$sqlite_override" "Linux resume unexpectedly moved SQLite"
+  fi
+  assert_equal "$run_dir" "$(readlink "$tmpdir/home/.codex")" \
+    "local SQLite changed the shared transcript location"
+  assert_equal 'shared database must remain untouched' "$(cat "$run_dir/state_5.sqlite")" \
+    "resume modified the shared database"
+done
 
 echo 'at=info msg="codex resume lookup tests passed"'

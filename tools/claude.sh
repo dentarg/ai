@@ -150,7 +150,7 @@ find_resume_jsonl () {
       return 0
     fi
   done <<EOF
-$(find "$history_root" -maxdepth 4 -type d -path "*_claude/projects" -print 2>/dev/null)
+$(find -H "$history_root" -maxdepth 4 -type d -path "*_claude/projects" -print 2>/dev/null)
 EOF
 
   return 1

@@ -41,6 +41,11 @@ assert_equal "$expected" "$actual" "resume lookup selected wrong transcript"
 actual=$(find_resume_jsonl "$tmpdir" "${session_id:0:8}")
 assert_equal "$expected" "$actual" "resume prefix lookup selected wrong transcript"
 
+ln -s "$tmpdir" "$tmpdir/history-link"
+actual=$(find_resume_jsonl "$tmpdir/history-link" "$session_id" || true)
+assert_equal "$tmpdir/history-link/${expected#"$tmpdir/"}" "$actual" \
+  "resume lookup did not follow the macOS history root symlink"
+
 actual=$(find_resume_jsonl "$tmpdir" "$subagent_id" || true)
 assert_equal "" "$actual" "resume lookup should ignore subagent transcripts"
 
