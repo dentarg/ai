@@ -39,6 +39,11 @@ command -v limactl >/dev/null 2>&1 || {
 }
 BASE_NAME=${AI_VM_BASE:-ai-base-macos}
 BUILD_TIMEOUT=${AI_VM_BUILD_TIMEOUT:-60m}
+XCODE_APP=${AI_VM_XCODE_APP:-/Applications/Xcode.app}
+if [ ! -x "$XCODE_APP/Contents/Developer/usr/bin/xcodebuild" ]; then
+  echo 'at=fatal msg="install Xcode on the host or set AI_VM_XCODE_APP to an Xcode.app path"' >&2
+  exit 1
+fi
 limactl validate "$REPO_DIR/ai.macos.lima.yaml"
 exists=0
 if limactl list --format '{{.Name}}' | grep -Fx "$BASE_NAME" >/dev/null; then
@@ -60,7 +65,7 @@ build_dir=$(mktemp -d "${TMPDIR:-/tmp}/ai-macos-build.XXXXXX")
 trap 'rm -rf "$build_dir"' EXIT
 trap 'exit 1' HUP INT TERM
 # Dereference installer/config symlinks whose targets are outside the archive.
-COPYFILE_DISABLE=1 tar -chzf "$build_dir/assets.tar.gz" -C "$REPO_DIR" \
+COPYFILE_DISABLE=1 /usr/bin/tar -chzf "$build_dir/assets.tar.gz" -C "$REPO_DIR" \
   lima/macos lima/assets/claude.sh lima/assets/gitconfig \
   dot.bashrc gitignore-global versions inside_deps/_codex_plugins.sh \
   inside_deps/npm-packages.txt tools/claude.sh tools/codex.sh tools/gemini.sh \
@@ -75,14 +80,32 @@ limactl start --tty=false --timeout "$BUILD_TIMEOUT" "$BASE_NAME"
 # Synthetic root links become available at the next boot.
 limactl stop "$BASE_NAME"
 limactl start --tty=false --timeout "$BUILD_TIMEOUT" "$BASE_NAME"
+echo 'at=info msg="copying macOS build assets"'
 limactl copy "$build_dir/assets.tar.gz" "$BASE_NAME:/tmp/ai-macos-assets.tar.gz"
+# Preserve Xcode's framework symlinks when transferring the application.
+echo 'at=info msg="archiving host Xcode; this may take several minutes"'
+COPYFILE_DISABLE=1 /usr/bin/tar -cf "$build_dir/xcode.tar" -C "$XCODE_APP" .
+echo 'at=info msg="copying Xcode archive into VM"'
+limactl copy "$build_dir/xcode.tar" "$BASE_NAME:/tmp/ai-xcode.tar"
+rm "$build_dir/xcode.tar"
+echo 'at=info msg="extracting Xcode in VM"'
+limactl shell --workdir /tmp "$BASE_NAME" bash -c '
+  set -eu
+  sudo rm -rf /Applications/Xcode.ai-staging.app
+  sudo mkdir -p /Applications/Xcode.ai-staging.app
+  sudo /usr/bin/tar -xf /tmp/ai-xcode.tar -C /Applications/Xcode.ai-staging.app
+  sudo rm -rf /Applications/Xcode.app
+  sudo mv /Applications/Xcode.ai-staging.app /Applications/Xcode.app
+  rm /tmp/ai-xcode.tar
+'
+echo 'at=info msg="provisioning macOS development tools"'
 limactl shell --workdir /tmp "$BASE_NAME" bash -c '
   set -eu
   test "$(uname -s)" = Darwin
   test -f /var/db/ai-macos-bootstrap
   rm -rf /tmp/ai-macos-build
   mkdir -p /tmp/ai-macos-build
-  tar -xzf /tmp/ai-macos-assets.tar.gz -C /tmp/ai-macos-build
+  /usr/bin/tar -xzf /tmp/ai-macos-assets.tar.gz -C /tmp/ai-macos-build
   bash /tmp/ai-macos-build/lima/macos/provision.sh
 '
 limactl stop "$BASE_NAME"
@@ -101,6 +124,10 @@ limactl shell --workdir /workspace "$BASE_NAME" bash -lc '
   terraform version
   toxiproxy-server --version
   toxiproxy-cli --version
+  xcodebuild -version
+  xcrun --sdk macosx --show-sdk-path
+  xcrun --sdk iphoneos --show-sdk-path
+  xcrun --sdk iphonesimulator --show-sdk-path
   sync
 '
 limactl stop "$BASE_NAME"

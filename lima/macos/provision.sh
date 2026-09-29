@@ -20,12 +20,15 @@ for tool in coreutils findutils gnu-sed gnu-tar grep; do
 done
 PROFILE
 source "$HOME/.bash_profile"
+bash "$assets/lima/macos/xcode.sh"
 while IFS= read -r package; do
   [[ -n "$package" ]] && npm install -g "$package"
 done < "$assets/inside_deps/npm-packages.txt"
 npm install -g "@openai/codex@$(cat "$assets/versions/codex")"
 bash "$assets/lima/assets/claude.sh" "$(cat "$assets/versions/claude-code")"
 rm -rf "$HOME/.claude"
+# This is a generated cache, and the installer expects an empty destination.
+sudo rm -rf /opt/codex-plugins
 sudo mkdir -p /usr/local/bin /opt/codex-plugins
 sudo chown "$(id -un)":staff /opt/codex-plugins
 bash "$assets/inside_deps/_codex_plugins.sh" "$assets/versions/codex-plugins" /opt/codex-plugins

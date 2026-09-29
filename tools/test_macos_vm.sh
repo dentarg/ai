@@ -5,6 +5,10 @@ tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 mkdir -p "$tmpdir/bin" "$tmpdir/project with spaces" "$tmpdir/ai/settings"
 export MACOS_TEST_LOG="$tmpdir/calls" MACOS_TEST_ARCHIVE="$tmpdir/assets.tar.gz"
+export AI_VM_XCODE_APP="$tmpdir/Xcode.app"
+mkdir -p "$AI_VM_XCODE_APP/Contents/Developer/usr/bin"
+touch "$AI_VM_XCODE_APP/Contents/Developer/usr/bin/xcodebuild"
+chmod +x "$AI_VM_XCODE_APP/Contents/Developer/usr/bin/xcodebuild"
 cat > "$tmpdir/bin/uname" <<'STUB'
 #!/bin/sh
 case "$1" in -m) echo arm64 ;; *) echo Darwin ;; esac
@@ -21,7 +25,9 @@ case "$1" in
       *) [[ "${MACOS_BASE_EXISTS:-0}" == 1 ]] && echo ai-base-macos ;;
     esac
     ;;
-  copy) cp "$2" "$MACOS_TEST_ARCHIVE" ;;
+  copy)
+    if [[ "$2" == */assets.tar.gz ]]; then cp "$2" "$MACOS_TEST_ARCHIVE"; fi
+    ;;
   shell)
     if [[ "$*" == *provision.sh* && "${FAIL_PROVISION:-0}" == 1 ]]; then exit 1; fi
     ;;
@@ -41,6 +47,7 @@ grep -F '<protect><ai-base-macos>' "$MACOS_TEST_LOG" >/dev/null
 grep -F 'terraform version' "$MACOS_TEST_LOG" >/dev/null
 grep -F 'toxiproxy-server --version' "$MACOS_TEST_LOG" >/dev/null
 grep -F 'toxiproxy-cli --version' "$MACOS_TEST_LOG" >/dev/null
+grep -F '<ai-base-macos:/tmp/ai-xcode.tar>' "$MACOS_TEST_LOG" >/dev/null
 tar -tzf "$MACOS_TEST_ARCHIVE" | grep -Fx 'lima/macos/provision.sh' >/dev/null
 mkdir "$tmpdir/extracted"
 tar -xzf "$MACOS_TEST_ARCHIVE" -C "$tmpdir/extracted"

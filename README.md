@@ -249,6 +249,15 @@ override the build defaults. `AI_VM_BUILD_TIMEOUT` controls each Lima startup
 The host must support the macOS 26 restore image supplied by the installed
 Lima template and run the same or a newer macOS version.
 
+Install full Xcode on the host before building. The build copies
+`/Applications/Xcode.app` into the guest; set `AI_VM_XCODE_APP` to use another
+Xcode application path. It accepts the Xcode license, installs first-launch
+components, and downloads the iOS simulator runtime. The guest includes
+`xcodebuild`, Swift, the macOS and iOS SDKs, and `simctl`. Allow space for Xcode
+and the simulator on both machines, plus a temporary Xcode archive during the
+build. Signing identities and provisioning profiles must be configured
+separately for signed device builds and distribution.
+
 Provisioning installs Homebrew, native language tools, the pinned Claude and
 Codex versions, Codex plugins, and the shared agent wrappers. The guest user
 gets passwordless sudo inside this disposable VM. The build reboots to activate
