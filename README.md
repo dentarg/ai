@@ -264,7 +264,13 @@ gets passwordless sudo inside this disposable VM. The build reboots to activate
 macOS synthetic links for `/workspace`, `/app`, and the other shared paths,
 then verifies the installed tools after another restart before protecting the
 base. No desktop login or Lima 2.3 `suppressFirstLoginSetup` setting is required
-by this SSH workflow. The virtual display remains enabled as required by Lima.
+by this SSH workflow. After startup, the launcher attempts to hide Lima's
+macOS display using the host's application API. The window may briefly appear
+and take focus before it is hidden; Lima still requires the display to exist.
+If that API fails, it tries System Events, which may request Automation or
+Accessibility permission for the host terminal. Hiding failures are nonfatal.
+The hide attempt times out after five seconds so it cannot block the build.
+Set `AI_VM_SHOW_DISPLAY=1` when building or launching to leave it visible.
 
 Profiles, resume, `--keep-vm`, CPU/memory overrides, and the opt-in host bridges
 use the existing launcher. TCP ports are forwarded over an SSH tunnel bound to

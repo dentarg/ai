@@ -22,6 +22,7 @@ case "$1" in
     case "$*" in
       *SSHConfigFile*) echo /tmp/test-ssh-config ;;
       *VMType*) echo vz ;;
+      *Dir*) echo /tmp/test-macos-vm ;;
       *) [[ "${MACOS_BASE_EXISTS:-0}" == 1 ]] && echo ai-base-macos ;;
     esac
     ;;
@@ -39,6 +40,16 @@ cat > "$tmpdir/bin/ssh" <<'STUB'
 printf '<%s>' "$@" >> "$MACOS_TEST_LOG"
 printf '\n' >> "$MACOS_TEST_LOG"
 STUB
+cat > "$tmpdir/bin/osascript" <<'STUB'
+#!/bin/sh
+printf 'hide-display <%s>\n' "$*" >> "$MACOS_TEST_LOG"
+cat >/dev/null
+if [ "${HIDE_DISPLAY_HANG:-0}" = 1 ]; then
+  echo "$$" > "$MACOS_TEST_LOG.hide-pid"
+  exec sleep 30
+fi
+exit "${HIDE_DISPLAY_STATUS:-0}"
+STUB
 chmod +x "$tmpdir/bin/"*
 export PATH="$tmpdir/bin:$PATH"
 "$REPO_DIR/build_vm" --macos >/dev/null
@@ -48,6 +59,7 @@ grep -F 'terraform version' "$MACOS_TEST_LOG" >/dev/null
 grep -F 'toxiproxy-server --version' "$MACOS_TEST_LOG" >/dev/null
 grep -F 'toxiproxy-cli --version' "$MACOS_TEST_LOG" >/dev/null
 grep -F '<ai-base-macos:/tmp/ai-xcode.tar>' "$MACOS_TEST_LOG" >/dev/null
+grep -F 'hide-display <-l JavaScript - /tmp/test-macos-vm/ha.pid>' "$MACOS_TEST_LOG" >/dev/null
 tar -tzf "$MACOS_TEST_ARCHIVE" | grep -Fx 'lima/macos/provision.sh' >/dev/null
 mkdir "$tmpdir/extracted"
 tar -xzf "$MACOS_TEST_ARCHIVE" -C "$tmpdir/extracted"
@@ -99,6 +111,16 @@ grep -F '<CODEX_AUTO_START=1>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '<-O><exit><lima-ai-macos-00-project-with-spaces>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '<delete><--force><ai-macos-00-project-with-spaces>' "$MACOS_TEST_LOG" >/dev/null
 ! grep -F 'hostnamectl' "$MACOS_TEST_LOG"
+: > "$MACOS_TEST_LOG"
+AI_VM_SHOW_DISPLAY=1 sh "$REPO_DIR/lima/macos/hide-display.sh" test-vm
+test ! -s "$MACOS_TEST_LOG"
+HIDE_DISPLAY_STATUS=1 sh "$REPO_DIR/lima/macos/hide-display.sh" test-vm 2>"$tmpdir/hide-error"
+grep -F 'could not hide macOS VM display' "$tmpdir/hide-error" >/dev/null
+SECONDS=0
+HIDE_DISPLAY_HANG=1 sh "$REPO_DIR/lima/macos/hide-display.sh" test-vm 2>"$tmpdir/hide-error"
+test "$SECONDS" -lt 15
+grep -F 'timed out hiding macOS VM display; continuing' "$tmpdir/hide-error" >/dev/null
+! kill -0 "$(cat "$MACOS_TEST_LOG.hide-pid")" 2>/dev/null
 if AI_DIR="$tmpdir/ai" "$REPO_DIR/bin/ai" --macos --udp-ports 9999 >/dev/null 2>&1; then
   echo 'at=fatal msg="macOS launcher accepted unsupported UDP forwarding"' >&2
   exit 1

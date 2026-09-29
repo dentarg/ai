@@ -77,9 +77,11 @@ if [ "$RESUME" -ne 1 ]; then
     --disk "${AI_VM_DISK:-100}" "$REPO_DIR/ai.macos.lima.yaml"
 fi
 limactl start --tty=false --timeout "$BUILD_TIMEOUT" "$BASE_NAME"
+sh "$REPO_DIR/lima/macos/hide-display.sh" "$BASE_NAME"
 # Synthetic root links become available at the next boot.
 limactl stop "$BASE_NAME"
 limactl start --tty=false --timeout "$BUILD_TIMEOUT" "$BASE_NAME"
+sh "$REPO_DIR/lima/macos/hide-display.sh" "$BASE_NAME"
 echo 'at=info msg="copying macOS build assets"'
 limactl copy "$build_dir/assets.tar.gz" "$BASE_NAME:/tmp/ai-macos-assets.tar.gz"
 # Preserve Xcode's framework symlinks when transferring the application.
@@ -110,6 +112,7 @@ limactl shell --workdir /tmp "$BASE_NAME" bash -c '
 '
 limactl stop "$BASE_NAME"
 limactl start --tty=false --timeout "$BUILD_TIMEOUT" "$BASE_NAME"
+sh "$REPO_DIR/lima/macos/hide-display.sh" "$BASE_NAME"
 limactl shell --workdir /workspace "$BASE_NAME" bash -lc '
   set -eu
   test -f /workspace/.ai-macos-provisioned

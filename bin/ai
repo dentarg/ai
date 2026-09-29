@@ -925,6 +925,7 @@ run_lima_vm() {
   limactl "$@"
   limactl start "$VM_NAME"
   if [ "$MACOS" -eq 1 ]; then
+    sh "$REPO_DIR/lima/macos/hide-display.sh" "$VM_NAME"
     limactl shell --workdir /app "$VM_NAME" sudo scutil --set HostName "$VM_NAME"
     start_macos_forwards
   else
