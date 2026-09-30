@@ -166,6 +166,8 @@ limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" \
     command -v claude
     command -v fnox
     command -v tailcat
+    command -v toxiproxy-server
+    command -v toxiproxy-cli
     test -s /workspace/.bashrc
     test -s /usr/local/bin/cx
     test -s /usr/local/bin/x

@@ -77,6 +77,7 @@ grep -F 'Package: chromium chromium-common' \
 grep -F 'Pin-Priority: 990' "$archive_dir/install-chromium.sh" >/dev/null
 grep -Fx 'poppler-utils' "$archive_dir/ubuntu-packages.txt" >/dev/null
 grep -Fx 'tesseract-ocr' "$archive_dir/ubuntu-packages.txt" >/dev/null
+grep -Fx 'toxiproxy' "$archive_dir/brew-packages.txt" >/dev/null
 grep -F 'systemctl disable docker.service' "$archive_dir/provision.sh" >/dev/null
 grep -F 'systemctl enable --now docker.socket' "$archive_dir/provision.sh" >/dev/null
 while read -r destination source archive; do
@@ -119,6 +120,8 @@ grep -F '<AI_VM_GPU=1>' "$log" >/dev/null
 grep -F 'test -c /dev/dri/renderD128' "$log" >/dev/null
 grep -F 'command -v fnox' "$log" >/dev/null
 grep -F 'command -v tailcat' "$log" >/dev/null
+grep -F 'command -v toxiproxy-server' "$log" >/dev/null
+grep -F 'command -v toxiproxy-cli' "$log" >/dev/null
 grep -F 'command -v llama-cli' "$log" >/dev/null
 grep -F 'command -v llama-server' "$log" >/dev/null
 grep -F 'llama-cli --list-devices' "$log" >/dev/null

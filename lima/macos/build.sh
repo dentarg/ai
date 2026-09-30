@@ -98,6 +98,8 @@ limactl shell --workdir /workspace "$BASE_NAME" bash -lc '
   claude --version
   codex --version
   ruby --version
+  toxiproxy-server --version
+  toxiproxy-cli --version
   sync
 '
 limactl stop "$BASE_NAME"

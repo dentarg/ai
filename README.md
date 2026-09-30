@@ -925,6 +925,7 @@ bin/setup-vm
 - [x] PostgreSQL
 - [x] LavinMQ
 - [x] Redis
+- [x] [Toxiproxy](https://github.com/Shopify/toxiproxy) — network failure simulation
 - [x] [amqpcat](https://github.com/cloudamqp/amqpcat)
 - [x] [tailcat](https://github.com/tailscale/tailcat) — netcat over Tailscale's data plane
 - [x] [rusage](https://justine.lol/rusage/) — better `time(1)`, prints full `getrusage(2)` stats

@@ -38,6 +38,8 @@ export PATH="$tmpdir/bin:$PATH"
 "$REPO_DIR/build_vm" --macos >/dev/null
 grep -F '<create><--tty=false><--name><ai-base-macos>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '<protect><ai-base-macos>' "$MACOS_TEST_LOG" >/dev/null
+grep -F 'toxiproxy-server --version' "$MACOS_TEST_LOG" >/dev/null
+grep -F 'toxiproxy-cli --version' "$MACOS_TEST_LOG" >/dev/null
 tar -tzf "$MACOS_TEST_ARCHIVE" | grep -Fx 'lima/macos/provision.sh' >/dev/null
 mkdir "$tmpdir/extracted"
 tar -xzf "$MACOS_TEST_ARCHIVE" -C "$tmpdir/extracted"

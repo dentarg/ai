@@ -39,6 +39,8 @@ bash -c 'nvm install 22'
 mapfile -t brew_packages < "$brew_packages_file"
 bash -c 'brew install "$@"' _ "${brew_packages[@]}"
 bash -c 'ast-grep --version'
+bash -c 'toxiproxy-server --version'
+bash -c 'toxiproxy-cli --version'
 
 mapfile -t npm_packages < "$npm_packages_file"
 bash -c 'npm install --global "$@"' _ "${npm_packages[@]}"
