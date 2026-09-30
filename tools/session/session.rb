@@ -36,8 +36,7 @@ class SessionCLI
     end
 
     command = argv.include?("--") ? argv.slice!(argv.index("--")..)[1..] : []
-    options = {image: DEFAULT_IMAGE, workspace: Dir.pwd, settings: "/settings",
-               ports: [], max_delay: 2.0}
+    options = {max_delay: 2.0}
     parser = OptionParser.new do |p|
       p.banner = "Usage: ai session #{action}#{action == 'list' ? '' : ' NAME'} [options]"
       if action == "start"
@@ -46,8 +45,8 @@ class SessionCLI
         p.on("--workspace DIRECTORY") { |v| options[:workspace] = v }
         p.on("--settings DIRECTORY") { |v| options[:settings] = v }
         p.on("--detach") { options[:detach] = true }
-        p.on("--port PORT", "Publish PORT or VM_PORT:PORT on VM loopback") do |v|
-          options[:ports] << published_port(v)
+        p.on("--port PORT", "--ports PORT", "Publish PORT or VM_PORT:PORT on VM loopback") do |v|
+          (options[:ports] ||= []) << published_port(v)
         end
       end
       p.on("--read-only") { options[:read_only] = true } if action == "attach"
@@ -152,12 +151,17 @@ class SessionCLI
     raise Error, "start sessions inside the Linux sandbox VM" unless RUBY_PLATFORM.include?("linux")
     raise Error, "supply the agent command after -- (for example: -- c myprofile)" if command.empty?
 
+    path = path_for(name)
+    previous = path.exist? ? locked(path) { stopped_session(path) } : nil
+    defaults = {image: DEFAULT_IMAGE, workspace: Dir.pwd, settings: "/settings", ports: []}
+    defaults.each_key do |key|
+      defaults[key] = previous[key.to_s] if previous && previous.key?(key.to_s)
+    end
+    options = defaults.merge(options)
     workspace = Pathname.new(options.fetch(:workspace)).realpath
     settings = Pathname.new(options.fetch(:settings)).realpath
     raise Error, "workspace and settings must be directories" unless workspace.directory? && settings.directory?
 
-    path = path_for(name)
-    raise Error, "session already exists: #{name}" if path.exist?
     if [workspace, settings].any? { |mount| path.ascend.any? { |ancestor| ancestor == mount } }
       raise Error, "session state must be outside the workspace and settings mounts"
     end
@@ -170,11 +174,21 @@ class SessionCLI
       docker("pull", image)
     end
     path.parent.mkpath
-    path.mkdir(0o700) # Reserve the name without overwriting any previous history.
+    begin
+      path.mkdir(0o700)
+    rescue Errno::EEXIST
+      # The lock below serializes starts, including concurrent name creation.
+    end
     locked(path) do
+      if path.join("session.json").exist?
+        current = stopped_session(path)
+        raise Error, "session changed while preparing; retry start" unless previous && current.fetch("id") == previous.fetch("id")
+        archive_run(path, current)
+      end
       identifier = SecureRandom.hex(16)
       metadata = {"id" => identifier, "name" => name, "container" => "ai-session-#{identifier}",
-                  "image" => image, "workspace" => workspace.to_s, "status" => "starting"}
+                  "image" => image, "workspace" => workspace.to_s, "settings" => settings.to_s,
+                  "ports" => options.fetch(:ports), "status" => "starting"}
       save(path, metadata)
       begin
         prepare(path)
@@ -187,7 +201,7 @@ class SessionCLI
                "-x", "120", "-y", "40", recorder)
         metadata["status"] = "running"
         save(path, metadata)
-        log(path, "session_started", session: name)
+        log(path, "session_started", session: name, run: identifier)
       rescue StandardError, Interrupt
         docker("rm", "--force", metadata.fetch("container"), check: false)
         metadata["status"] = "failed"
@@ -201,8 +215,25 @@ class SessionCLI
     options[:detach] ? 0 : attach(name, options)
   end
 
+  def stopped_session(path)
+    metadata = load(path)
+    raise Error, "session already exists: #{path.basename}; stop it before starting again" unless metadata.fetch("status") == "stopped"
+    raise Error, "stopped session still has a container; refusing to replace it" unless container_state(metadata) == "missing"
+
+    metadata
+  end
+
+  def archive_run(path, metadata)
+    archive = path.join("runs", metadata.fetch("id"))
+    archive.mkpath
+    %w[recording invitations].each do |entry|
+      path.join(entry).rename(archive.join(entry)) if path.join(entry).exist?
+    end
+    FileUtils.cp(path.join("session.json"), archive.join("session.json"))
+  end
+
   def prepare(path)
-    %w[history recording config commandhistory bundle].each { |directory| path.join(directory).mkdir }
+    %w[history recording config commandhistory bundle].each { |directory| path.join(directory).mkpath }
     path.join("config/tmux.conf").write(<<~TMUX)
       set -g remain-on-exit on
       set -g history-limit 50000
@@ -259,11 +290,17 @@ class SessionCLI
 
       data
     end
+    term = ENV.fetch("TERM", "xterm-256color")
+    # The host terminal may have a terminfo entry that the image does not ship.
+    # Query inside the container, where tmux will interpret this value.
+    supported = !term.empty? && !term.start_with?("-") &&
+      docker("exec", metadata.fetch("container"), "infocmp", "-x", term, check: false).last
+    term = "xterm-256color" unless supported
     connection = SecureRandom.hex(6)
     readonly = options[:read_only]
     log(path, "terminal_attached", connection: connection, access: readonly ? "read" : "write",
         participant: options.fetch(:participant, "owner"))
-    command = ["docker", "exec", "-it", "-e", "TERM=#{ENV.fetch('TERM', 'xterm-256color')}",
+    command = ["docker", "exec", "-it", "-e", "TERM=#{term}",
                metadata.fetch("container"), "tmux", "-L", "ai", "attach-session", "-t", name]
     command.concat(["-r", "-f", "ignore-size"]) if readonly
     handlers = %w[HUP TERM].to_h { |sig| [sig, Signal.trap(sig) { exit 128 + Signal.list.fetch(sig) }] }

@@ -11,7 +11,7 @@ class SessionRemote < SessionCLI
   PREFIX = "ai-session-v1."
 
   def run(action, argv)
-    options = {ports: []}
+    options = {ports: [], bind: "127.0.0.1"}
     parser = OptionParser.new do |p|
       p.banner = case action
                  when "join" then "Usage: ai session join INVITATION|@FILE [--port LOCAL_PORT:CONTAINER_PORT]"
@@ -19,15 +19,28 @@ class SessionRemote < SessionCLI
                  else "Usage: ai session #{action} NAME PARTICIPANT"
                  end
       p.on("--port PORT", "Forward LOCAL_PORT:CONTAINER_PORT (or the same PORT)") { |v| options[:ports] << v } if action == "join"
+      if action == "join"
+        p.on("--bind ADDRESS", %w[127.0.0.1 0.0.0.0], "Preview bind address (default: 127.0.0.1; Docker: 0.0.0.0)") do |value|
+          options[:bind] = value
+        end
+      end
       p.on("-h", "--help") { puts p; return 0 }
     end
     parser.parse!(argv)
     raise Error, parser.to_s unless argv.size == (%w[join invitations].include?(action) ? 1 : 2)
+    unless action == "join"
+      raise Error, "run session #{action} inside the Linux VM where the session is running" unless RUBY_PLATFORM.include?("linux")
+      unless path_for(argv.first).join("session.json").file?
+        raise Error, "session #{argv.first.inspect} was not found here; run this command in its VM (use ai session list)"
+      end
+    end
 
     case action
     when "join"
       token = argv.first
-      token = File.open(token.delete_prefix("@")) { |file| file.read(16_384).to_s.strip } if token.start_with?("@")
+      if token.start_with?("@")
+        token = File.open(File.expand_path(token.delete_prefix("@"))) { |file| file.read(16_384).to_s.strip }
+      end
       join(token, options)
     when "invite" then invite(*argv)
     when "invitations" then invitations(argv.first)
@@ -109,7 +122,6 @@ class SessionRemote < SessionCLI
 
   def create_invitation(path, directory, metadata, participant)
     user = Etc.getpwuid.name
-    raise Error, "remote sessions require a Linux VM" unless RUBY_PLATFORM.include?("linux")
     linger = command("loginctl", "show-user", user, "--property=Linger", "--value").strip
     raise Error, "enable persistent user services first: sudo loginctl enable-linger #{user}" unless linger == "yes"
 
@@ -272,9 +284,19 @@ class SessionRemote < SessionCLI
     [data, directory]
   end
 
-  def ssh_command(data, directory)
-    proxy = ["tailcat", "--key=new", data.fetch("address"), data.fetch("port").to_s].shelljoin
-    ["ssh", "-F", "/dev/null", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
+  def require_program(name, hint)
+    ENV.fetch("PATH", "").split(File::PATH_SEPARATOR).each do |directory|
+      path = File.expand_path(File.join(directory, name))
+      return path if File.file?(path) && File.executable?(path)
+    end
+    raise Error, "#{name} was not found on PATH; #{hint}"
+  end
+
+  def ssh_command(data, directory, ssh:, tailcat:)
+    # SSH runs ProxyCommand through the user's shell, whose startup files may
+    # change PATH. Use the executable we checked, escaping SSH's percent tokens.
+    proxy = [tailcat, "--key=new", data.fetch("address"), data.fetch("port").to_s].shelljoin.gsub("%", "%%")
+    [ssh, "-F", "/dev/null", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
      "-o", "IdentityAgent=none", "-o", "StrictHostKeyChecking=yes",
      "-o", "UserKnownHostsFile=#{directory.join('known_hosts').to_s.to_json}", "-o", "GlobalKnownHostsFile=/dev/null",
      "-o", "HostKeyAlias=ai-session-#{data.fetch('id')}", "-o", "ProxyCommand=#{proxy}",
@@ -283,17 +305,25 @@ class SessionRemote < SessionCLI
   end
 
   def join(token, options)
+    tailcat = require_program("tailcat", "install Tailcat on this machine (macOS: brew install tailcat)")
+    ssh = require_program("ssh", "install the OpenSSH client on this machine")
     raise Error, "join requires a terminal" unless $stdin.tty? && $stdout.tty?
     data, directory = client_files(token)
-    args = ssh_command(data, directory)
+    args = ssh_command(data, directory, ssh: ssh, tailcat: tailcat)
     options.fetch(:ports).each do |mapping|
       parts = mapping.split(":", -1)
       raise Error, "use PORT or LOCAL_PORT:CONTAINER_PORT" unless (1..2).cover?(parts.length)
       local = valid_port(parts.first)
       container = valid_port(parts.last).to_s
       host = data.fetch("previews")[container]
-      raise Error, "container port #{container} was not published by this session" unless host
-      args.concat(["-L", "127.0.0.1:#{local}:127.0.0.1:#{host}"])
+      unless host
+        available = data.fetch("previews").keys.sort_by(&:to_i).join(", ")
+        available = "none" if available.empty?
+        raise Error, "container port #{container} was not published by this session. " \
+                     "Available container ports: #{available}. " \
+                     "Publish app ports with session start --port, not VM --ports."
+      end
+      args.concat(["-L", "#{options.fetch(:bind)}:#{local}:127.0.0.1:#{host}"])
       puts "App preview: http://127.0.0.1:#{local} (while attached)"
     end
     puts "Joining shared terminal. Detach with Ctrl+b, then d."

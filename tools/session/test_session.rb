@@ -60,9 +60,11 @@ class SessionTest < Minitest::Test
             "XDG_CONFIG_HOME" => File.join(@root, "client")}
     @clients = []
     @sessions = []
+    @client_containers = []
   end
 
   def teardown
+    @client_containers.each { |name| Open3.capture3("docker", "rm", "--force", name) }
     @clients.each(&:close)
     @sessions.each { |name| cli("stop", name, check: false) }
     FileUtils.rm_rf(@root)
@@ -134,6 +136,54 @@ class SessionTest < Minitest::Test
     refute status.success?
   end
 
+  def test_inviting_a_missing_session_explains_where_to_run_the_command
+    output, error, status = cli("invite", "missing", "alice", check: false)
+    refute status.success?
+    assert_empty output
+    assert_includes error, 'session "missing" was not found here'
+    assert_includes error, "run this command in its VM"
+    refute File.exist?(@env.fetch("AI_SESSION_DIR"))
+  end
+
+  def test_join_reports_missing_tailcat_before_opening_a_connection
+    empty_path = File.join(@root, "empty-bin")
+    FileUtils.mkdir_p(empty_path)
+    output, error, status = Open3.capture3(@env.merge("PATH" => empty_path), RbConfig.ruby,
+                                         File.join(SessionCLI::REPO, "tools/session/session.rb"),
+                                         "join", "unused-invitation")
+    refute status.success?
+    assert_empty output
+    assert_includes error, "tailcat was not found on PATH"
+    assert_includes error, "brew install tailcat"
+    refute File.exist?(@env.fetch("XDG_CONFIG_HOME"))
+  end
+
+  def test_start_reuses_stopped_session_and_retains_history
+    start("restart", "bash", "--norc", "-c", 'echo FIRST-RUN; exec sleep infinity')
+    first = terminal("attach", "restart")
+    first.expect("FIRST-RUN")
+    old = metadata("restart")
+    directory = File.join(@root, "sessions/restart")
+    File.write(File.join(directory, "history/saved-conversation"), "keep this history\n")
+    cli("stop", "restart")
+    first.close
+    @clients.delete(first)
+
+    cli("start", "restart", "--detach", "--ports", "3000", "--",
+        "bash", "--norc", "-c", 'echo SECOND-RUN; exec sleep infinity')
+    terminal("attach", "restart").expect("SECOND-RUN")
+    current = metadata("restart")
+    refute_equal old.fetch("container"), current.fetch("container")
+    assert_equal @workspace, current.fetch("workspace")
+    assert_equal "keep this history\n", File.read(File.join(directory, "history/saved-conversation"))
+    archive = File.join(directory, "runs", old.fetch("id"))
+    assert_equal old.fetch("id"), JSON.parse(File.read(File.join(archive, "session.json"))).fetch("id")
+    assert_includes File.read(File.join(archive, "recording/output")), "FIRST-RUN"
+    refute_includes File.read(File.join(directory, "recording/output")), "FIRST-RUN"
+    assert_includes cli("ports", "restart").first, "3000/tcp"
+    assert_equal 2, cli("logs", "restart").first.scan("event=session_started").length
+  end
+
   def test_preview_port_is_reachable_and_bound_only_to_vm_loopback
     File.write(File.join(@workspace, "index.html"), "shared app preview\n")
     start("preview", "ruby", "-e", preview_server, ports: ["3000"])
@@ -148,6 +198,7 @@ class SessionTest < Minitest::Test
   end
 
   def test_shared_terminal_survives_detach_and_preserves_recording
+    @env["TERM"] = "xterm-ai-missing-terminfo"
     start("demo", "bash", "--norc", "-c",
           'printf "READY\n"; while IFS= read -r line; do printf "received:%s\n" "$line"; done')
     container = metadata("demo").fetch("container")
@@ -237,6 +288,12 @@ class SessionTest < Minitest::Test
     refute system("systemctl", "--user", "is-active", "--quiet", data.fetch("unit"))
     refute File.exist?(File.join(directory, "token"))
     assert_empty File.read(File.join(directory, "authorized_keys"))
+    cli("stop", "remote")
+    cli("start", "remote", "--detach", "--", "sleep", "infinity")
+    replacement = cli("invite", "remote", "alice").first.strip
+    refute_equal invitation, replacement
+    refute_equal remote.send(:decode, invitation).fetch("identity"), remote.send(:decode, replacement).fetch("identity")
+    assert_includes cli("invitations", "remote").first, "alice\tactive"
   end
 
   def test_join_over_tailcat
@@ -246,7 +303,13 @@ class SessionTest < Minitest::Test
     invitation_file = File.join(@root, "bob.invite")
     File.write(invitation_file, invitation)
     port = TCPServer.open("127.0.0.1", 0) { |socket| socket.addr[1] }
-    client = terminal("join", "@#{invitation_file}", "--port", "#{port}:3000")
+    home_relative = Pathname.new(invitation_file).relative_path_from(Pathname.new(Dir.home))
+    unpublished = terminal("join", "@~/#{home_relative}", "--port", "3333")
+    unpublished.expect("Available container ports: 3000")
+    unpublished.expect("session start --port, not VM --ports")
+    unpublished.close
+    @clients.delete(unpublished)
+    client = terminal("join", "@~/#{home_relative}", "--port", "#{port}:3000")
     client.expect("PREVIEW-READY")
     assert_equal "remote app preview\n", get_preview("http://127.0.0.1:#{port}")
     client.write("over-tailcat\r")
@@ -261,5 +324,31 @@ class SessionTest < Minitest::Test
     cli("revoke", "tailcat", "bob")
     reconnected.expect("connection ended with status")
     assert_raises(Errno::ECONNREFUSED) { TCPSocket.new("127.0.0.1", port).close }
+  end
+
+  if ENV["AI_SESSION_CLIENT_IMAGE"]
+    def test_docker_join_over_tailcat
+      File.write(File.join(@workspace, "index.html"), "container client preview\n")
+      start("container-client", "ruby", "-e", preview_server, ports: ["3000"])
+      invitation = cli("invite", "container-client", "alice").first
+      invitation_file = File.join(@root, "alice.invite")
+      File.write(invitation_file, invitation)
+      name = "ai-join-test-#{SecureRandom.hex(8)}"
+      @client_containers << name
+      port = TCPServer.open("127.0.0.1", 0) { |socket| socket.addr[1] }
+      command = ["docker", "run", "--rm", "--init", "-it", "--name", name,
+                 "--mount", "type=bind,src=#{invitation_file},dst=/invitation,readonly",
+                 "--publish", "127.0.0.1:#{port}:3000", "--entrypoint", "ai-join",
+                 ENV.fetch("AI_SESSION_CLIENT_IMAGE"), "@/invitation", "--port", "3000", "--bind", "0.0.0.0"]
+      client = SessionTerminal.new(@env, command: command)
+      @clients << client
+      client.expect("PREVIEW-READY")
+      assert_equal "container client preview\n", get_preview("http://127.0.0.1:#{port}")
+      client.write("from-container\r")
+      client.expect("received:from-container")
+      client.write("\x02d")
+      client.expect("detached")
+      assert_includes cli("logs", "container-client").first, "participant=alice"
+    end
   end
 end

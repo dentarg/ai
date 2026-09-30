@@ -872,11 +872,15 @@ in that directory. Agent history, bundle cache, and shell history are isolated
 per session. Token changes stay in the session; syncing refreshed credentials
 back to the read-only settings directory is not supported in this first slice.
 
-Repeat `--port` for additional TCP services. `--port 3000` selects an unused
+Repeat `--port` (also accepted as `--ports`) for additional TCP services.
+`--port 3000` selects an unused
 VM port; `--port 18080:3000` selects VM port 18080 explicitly. Both bind only
 to `127.0.0.1` in the VM. Apps must listen on `0.0.0.0` inside the container.
 `session ports` prints HTTP preview URLs; the forwarding itself also carries
 WebSockets and other TCP protocols.
+These are **session** ports: use `session start --port 3000`. The VM launcher's
+`--ports` option is not required for Tailcat previews and does not publish a
+port from an agent container. Ports must be selected when creating the session.
 
 ### Invite remote participants
 
@@ -900,16 +904,57 @@ bin/ai session join 'ai-session-v1.REPLACE_WITH_INVITATION' --port 3000
 # history and process arguments:
 bin/ai session join @alice.invite --port 3000
 
+# Home-relative invitation paths also work:
+bin/ai session join @~/Downloads/alice.invite --port 3000
+
 # On the VM: disconnect this invitation's terminal and preview tunnels.
 bin/ai session revoke web alice
 ```
 
-Participants need Ruby 3.1 or newer, OpenSSH client, and `tailcat` on PATH.
+Joining from a checkout requires Ruby 3.1 or newer, OpenSSH client, and
+`tailcat` on PATH.
+On macOS, install Tailcat with `brew install tailcat`
+([upstream installation instructions](https://github.com/tailscale/tailcat/blob/main/INSTALL.md)).
+`join` checks for missing client tools before attempting a connection.
+
+Participants can also join using Docker without cloning this repository or
+installing Ruby or Tailcat locally. Save the invitation as a file, then run:
+
+```shell
+docker pull ghcr.io/dentarg/ai:latest
+docker run --rm --init -it \
+  --mount "type=bind,src=$HOME/Downloads/alice.invite,dst=/invitation,readonly" \
+  --entrypoint ai-join \
+  ghcr.io/dentarg/ai:latest @/invitation
+```
+
+To browse an app published by the owner with `session start --port 3000`:
+
+```shell
+docker run --rm --init -it \
+  --mount "type=bind,src=$HOME/Downloads/alice.invite,dst=/invitation,readonly" \
+  --publish 127.0.0.1:3000:3000 \
+  --entrypoint ai-join \
+  ghcr.io/dentarg/ai:latest @/invitation --port 3000 --bind 0.0.0.0
+```
+
+Open `http://127.0.0.1:3000` on the participant's machine. `--bind 0.0.0.0`
+lets Docker reach the SSH preview listener inside the client container;
+`--publish 127.0.0.1:3000:3000` keeps access on the host limited to localhost.
+To use host port 13000, change only the publish mapping to
+`127.0.0.1:13000:3000`. Use `--bind 0.0.0.0` only with the container setup;
+normal `session join` previews bind to localhost by default.
+Detach with **Ctrl+b, then d**. Docker removes the client container and its
+temporary credentials; the shared agent keeps running. Run the same command
+again to reconnect with the invitation.
+
 An invitation grants access immediately; send it privately through your usual
 chat. It contains an SSH private key and a pinned server host key. Anyone with
 the invitation can use it, so use a separate participant name for each person.
 Invitations remain valid until revoked, the session stops, or the VM shuts down.
-Revoked participant names cannot be reused within that session.
+The same invitation supports repeated and simultaneous connections while valid.
+Revoked participant names cannot be reused until the session is stopped and
+started again. Restarting requires fresh invitations; old ones stay revoked.
 
 Tailcat carries an encrypted connection to a dedicated SSH endpoint on VM
 loopback. SSH forces terminal attachment inside the agent container and permits
@@ -948,9 +993,22 @@ otherwise `$AI_DIR/history/multiplayer/<name>` (`AI_DIR` defaults to `~/ai`).
 a terminal output/timing recording, and a logfmt lifecycle log. Raw keystrokes
 are not recorded, but text echoed on screen is. Terminal recordings do not
 attribute prompts to participants. Replay uses util-linux `scriptreplay` in
-the VM. Stopping removes the container while retaining these files; names
-cannot be reused and stopped sessions cannot yet be restarted. Disconnects
-preserve running sessions, but VM reboot recovery is not implemented.
+the VM. Stopping removes the container while retaining these files. Start a
+stopped session again with the same name and an agent command:
+
+```shell
+bin/ai session start demo --detach --port 3333 -- cx
+```
+
+The saved workspace, image, settings, and port mappings are reused unless
+overridden. Supplying `--port` replaces the previous port mappings. Each start
+creates a new container and agent process; use the agent's resume option to
+continue an earlier conversation. Agent history, shell history, and bundle
+cache are retained, but packages installed only in the removed container are
+lost. The previous recording, session metadata, and invitation records move
+to `runs/<previous-run-id>/` within the session directory. `session replay`
+plays the current run's recording. Create new invitations after restarting.
+Disconnects preserve running sessions, but VM reboot recovery is not implemented.
 
 Run the integration tests without agent credentials or model requests.
 The remote tests need the VM services listed above and reach Tailcat's relay
@@ -962,6 +1020,10 @@ ruby tools/session/test_session.rb
 
 # Local tests only (also run against each candidate image in CI):
 ruby tools/session/test_session.rb --exclude '/remote|tailcat/'
+
+# Include joining from a standalone container with browser preview forwarding:
+docker build -t ai-session-client-test:latest .
+AI_SESSION_CLIENT_IMAGE=ai-session-client-test:latest ruby tools/session/test_session.rb
 ```
 
 ## Remote control

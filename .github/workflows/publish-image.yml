@@ -67,7 +67,8 @@ jobs:
           docker pull "$CANDIDATE_IMAGE"
           docker run --rm --entrypoint bash "$CANDIDATE_IMAGE" -lc '
             set -e
-            command -v c cx tmux script tailcat
+            command -v c cx tmux script tailcat ai-join
+            ai-join --help
             claude --version
             codex --version
           '

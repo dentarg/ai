@@ -190,4 +190,8 @@ RUN chmod +x /usr/local/bin/start.sh \
 RUN mkdir -p /etc/systemd/system.conf.d && \
     printf '[Manager]\nShowStatus=no\nLogLevel=warning\n' > /etc/systemd/system.conf.d/hide-status.conf
 
+# Standalone participant client; no repository checkout is needed to join.
+COPY tools/session/session.rb tools/session/remote.rb /usr/local/lib/ai/session/
+COPY --chmod=755 tools/session/ai-join /usr/local/bin/ai-join
+
 CMD ["/sbin/init"]
