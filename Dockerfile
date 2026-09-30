@@ -1,4 +1,4 @@
-FROM ubuntu:26.04
+FROM ubuntu:26.04 AS workspace
 
 COPY inside_deps/ubuntu-packages.txt /tmp/ubuntu-packages.txt
 RUN apt-get update \
@@ -15,7 +15,9 @@ RUN bash /tmp/ai-build/install-chromium.sh /tmp/chromium-packages.txt \
 
 ENV HOME=/workspace
 ENV RUBIES_DIR="${HOME}/.local/share/rv/rubies"
-RUN mkdir $HOME
+RUN useradd --no-create-home --home-dir /workspace --shell /bin/bash ai-build \
+    && install -d -o ai-build -g ai-build \
+      /workspace /home/linuxbrew /home/linuxbrew/.linuxbrew
 WORKDIR $HOME
 
 COPY inside_deps/workspace.sh \
@@ -31,16 +33,21 @@ COPY inside_deps/workspace.sh \
      /tmp/ai-build/
 
 # Homebrew always installs under /home/linuxbrew/.linuxbrew. Keep the expensive
-# user-space toolchain recipe shared with the Lima VM.
+# user-space toolchain recipe shared with the Lima VM. BuildKit does not expose
+# the container markers that Homebrew uses to permit installation as root.
 ENV BASH_ENV="/workspace/.bash_profile"
+USER ai-build
 RUN bash /tmp/ai-build/workspace.sh \
       /tmp/ai-build \
       /tmp/ai-build/mise-tools.txt \
       /tmp/ai-build/brew-packages.txt \
       /tmp/ai-build/npm-packages.txt \
       /tmp/ai-build/rv-ruby-versions.txt \
-      /tmp/ai-build/ruby-build-versions.txt \
-    && rm -rf /tmp/ai-build
+      /tmp/ai-build/ruby-build-versions.txt
+USER root
+RUN rm -rf /tmp/ai-build
+
+FROM workspace AS runtime
 
 # Pi can use the shared llama.cpp server running in a GPU VM. The duration
 # extension keeps its per-task timing consistent in containers and VMs.
