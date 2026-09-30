@@ -917,6 +917,7 @@ bin/setup-vm
 - [x] Python
 - [x] Rust
 - [x] Go
+- [x] [Terraform](https://developer.hashicorp.com/terraform)
 - [x] ast-grep
 - [x] [fnox](https://fnox.jdx.dev/) — encrypted and remote secret manager
 - [x] tmux
