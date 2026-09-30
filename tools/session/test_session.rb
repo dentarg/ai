@@ -64,7 +64,7 @@ class SessionTest < Minitest::Test
   end
 
   def teardown
-    @client_containers.each { |name| Open3.capture3("docker", "rm", "--force", name) }
+    @client_containers.each { |engine, name| Open3.capture3(engine, "rm", "--force", name) }
     @clients.each(&:close)
     @sessions.each { |name| cli("stop", name, check: false) }
     FileUtils.rm_rf(@root)
@@ -327,28 +327,36 @@ class SessionTest < Minitest::Test
   end
 
   if ENV["AI_SESSION_CLIENT_IMAGE"]
-    def test_docker_join_over_tailcat
-      File.write(File.join(@workspace, "index.html"), "container client preview\n")
-      start("container-client", "ruby", "-e", preview_server, ports: ["3000"])
-      invitation = cli("invite", "container-client", "alice").first
-      invitation_file = File.join(@root, "alice.invite")
-      File.write(invitation_file, invitation)
-      name = "ai-join-test-#{SecureRandom.hex(8)}"
-      @client_containers << name
-      port = TCPServer.open("127.0.0.1", 0) { |socket| socket.addr[1] }
-      command = ["docker", "run", "--rm", "--init", "-it", "--name", name,
-                 "--mount", "type=bind,src=#{invitation_file},dst=/invitation,readonly",
-                 "--publish", "127.0.0.1:#{port}:3000", "--entrypoint", "ai-join",
-                 ENV.fetch("AI_SESSION_CLIENT_IMAGE"), "@/invitation", "--port", "3000", "--bind", "0.0.0.0"]
-      client = SessionTerminal.new(@env, command: command)
-      @clients << client
-      client.expect("PREVIEW-READY")
-      assert_equal "container client preview\n", get_preview("http://127.0.0.1:#{port}")
-      client.write("from-container\r")
-      client.expect("received:from-container")
-      client.write("\x02d")
-      client.expect("detached")
-      assert_includes cli("logs", "container-client").first, "participant=alice"
+    %w[docker podman].each do |engine|
+      define_method("test_#{engine}_join_over_tailcat") do
+        File.write(File.join(@workspace, "index.html"), "container client preview\n")
+        start("container-client", "ruby", "-e", preview_server, ports: ["3000"])
+        invitation = cli("invite", "container-client", "alice").first
+        invitation_file = File.join(@root, "alice.invite")
+        File.write(invitation_file, invitation)
+        invitation_id = SessionRemote.new.send(:decode, invitation.strip).fetch("id")
+        port = TCPServer.open("127.0.0.1", 0) { |socket| socket.addr[1] }
+        client = terminal("join", "@#{invitation_file}", "--#{engine}",
+                          "--image", ENV.fetch("AI_SESSION_CLIENT_IMAGE"), "--port", "#{port}:3000")
+        client.expect("PREVIEW-READY")
+        ids, status = Open3.capture2(engine, "ps", "-q", "--filter", "label=ai.session.client=#{invitation_id}")
+        assert status.success?
+        info, status = Open3.capture2(engine, "inspect", ids.strip)
+        assert status.success?
+        bindings = JSON.parse(info).first.fetch("NetworkSettings").fetch("Ports").fetch("#{port}/tcp")
+        assert_equal [{"HostIp" => "127.0.0.1", "HostPort" => port.to_s}], bindings
+        assert_equal "container client preview\n", get_preview("http://127.0.0.1:#{port}")
+        client.write("from-container\r")
+        client.expect("received:from-container")
+        client.write("\x02d")
+        client.expect("detached")
+        assert_includes cli("logs", "container-client").first, "participant=alice"
+      ensure
+        if invitation_id
+          ids, = Open3.capture2(engine, "ps", "-aq", "--filter", "label=ai.session.client=#{invitation_id}")
+          @client_containers.concat(ids.split.map { |id| [engine, id] })
+        end
+      end
     end
   end
 end

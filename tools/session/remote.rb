@@ -20,8 +20,16 @@ class SessionRemote < SessionCLI
                  end
       p.on("--port PORT", "Forward LOCAL_PORT:CONTAINER_PORT (or the same PORT)") { |v| options[:ports] << v } if action == "join"
       if action == "join"
-        p.on("--bind ADDRESS", %w[127.0.0.1 0.0.0.0], "Preview bind address (default: 127.0.0.1; Docker: 0.0.0.0)") do |value|
+        %w[podman docker].each do |engine|
+          p.on("--#{engine}", "Join using the published image through #{engine}") do
+            raise Error, "choose either --podman or --docker" if options[:engine] && options[:engine] != engine
+            options[:engine] = engine
+          end
+        end
+        p.on("--image IMAGE", "Participant container image (default: #{DEFAULT_IMAGE})") { |value| options[:image] = value }
+        p.on("--bind ADDRESS", %w[127.0.0.1 0.0.0.0], "Preview bind address (default: 127.0.0.1; containers: 0.0.0.0)") do |value|
           options[:bind] = value
+          options[:explicit_bind] = true
         end
       end
       p.on("-h", "--help") { puts p; return 0 }
@@ -37,6 +45,11 @@ class SessionRemote < SessionCLI
 
     case action
     when "join"
+      if options[:engine]
+        join_container(argv.first, options)
+        return 0
+      end
+      raise Error, "--image requires --podman or --docker" if options[:image]
       token = argv.first
       if token.start_with?("@")
         token = File.open(File.expand_path(token.delete_prefix("@"))) { |file| file.read(16_384).to_s.strip }
@@ -304,13 +317,8 @@ class SessionRemote < SessionCLI
      "-i", directory.join("identity").to_s, "-l", data.fetch("user")]
   end
 
-  def join(token, options)
-    tailcat = require_program("tailcat", "install Tailcat on this machine (macOS: brew install tailcat)")
-    ssh = require_program("ssh", "install the OpenSSH client on this machine")
-    raise Error, "join requires a terminal" unless $stdin.tty? && $stdout.tty?
-    data, directory = client_files(token)
-    args = ssh_command(data, directory, ssh: ssh, tailcat: tailcat)
-    options.fetch(:ports).each do |mapping|
+  def preview_forwards(data, mappings)
+    mappings.map do |mapping|
       parts = mapping.split(":", -1)
       raise Error, "use PORT or LOCAL_PORT:CONTAINER_PORT" unless (1..2).cover?(parts.length)
       local = valid_port(parts.first)
@@ -323,6 +331,37 @@ class SessionRemote < SessionCLI
                      "Available container ports: #{available}. " \
                      "Publish app ports with session start --port, not VM --ports."
       end
+      [local, container, host]
+    end
+  end
+
+  def join_container(argument, options)
+    engine = options.fetch(:engine)
+    executable = require_program(engine, "install #{engine} and start its container engine")
+    raise Error, "join requires a terminal" unless $stdin.tty? && $stdout.tty?
+    raise Error, "--#{engine} requires an invitation file: join --#{engine} @alice.invite" unless argument.start_with?("@")
+    raise Error, "--#{engine} manages preview binding; omit --bind" if options[:explicit_bind]
+
+    invitation = Pathname.new(File.expand_path(argument.delete_prefix("@"))).realpath
+    raise Error, "invitation mount paths cannot contain commas" if invitation.to_s.include?(",")
+    data = decode(invitation.open { |file| file.read(16_384).to_s.strip })
+    forwards = preview_forwards(data, options.fetch(:ports))
+    args = [executable, "run", "--rm", "--init", "-it", "--label", "ai.session.client=#{data.fetch('id')}",
+            "--mount", "type=bind,src=#{invitation},dst=/invitation,readonly"]
+    forwards.each { |local, _, _| args.concat(["--publish", "127.0.0.1:#{local}:#{local}"]) }
+    args.concat(["--entrypoint", "ai-join", options.fetch(:image, DEFAULT_IMAGE), "@/invitation", "--bind", "0.0.0.0"])
+    forwards.each { |local, container, _| args.concat(["--port", "#{local}:#{container}"]) }
+    result = run_terminal(*args)
+    raise Error, "#{engine} join ended with status #{result}" unless result.zero?
+  end
+
+  def join(token, options)
+    tailcat = require_program("tailcat", "install Tailcat on this machine (macOS: brew install tailcat)")
+    ssh = require_program("ssh", "install the OpenSSH client on this machine")
+    raise Error, "join requires a terminal" unless $stdin.tty? && $stdout.tty?
+    data, directory = client_files(token)
+    args = ssh_command(data, directory, ssh: ssh, tailcat: tailcat)
+    preview_forwards(data, options.fetch(:ports)).each do |local, _, host|
       args.concat(["-L", "#{options.fetch(:bind)}:#{local}:127.0.0.1:#{host}"])
       puts "App preview: http://127.0.0.1:#{local} (while attached)"
     end

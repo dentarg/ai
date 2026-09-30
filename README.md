@@ -911,11 +911,31 @@ bin/ai session join @~/Downloads/alice.invite --port 3000
 bin/ai session revoke web alice
 ```
 
-Joining from a checkout requires Ruby 3.1 or newer, OpenSSH client, and
+Joining directly from a checkout requires Ruby 3.1 or newer, OpenSSH client, and
 `tailcat` on PATH.
 On macOS, install Tailcat with `brew install tailcat`
 ([upstream installation instructions](https://github.com/tailscale/tailcat/blob/main/INSTALL.md)).
 `join` checks for missing client tools before attempting a connection.
+
+To keep SSH and Tailcat inside a container, select Podman or Docker:
+
+```shell
+bin/ai session join --podman @~/Downloads/alice.invite --port 3000
+bin/ai session join --docker @~/Downloads/alice.invite --port 3000
+
+# Use a different local browser port:
+bin/ai session join --podman @~/Downloads/alice.invite --port 13000:3000
+```
+
+The helper requires Ruby and the selected container engine on the participant's
+machine. Start the engine first; for Podman on macOS, run `podman machine start`
+after the usual initial setup. The helper runs `ghcr.io/dentarg/ai:latest`,
+mounts the invitation read-only, sets the preview bind address, and publishes
+ports only on host loopback. Repeat `--port` for more apps, or omit it for
+terminal-only access. `--image IMAGE`
+selects a different participant image. A missing image is pulled automatically;
+use `podman pull ghcr.io/dentarg/ai:latest` or `docker pull ghcr.io/dentarg/ai:latest`
+to refresh an already cached image.
 
 Participants can also join using Docker without cloning this repository or
 installing Ruby or Tailcat locally. Save the invitation as a file, then run:
@@ -1021,8 +1041,9 @@ ruby tools/session/test_session.rb
 # Local tests only (also run against each candidate image in CI):
 ruby tools/session/test_session.rb --exclude '/remote|tailcat/'
 
-# Include joining from a standalone container with browser preview forwarding:
+# Include joining through both Docker and Podman helpers with browser preview forwarding:
 docker build -t ai-session-client-test:latest .
+docker save ai-session-client-test:latest | podman load
 AI_SESSION_CLIENT_IMAGE=ai-session-client-test:latest ruby tools/session/test_session.rb
 ```
 
