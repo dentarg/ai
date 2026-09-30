@@ -19,6 +19,28 @@ Agents work best when they can freely run shell commands, edit files, install pa
 
 ## Setup
 
+The image publishing workflow builds `ghcr.io/dentarg/ai` for Linux AMD64 and
+ARM64 on pushes to `main` and manual runs from `main`. After both native
+builds pass the agent smoke checks and local session integration tests, it publishes
+`latest` and `sha-<full-commit-sha>` multi-platform tags. Docker and Podman
+select the matching architecture automatically.
+
+The package is public and supports anonymous downloads. The workflow uses
+`GITHUB_TOKEN` with `packages: write`; no registry secret is needed.
+
+```shell
+# Download instead of building, keeping the local tag used by the host tools.
+podman pull ghcr.io/dentarg/ai:latest
+podman tag ghcr.io/dentarg/ai:latest ai:latest
+
+# Inside a Linux VM, download directly into its Docker daemon.
+docker pull ghcr.io/dentarg/ai:latest
+```
+
+Repeat the pull to update, or use a `sha-<full-commit-sha>` tag to select a
+particular source revision. Registry digests can be used for an exact image.
+`./build_image` still builds the local `ai:latest` image for development.
+
 Drop per-profile OAuth credentials in `$HOME/ai/settings` as
 `.credentials.<profile>.json`. They get mounted into the container and copied
 into `~/.claude/` when you launch claude with a matching profile. See the
@@ -798,6 +820,149 @@ For self-hosted Sentry, additionally drop the hostname in
 through as `--host=...`.
 
 No `sentry.token` → no MCP server registered.
+
+## Persistent terminals inside a Linux VM
+
+`bin/ai session` runs multiplayer sessions with a shared native terminal. Start sessions
+**inside a Linux sandbox VM**, with Docker available. Sessions use
+`ghcr.io/dentarg/ai:latest` by default and pull it if missing from the VM's
+Docker daemon. Pull explicitly to update a cached image. Use `--image ai:latest`
+to use a local development build, or `--image ghcr.io/dentarg/ai:sha-<commit>`
+to select a published revision. An image on the host's Podman daemon is not
+automatically available in the VM.
+Use `--keep-vm` when launching the VM: terminal detachment does not override
+the outer launcher's VM cleanup policy.
+
+Each session runs its agent in a separate Docker container. Local and invited
+remote participants attach to the same native agent UI and type freely.
+
+```shell
+# Run from this repository inside the VM; choose the agent's working directory.
+bin/ai session start demo --workspace /repos/demo -- c myprofile
+
+# Start without attaching, and publish a web app on an unused VM loopback port.
+bin/ai session start web --workspace /repos/web --detach --port 3000 -- cx myprofile
+
+# From another terminal in the same VM:
+bin/ai session list
+bin/ai session attach demo
+bin/ai session attach demo --read-only
+bin/ai session ports web
+```
+
+Detach with **Ctrl+b, then d**. Ctrl+C still reaches the agent. Everyone
+shares one input buffer; coordinate typing out of band. Writable clients
+can also use tmux commands inside the agent container. Read-only attachment
+is a local convenience, not a remote authentication boundary. Viewer
+terminals do not resize the shared screen; the latest active writable
+client determines its size.
+Use **Ctrl+b, then i** to redisplay the session information without leaving
+the terminal. The owner can list invitations or retrieve the same invitation
+from another VM terminal.
+
+The image must contain Bash, tmux, util-linux (`script`), and the requested
+agent command. `--image` selects another image. The normal agent wrappers
+and shell configuration are loaded, but the container runs without systemd
+or automatic database startup. Supporting services belong in the VM.
+Neither the Docker socket nor the VM's home directory is mounted into it.
+
+`--settings` selects the settings directory (default `/settings`), mounted
+read-only. Everyone with write access to the terminal can use the credentials
+in that directory. Agent history, bundle cache, and shell history are isolated
+per session. Token changes stay in the session; syncing refreshed credentials
+back to the read-only settings directory is not supported in this first slice.
+
+Repeat `--port` for additional TCP services. `--port 3000` selects an unused
+VM port; `--port 18080:3000` selects VM port 18080 explicitly. Both bind only
+to `127.0.0.1` in the VM. Apps must listen on `0.0.0.0` inside the container.
+`session ports` prints HTTP preview URLs; the forwarding itself also carries
+WebSockets and other TCP protocols.
+
+### Invite remote participants
+
+The VM needs Tailcat (tested with v0.4.0), OpenSSH server, and a running systemd
+user manager. Enable persistent user services once if needed:
+`sudo loginctl enable-linger "$USER"`. The invitation commands run as your
+normal VM user and do not change the VM's existing SSH server.
+
+```shell
+# On the VM: create one invitation per participant. Repeating this command
+# displays the same invitation, including after attaching to the terminal.
+bin/ai session invite web alice
+
+# List invitations without displaying credentials.
+bin/ai session invitations web
+
+# On the participant's Mac or Linux machine, from a checkout of this repo:
+bin/ai session join 'ai-session-v1.REPLACE_WITH_INVITATION' --port 3000
+
+# Or receive the invitation as a file, keeping the credential out of shell
+# history and process arguments:
+bin/ai session join @alice.invite --port 3000
+
+# On the VM: disconnect this invitation's terminal and preview tunnels.
+bin/ai session revoke web alice
+```
+
+Participants need Ruby 3.1 or newer, OpenSSH client, and `tailcat` on PATH.
+An invitation grants access immediately; send it privately through your usual
+chat. It contains an SSH private key and a pinned server host key. Anyone with
+the invitation can use it, so use a separate participant name for each person.
+Invitations remain valid until revoked, the session stops, or the VM shuts down.
+Revoked participant names cannot be reused within that session.
+
+Tailcat carries an encrypted connection to a dedicated SSH endpoint on VM
+loopback. SSH forces terminal attachment inside the agent container and permits
+forwarding only to this session's published preview ports. Arbitrary VM commands,
+agent forwarding, remote forwarding, and Unix socket forwarding are disabled.
+Each invitation has its own systemd service, so revocation also closes existing
+connections without interrupting other participants. Share only with trusted
+collaborators: terminal writers have the agent container's full capabilities
+and can read its mounted credentials and project files.
+After revocation, the participant's terminal may take a few seconds to detect
+the lost transport and close; access is already stopped on the VM.
+
+`join --port 3000` makes the app available at `http://127.0.0.1:3000` on the
+participant's machine while attached. Use `--port 13000:3000` if local port 3000
+is occupied, and repeat the option for other published ports. Browser requests
+and WebSockets travel through the same authenticated connection. Detaching
+closes these tunnels; joining again restores them. The participant's SSH
+credentials are saved with private permissions in
+`${XDG_CONFIG_HOME:-~/.config}/ai/session-joins/`.
+
+Remote terminal events identify the invitation name, not individual keystrokes.
+Detailed bridge diagnostics are available through `journalctl --user -u UNIT`;
+the service name is in the invitation's `invitation.json` under session data.
+
+### Session history and tests
+
+```shell
+bin/ai session logs demo
+bin/ai session replay demo
+bin/ai session stop demo
+```
+
+Session data lives in `/history/multiplayer/<name>` when `/history` exists,
+otherwise `$AI_DIR/history/multiplayer/<name>` (`AI_DIR` defaults to `~/ai`).
+`AI_SESSION_DIR` overrides this location. It contains the agent's own history,
+a terminal output/timing recording, and a logfmt lifecycle log. Raw keystrokes
+are not recorded, but text echoed on screen is. Terminal recordings do not
+attribute prompts to participants. Replay uses util-linux `scriptreplay` in
+the VM. Stopping removes the container while retaining these files; names
+cannot be reused and stopped sessions cannot yet be restarted. Disconnects
+preserve running sessions, but VM reboot recovery is not implemented.
+
+Run the integration tests without agent credentials or model requests.
+The remote tests need the VM services listed above and reach Tailcat's relay
+network; the local tests need only Docker and Ruby with Minitest:
+
+```shell
+docker build -f tools/session/Dockerfile.test -t ai-session-test:latest tools/session
+ruby tools/session/test_session.rb
+
+# Local tests only (also run against each candidate image in CI):
+ruby tools/session/test_session.rb --exclude '/remote|tailcat/'
+```
 
 ## Remote control
 

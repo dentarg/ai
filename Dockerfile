@@ -149,8 +149,8 @@ RUN rm -rf $HOME/.claude $HOME/.claude.json
 # last, so editing the blocklist doesn't re-clone the marketplaces above
 COPY claude/plugins.blocklist /opt/claude-plugins/blocklist
 
-ENV LANG C.UTF-8
-ENV LC_ALL C.UTF-8
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
 # do this late to allow tweaking without rebuilding previous layers
 COPY ./tools/start.sh /usr/local/bin/start.sh

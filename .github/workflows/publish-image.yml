@@ -72,6 +72,15 @@ jobs:
             codex --version
           '
 
+      - name: Test local sessions
+        env:
+          AI_SESSION_TEST_IMAGE: ${{ env.IMAGE }}:build-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-minitest
+          docker pull ubuntu:26.04
+          ruby tools/session/test_session.rb --exclude '/remote|tailcat/'
+
   publish:
     needs:
       - build

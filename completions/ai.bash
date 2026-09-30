@@ -17,7 +17,7 @@ _ai_complete() {
 
   case "$COMP_CWORD" in
     1)
-      values="profile models completion cx --resume --ports --udp-ports --vm
+      values="profile models session completion cx --resume --ports --udp-ports --vm
         --keep-vm --gpu --nested-virt --cpus --memory --1password
         --host-browser --remote --fast --help
         $(_ai_browser_profile_options)
@@ -27,6 +27,7 @@ _ai_complete() {
       case "$first" in
         profile) values='list create remove set-model login --help' ;;
         models) values='list refresh --help' ;;
+        session) values='start attach list stop logs replay ports invite invitations revoke join --help' ;;
         completion) values='bash zsh' ;;
         cx)
           values="$("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')

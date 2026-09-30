@@ -31,7 +31,7 @@ _ai_browser_profile_options() {
 _ai_commands_profiles_options() {
   local command=$words[1]
   local -a commands profiles options values
-  commands=(profile models completion cx)
+  commands=(profile models session completion cx)
   profiles=("${(@f)$("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')}" )
   options=(
     --resume --ports --udp-ports --vm --keep-vm --gpu --nested-virt
@@ -67,6 +67,7 @@ _ai() {
       case "$first" in
         profile) _values command list create remove set-model login --help ;;
         models) _values command list refresh --help ;;
+        session) _values command start attach list stop logs replay ports invite invitations revoke join --help ;;
         completion) _values shell bash zsh ;;
         cx) _ai_profiles_options ;;
       esac

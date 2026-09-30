@@ -26,6 +26,7 @@ usage() {
 Usage: $(basename "$0") [profile | cx [profile]] [options]
        $(basename "$0") profile <command> [arguments]
        $(basename "$0") models <command> [arguments]
+       $(basename "$0") session <command> [arguments]
        $(basename "$0") completion bash|zsh
 
 Start the AI development environment, optionally launching Claude Code with a
@@ -71,6 +72,10 @@ EOF
 }
 
 case "${1:-}" in
+  session)
+    shift
+    exec ruby "$REPO_DIR/tools/session/session.rb" "$@"
+    ;;
   profile)
     shift
     exec "$SCRIPT_DIR/ai-profile" "$@"

@@ -1,0 +1,8 @@
+FROM ubuntu:26.04
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tmux util-linux ruby \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV HOME=/workspace
+RUN mkdir /workspace
