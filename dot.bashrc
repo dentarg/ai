@@ -94,6 +94,11 @@ __git_ps1() {
 
 PS1='\[\e[1;32m\]\h\[\e[0m\]:\[\e[1;34m\]\w\[\e[1;33m\]$(__git_ps1)\[\e[0m\]\$ '
 
+# Include the VM hostname in terminal tabs, where every workspace is /app.
+case "${TERM:-}" in
+  xterm*|screen*|tmux*|rxvt*) PS1='\[\e]0;\h:\w\a\]'"$PS1" ;;
+esac
+
 link_dotfiles
 
 # source user's bashrc from dotfiles if present (after container setup)
