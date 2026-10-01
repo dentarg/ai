@@ -23,14 +23,14 @@ fatal_unexpected_arg() {
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") <c|claude|cx|codex> [profile] [options]
+Usage: $(basename "$0") [(c|claude|cx|codex) [profile]] [options]
        $(basename "$0") profile <command> [arguments]
        $(basename "$0") models <command> [arguments]
        $(basename "$0") session <command> [arguments]
        $(basename "$0") completion bash|zsh
 
-Start the AI development environment with Claude Code (c or claude) or Codex
-(cx or codex), optionally selecting a profile. An agent is required.
+Start the AI development environment with an interactive shell. Optionally launch
+Claude Code (c or claude) or Codex (cx or codex), with an optional profile.
 Podman is the default; --vm uses an ephemeral Lima VM.
 
 Run $(basename "$0") profile --help to manage agent profiles or
@@ -244,7 +244,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-if [ -z "$AGENT" ]; then
+if [ -z "$AGENT" ] && [ -n "$RESUME" ]; then
   echo 'at=fatal msg="specify an agent: c or claude, cx or codex"' >&2
   usage >&2
   exit 1
@@ -332,8 +332,11 @@ if [ -n "$RESUME" ]; then
   fi
 fi
 
-AGENT_ENV="--env CLAUDE_AUTO_START=1"
-[ "$AGENT" = codex ] && AGENT_ENV="--env CODEX_AUTO_START=1"
+AGENT_ENV=""
+case "$AGENT" in
+  claude) AGENT_ENV="--env CLAUDE_AUTO_START=1" ;;
+  codex) AGENT_ENV="--env CODEX_AUTO_START=1" ;;
+esac
 
 # Opt-in remote control; `c` reads AI_REMOTE in the container and enables it.
 REMOTE_ENV=""
@@ -974,7 +977,7 @@ run_lima_vm() {
   fi
   if [ "$AGENT" = codex ]; then
     set -- "$@" CODEX_AUTO_START=1
-  else
+  elif [ "$AGENT" = claude ]; then
     set -- "$@" CLAUDE_AUTO_START=1
   fi
   is_true "$REMOTE" && set -- "$@" AI_REMOTE=1

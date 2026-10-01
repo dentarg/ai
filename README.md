@@ -91,8 +91,11 @@ bin/ai profile list
 source <(bin/ai completion zsh)
 # use "bash" instead of "zsh" when appropriate
 
+# launch a new Podman container with an interactive shell
+bin/ai
+
 # select an agent explicitly: c or claude, cx or codex
-# a bare command or profile without an agent is rejected
+# profiles and resumed sessions require an agent
 # start Claude Code in Podman and share the current working directory
 bin/ai c
 

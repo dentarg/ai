@@ -78,7 +78,22 @@ for selector in c claude cx codex; do
   grep -Fx "${prefix}_RESUME=session-id" "$PODMAN_ARGS_FILE" >/dev/null
 done
 
-for arguments in '' '--ports 9999' alpha 'alpha c' 'c cx' 'codex claude' 'c c'; do
+# Shell-only launches create a new container without auto-starting an agent.
+for arguments in '' '--ports 9999'; do
+  # Split the option string into arguments; an empty string passes none.
+  # shellcheck disable=SC2086
+  HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:$PATH" \
+    "$REPO_DIR/bin/ai" $arguments >/dev/null
+  assert_label ''
+  grep -Fx 'run' "$PODMAN_ARGS_FILE" >/dev/null
+  grep -Fx -- '--interactive' "$PODMAN_ARGS_FILE" >/dev/null
+  if grep -E '^(CLAUDE|CODEX)_AUTO_START=' "$PODMAN_ARGS_FILE" >/dev/null; then
+    echo 'at=fatal msg="shell-only launch auto-started an agent"' >&2
+    exit 1
+  fi
+done
+
+for arguments in '--resume session-id' alpha 'alpha c' 'c cx' 'codex claude' 'c c'; do
   rm -f "$PODMAN_ARGS_FILE"
   if HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:$PATH" \
     "$REPO_DIR/bin/ai" $arguments >"$tmpdir/error" 2>&1; then
