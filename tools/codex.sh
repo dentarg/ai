@@ -133,6 +133,7 @@ main () {
   local config_profile_path
   local codex_cwd
   local codex_cwd_toml
+  local terminal_title
   local codex_backup
   local sqlite_home
   local session_key
@@ -275,7 +276,8 @@ check_for_update_on_startup = false
 [tui]
 notifications = false
 status_line = ["current-dir", "git-branch", "model-with-reasoning", "context-used", "thread-id"]
-terminal_title = ["project-name"]
+# The wrapper sets a title with host metadata; /app alone is ambiguous.
+terminal_title = []
 
 [projects.$codex_cwd_toml]
 trust_level = "trusted"
@@ -317,6 +319,16 @@ EOF
     --search
   )
   [[ -n "$resume_id" ]] && codex_cmd+=(resume "$resume_id")
+
+  if [[ -t 1 ]]; then
+    case "${TERM:-}" in
+      xterm*|screen*|tmux*|rxvt*)
+        terminal_title="${HOST_DIR:-${PWD##*/}} [${profile:-default}] - Codex"
+        terminal_title=$(printf '%s' "$terminal_title" | LC_ALL=C tr -d '[:cntrl:]')
+        printf '\033]0;%s\007' "$terminal_title"
+        ;;
+    esac
+  fi
 
   set +e
   "${codex_cmd[@]}"

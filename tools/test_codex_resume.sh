@@ -147,6 +147,53 @@ assert_equal 'model = "gpt-profile"' "$(printf '%s\n' "$output" | sed -n '3p')" 
 grep -F 'model = "gpt-6-astra"' \
   "${tmpdir}/home/.codex/config.toml" >/dev/null
 
+# Check container and VM titles through a terminal, including resumed sessions.
+python3 - "$SCRIPT_DIR/codex.sh" "$tmpdir" "$session_id" <<'PYTHON'
+import errno
+import os
+import pty
+import subprocess
+import sys
+from pathlib import Path
+
+wrapper, root, session_id = sys.argv[1:]
+for hostname, arguments in (("ai-c-00-my-project", ["alpha"]),
+                            ("ai-01-my-project", ["--resume", session_id])):
+    hostname_command = Path(root, "bin", "hostname")
+    hostname_command.write_text(f"#!/bin/sh\nprintf '%s\\n' '{hostname}'\n")
+    hostname_command.chmod(0o755)
+    env = dict(os.environ, HOME=f"{root}/home", HISTORY_ROOT=root,
+               SETTINGS_ROOT=f"{root}/settings", HOST_DIR="my project\x1b\x07\n",
+               TERM="xterm-256color", PATH=f"{root}/bin:{os.environ['PATH']}",
+               CODEX_PLUGIN_ROOT=f"{root}/no-plugins")
+    master, slave = pty.openpty()
+    try:
+        result = subprocess.run(["bash", wrapper, *arguments], env=env,
+                                stdout=slave, stderr=subprocess.PIPE, timeout=10)
+        result.check_returncode()
+        os.close(slave)
+        slave = None
+        output = b""
+        while True:
+            try:
+                chunk = os.read(master, 65536)
+            except OSError as error:
+                if error.errno != errno.EIO:
+                    raise
+                break
+            if not chunk:
+                break
+            output += chunk
+        expected = b"\x1b]0;my project [alpha] - Codex\x07"
+        assert expected in output, repr(output)
+        config = Path(root, "home", ".codex", "config.toml").read_text()
+        assert 'terminal_title = []' in config, config
+    finally:
+        if slave is not None:
+            os.close(slave)
+        os.close(master)
+PYTHON
+
 # macOS shared mounts must not host SQLite's runtime files. Keep the
 # transcript shared, but use a stable local database across repeated resumes.
 cat > "${tmpdir}/bin/uname" <<'EOF'

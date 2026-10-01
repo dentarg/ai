@@ -20,10 +20,14 @@ trap 'rm -rf "$tmpdir"' EXIT
 fake_bin="${tmpdir}/bin"
 ai_dir="${tmpdir}/ai"
 mkdir -p "$fake_bin" "${ai_dir}/settings" "${tmpdir}/home"
-# Keep the variables literal for the fake executable to expand at runtime.
-# shellcheck disable=SC2016
-printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "$PODMAN_ARGS_FILE"\n' \
-  > "${fake_bin}/podman"
+cat > "${fake_bin}/podman" <<'EOF'
+#!/bin/sh
+if [ "$1" = ps ]; then
+  printf '%s\n' "${EXISTING_CONTAINER_NAME:-}"
+else
+  printf '%s\n' "$@" > "$PODMAN_ARGS_FILE"
+fi
+EOF
 chmod +x "${fake_bin}/podman"
 
 export PODMAN_ARGS_FILE="${tmpdir}/podman-args"
@@ -33,6 +37,13 @@ AI_DIR="$ai_dir" \
 PATH="${fake_bin}:${REPO_DIR}/bin:${PATH}" \
   "$REPO_DIR/bin/ai" cx >/dev/null
 assert_label codex
+container_name=$(awk 'previous == "--name" { print; exit } { previous = $0 }' "$PODMAN_ARGS_FILE")
+container_hostname=$(awk 'previous == "--hostname" { print; exit } { previous = $0 }' "$PODMAN_ARGS_FILE")
+[[ "$container_name" == ai-c-00-* ]]
+[[ "$container_hostname" == "$container_name" ]]
+HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:$PATH" \
+  EXISTING_CONTAINER_NAME="$container_name" "$REPO_DIR/bin/ai" cx >/dev/null
+grep -Fx "ai-c-01-${container_name#ai-c-00-}" "$PODMAN_ARGS_FILE" >/dev/null
 project_name=$(basename "$(pwd)")
 grep -Fx "HOST_DIR=$project_name" "$PODMAN_ARGS_FILE" >/dev/null
 grep -Fx "$(pwd):/app" "$PODMAN_ARGS_FILE" >/dev/null

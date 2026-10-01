@@ -761,9 +761,11 @@ append_lima_forwards() {
   IFS=$OLD_IFS
 }
 
-next_vm_name() {
+next_instance_name() {
   name_prefix=ai
-  if [ "$MACOS" -eq 1 ]; then
+  if [ "$VM_BACKEND" -eq 0 ]; then
+    name_prefix=ai-c
+  elif [ "$MACOS" -eq 1 ]; then
     name_prefix=ai-macos
   elif [ "$GPU" -eq 1 ]; then
     name_prefix=ai-gpu
@@ -778,7 +780,11 @@ next_vm_name() {
   project_name=${project_name%-}
   [ -n "$project_name" ] || project_name=workspace
 
-  existing_names=$(limactl list --format '{{.Name}}' 2>/dev/null)
+  if [ "$VM_BACKEND" -eq 1 ]; then
+    existing_names=$(limactl list --format '{{.Name}}' 2>/dev/null) || return 1
+  else
+    existing_names=$(podman ps --all --format '{{.Names}}') || return 1
+  fi
   index=0
   while [ "$index" -lt 100 ]; do
     candidate=$(printf '%s-%02d-%s' "$name_prefix" "$index" "$project_name")
@@ -789,7 +795,7 @@ next_vm_name() {
     index=$((index + 1))
   done
 
-  echo "at=fatal msg=\"no available Lima VM name\" project=$project_name" >&2
+  echo "at=fatal msg=\"no available instance name\" project=$project_name" >&2
   return 1
 }
 
@@ -868,7 +874,7 @@ run_lima_vm() {
     exit 1
   fi
 
-  VM_NAME=$(next_vm_name)
+  VM_NAME=$(next_instance_name)
   primary_host_port=$(free_host_port)
 
   mounts_json=$(jq -cn \
@@ -1037,7 +1043,11 @@ fi
 # NET_RAW    ping
 # SYS_PTRACE strace
 
+CONTAINER_NAME=$(next_instance_name)
+
 podman run --rm --interactive --tty \
+  --name "$CONTAINER_NAME" \
+  --hostname "$CONTAINER_NAME" \
   --cap-add=NET_ADMIN \
   --cap-add=NET_RAW \
   --cap-add=SYS_PTRACE \

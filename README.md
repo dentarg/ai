@@ -196,9 +196,16 @@ x
 ```
 
 `bin/ai` mounts the project at `/app`, and `cx` preserves that working
-directory when it launches Codex. Its generated statusline shows the current
-directory, git branch, model/reasoning, context used, and thread id. TUI
-notifications are disabled for quieter terminal sessions. Codex defaults to
+directory when it launches Codex. Terminal tabs show
+`project [oauth-profile] - Codex`, with the host working directory name
+first so it stays visible in narrow tabs. Hostnames are omitted from the title.
+Containers still use matching names and hostnames of `ai-c-XX-<project>`,
+distinct from the VM prefixes `ai-`, `ai-gpu-`, and `ai-macos-`. Containers
+choose the first free number from `00` to `99`, including stopped containers
+when checking availability. Codex title updates are disabled so they do not
+replace the title with `app`. Its generated statusline
+shows the current directory, git branch, model/reasoning, context used, and
+thread id. TUI notifications are disabled for quieter terminal sessions. Codex defaults to
 `gpt-6-astra`. To override the default for an OAuth profile, add native Codex
 configuration such as
 `model = "gpt-6-sol"` to
