@@ -85,7 +85,7 @@ chmod +x "${fake_bin}/podman"
 HOME="${tmpdir}/home" \
 AI_DIR="$ai_dir" \
 PATH="${fake_bin}:${REPO_DIR}/bin:${PATH}" \
-  "$REPO_DIR/bin/ai" alpha >/dev/null 2>&1
+  "$REPO_DIR/bin/ai" c alpha >/dev/null 2>&1
 assert_equal newer \
   "$(jq -r '.claudeAiOauth.accessToken' "${ai_dir}/settings/.credentials.alpha.json")" \
   "bin/ai did not recover expired profile credentials from history"

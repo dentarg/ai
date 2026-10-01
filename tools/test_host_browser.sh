@@ -64,7 +64,7 @@ output=$(
   AI_DIR="$ai_dir" \
   AI_CHROME_CANARY_PATH="${fake_bin}/chrome-canary" \
   PATH="${fake_bin}:${PATH}" \
-    "$REPO_DIR/bin/ai" --host-browser 2>&1
+    "$REPO_DIR/bin/ai" c --host-browser 2>&1
 )
 
 grep -F 'at=info msg="host browser ready" browser="Google Chrome Canary"' <<< "$output" >/dev/null
@@ -103,7 +103,7 @@ HOME="${tmpdir}/home" \
 AI_DIR="$ai_dir" \
 AI_CHROME_CANARY_PATH="${fake_bin}/chrome-canary" \
 PATH="${fake_bin}:${PATH}" \
-  "$REPO_DIR/bin/ai" --host-browser >/dev/null 2>&1
+  "$REPO_DIR/bin/ai" c --host-browser >/dev/null 2>&1
 test -f "$PROFILE_REUSED_FILE"
 ruby -rjson - "${ai_dir}/host-browser/profile/Default/Preferences" <<'RUBY'
 preferences = JSON.parse(File.read(ARGV.fetch(0)))
@@ -118,7 +118,7 @@ AI_DIR="$ai_dir" \
 AI_CHROME_CANARY_PATH="${fake_bin}/chrome-canary" \
 PROFILE_REUSED_FILE="$named_reused_file" \
 PATH="${fake_bin}:${PATH}" \
-  "$REPO_DIR/bin/ai" --host-browser=work >/dev/null 2>&1
+  "$REPO_DIR/bin/ai" c --host-browser=work >/dev/null 2>&1
 grep -Fx -- "--user-data-dir=${ai_dir}/host-browser/profiles/work" \
   "$CHROME_ARGS_FILE" >/dev/null
 test -f "${ai_dir}/host-browser/profiles/work/persisted-state"
@@ -128,13 +128,13 @@ AI_DIR="$ai_dir" \
 AI_CHROME_CANARY_PATH="${fake_bin}/chrome-canary" \
 PROFILE_REUSED_FILE="$named_reused_file" \
 PATH="${fake_bin}:${PATH}" \
-  "$REPO_DIR/bin/ai" --host-browser=work >/dev/null 2>&1
+  "$REPO_DIR/bin/ai" c --host-browser=work >/dev/null 2>&1
 test -f "$named_reused_file"
 
 if HOME="${tmpdir}/home" AI_DIR="$ai_dir" \
   AI_CHROME_CANARY_PATH="${fake_bin}/chrome-canary" \
   PATH="${fake_bin}:${PATH}" \
-    "$REPO_DIR/bin/ai" --host-browser=../bad >/dev/null 2>&1; then
+    "$REPO_DIR/bin/ai" c --host-browser=../bad >/dev/null 2>&1; then
   echo 'at=fatal msg="invalid host browser profile was accepted"' >&2
   exit 1
 fi
@@ -147,7 +147,7 @@ if HOME="${tmpdir}/home" \
   AI_CHROME_CANARY_PATH="${fake_bin}/chrome-canary" \
   PROFILE_LOCK_ACTIVE=1 \
   PATH="${fake_bin}:${PATH}" \
-    "$REPO_DIR/bin/ai" --host-browser >"$lock_output" 2>&1; then
+    "$REPO_DIR/bin/ai" c --host-browser >"$lock_output" 2>&1; then
   echo 'at=fatal msg="concurrent host browser profile use was allowed"' >&2
   exit 1
 fi

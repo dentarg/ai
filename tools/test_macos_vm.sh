@@ -121,7 +121,7 @@ HIDE_DISPLAY_HANG=1 sh "$REPO_DIR/lima/macos/hide-display.sh" test-vm 2>"$tmpdir
 test "$SECONDS" -lt 15
 grep -F 'timed out hiding macOS VM display; continuing' "$tmpdir/hide-error" >/dev/null
 ! kill -0 "$(cat "$MACOS_TEST_LOG.hide-pid")" 2>/dev/null
-if AI_DIR="$tmpdir/ai" "$REPO_DIR/bin/ai" --macos --udp-ports 9999 >/dev/null 2>&1; then
+if AI_DIR="$tmpdir/ai" "$REPO_DIR/bin/ai" c --macos --udp-ports 9999 >/dev/null 2>&1; then
   echo 'at=fatal msg="macOS launcher accepted unsupported UDP forwarding"' >&2
   exit 1
 fi

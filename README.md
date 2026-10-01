@@ -91,32 +91,34 @@ bin/ai profile list
 source <(bin/ai completion zsh)
 # use "bash" instead of "zsh" when appropriate
 
-# start podman and share the current working directory
-bin/ai
+# select an agent explicitly: c or claude, cx or codex
+# a bare command or profile without an agent is rejected
+# start Claude Code in Podman and share the current working directory
+bin/ai c
 
 # instead, clone an ephemeral Lima VM from ai-base; it is deleted on exit
-bin/ai --vm
+bin/ai c --vm
 
 # keep the VM running after exit so it can be inspected with limactl shell
-bin/ai --keep-vm
+bin/ai c --keep-vm
 
 # enable nested virtualization and give the outer VM additional resources
-bin/ai --vm --nested-virt --cpus 8 --memory 16
+bin/ai c --vm --nested-virt --cpus 8 --memory 16
 
 # use the GPU-enabled krunkit base VM
-bin/ai --vm --gpu
+bin/ai c --vm --gpu
 
 # allow this session to request approved, allowlisted 1Password secrets
-bin/ai --1password
+bin/ai c --1password
 
 # launch a visible, isolated Chrome Canary on the host for the agent to control
-bin/ai --host-browser
+bin/ai c --host-browser
 
 # start podman and auto-launch "c <profile>" once the container is up.
 # before launching, the shared "~/ai/settings" token for <profile> is
 # refreshed on the host. If it has expired, recent Claude session history is
 # searched for a newer active copy before falling back to interactive login.
-bin/ai <profile>
+bin/ai c <profile>
 
 # start podman and auto-launch "cx" once the container is up.
 bin/ai cx
@@ -126,8 +128,8 @@ bin/ai cx <profile>
 
 # resume a prior Claude session: passed through to "c --resume <id>" on launch.
 # works with or without a profile (c auto-detects it from the session).
-bin/ai --resume <session-id>
-bin/ai <profile> --resume <session-id>
+bin/ai c --resume <session-id>
+bin/ai c <profile> --resume <session-id>
 
 # resume a prior Codex session: passed through to "cx --resume <id>" on launch.
 # the profile is auto-detected from the original session.
@@ -135,25 +137,25 @@ bin/ai cx --resume <session-id>
 
 # publish extra ports from the container to the host. each entry is either
 # "PORT" (host==container) or "SRC:DST" (host:container); comma-separate many.
-bin/ai --ports 9999             # host 9999 -> container 9999
-bin/ai --ports 8888:7777        # host 8888 -> container 7777
-bin/ai <profile> --ports 9999,8888:7777
+bin/ai c --ports 9999             # host 9999 -> container 9999
+bin/ai c --ports 8888:7777        # host 8888 -> container 7777
+bin/ai c <profile> --ports 9999,8888:7777
 
 # all launch/profile/resume/port options also work with the VM backend
 bin/ai --vm cx --ports 9999
 
 # expose a UDP port from a Lima VM (host port 41641 -> guest port 41641)
-bin/ai --vm --keep-vm --udp-ports 41641
+bin/ai c --vm --keep-vm --udp-ports 41641
 
 # enable Claude Code remote control for the session (off by default).
 # equivalently set AI_REMOTE=1 in your shell. see "Remote control" below.
-bin/ai <profile> --remote
-AI_REMOTE=1 bin/ai <profile>
+bin/ai c <profile> --remote
+AI_REMOTE=1 bin/ai c <profile>
 
 # enable fast mode for the session (off by default).
 # equivalently set AI_FAST=1 in your shell. see "Fast mode" below.
-bin/ai <profile> --fast
-AI_FAST=1 bin/ai <profile>
+bin/ai c <profile> --fast
+AI_FAST=1 bin/ai c <profile>
 
 # start services (and run "bundle install" if Gemfile exists).
 # also runs automatically as part of "c" below.
@@ -234,7 +236,7 @@ bin/setup-vm
 # rebuild all layers and pull latest base image
 ./build_image --force
 
-# build the stopped ai-base Lima instance used by bin/ai --vm
+# build the stopped ai-base Lima instance used by bin/ai c --vm
 ./build_vm
 
 # replace an existing base VM; accepts the same agent update flags
@@ -254,9 +256,9 @@ macOS base and launch an ephemeral session:
 
 ```shell
 ./build_vm --macos
-bin/ai --macos
+bin/ai c --macos
 bin/ai --macos cx work
-bin/ai --macos work --ports 9999,8888:7777
+bin/ai c --macos work --ports 9999,8888:7777
 ```
 
 The default base is `ai-base-macos`. If tool installation fails, run
@@ -314,7 +316,7 @@ verification on an Apple-silicon Mac. See [Lima's macOS guest documentation](htt
 
 `build_vm` provisions the expensive language runtimes and development tools
 once, verifies Docker and the coding agents, stops the resulting `ai-base`
-instance, and protects it from accidental deletion. `bin/ai --vm` clones that
+instance, and protects it from accidental deletion. `bin/ai c --vm` clones that
 base for each session, adds the same `/app`, `/settings`, `/history`, `/share`,
 and other mounts used by the Podman backend, then deletes the clone when the
 interactive shell exits. The image and VM builds share the Chromium, system
@@ -359,7 +361,7 @@ cloned VM's resources for workloads that need more than the base VM allocation.
 GPU acceleration uses a separate `ai-base-gpu` instance because Lima selects
 the VM driver when an instance is created. `build_vm --gpu` uses Lima's
 experimental `krunkit` driver and verifies that `/dev/dri/renderD128` exists;
-`bin/ai --vm --gpu` clones that base. This requires Apple Silicon, macOS 14 or
+`bin/ai c --vm --gpu` clones that base. This requires Apple Silicon, macOS 14 or
 newer, and krunkit installed on the host.
 
 The guest receives a paravirtualized Vulkan device rather than direct hardware
@@ -506,8 +508,8 @@ Use a named profile to run isolated browser identities concurrently. Named
 profiles remain under `$HOME/ai/host-browser/profiles/<name>`:
 
 ```shell
-bin/ai --host-browser=work
-bin/ai --host-browser=personal
+bin/ai c --host-browser=work
+bin/ai c --host-browser=personal
 ```
 
 The host-facing Chrome debugging socket remains on loopback. A TLS proxy
@@ -557,7 +559,7 @@ content-script pages, and Manifest V3 service-worker targets. Manually loaded
 extensions persist in the dedicated profile between sessions.
 
 Applications running in the guest still need `--ports` so the host browser can
-reach them. For example, `bin/ai --host-browser --ports 3000` exposes a guest
+reach them. For example, `bin/ai c --host-browser --ports 3000` exposes a guest
 server on `http://127.0.0.1:3000` to Canary.
 
 ## 1Password bridge
@@ -620,7 +622,7 @@ The policy deliberately lives outside directories mounted into containers.
 Start an enabled session, then request a configured alias inside it:
 
 ```shell
-bin/ai --1password
+bin/ai c --1password
 
 # inside the container; prints the value after host approval
 op-read github-token
@@ -1063,8 +1065,8 @@ session (filesystem, MCP servers, every tool call) to anyone with your
 claude.ai login. Turn it on with either:
 
 ```shell
-bin/ai <profile> --remote      # one-off flag
-AI_REMOTE=1 bin/ai <profile>   # or set the env in your shell
+bin/ai c <profile> --remote      # one-off flag
+AI_REMOTE=1 bin/ai c <profile>   # or set the env in your shell
 ```
 
 `bin/ai` forwards this into the container as `AI_REMOTE=1`; `c` then sets
@@ -1089,8 +1091,8 @@ it draws from usage credits at a higher rate and has separate rate limits.
 Turn it on with either:
 
 ```shell
-bin/ai <profile> --fast      # one-off flag
-AI_FAST=1 bin/ai <profile>   # or set the env in your shell
+bin/ai c <profile> --fast      # one-off flag
+AI_FAST=1 bin/ai c <profile>   # or set the env in your shell
 ```
 
 `bin/ai` forwards this into the container as `AI_FAST=1`; `c` then sets

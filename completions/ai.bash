@@ -17,11 +17,10 @@ _ai_complete() {
 
   case "$COMP_CWORD" in
     1)
-      values="profile models session completion cx --resume --ports --udp-ports --vm
+      values="profile models session completion c claude cx codex --resume --ports --udp-ports --vm
         --keep-vm --gpu --nested-virt --cpus --memory --1password
         --host-browser --remote --fast --help
-        $(_ai_browser_profile_options)
-        $("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')"
+        $(_ai_browser_profile_options)"
       ;;
     2)
       case "$first" in
@@ -29,10 +28,11 @@ _ai_complete() {
         models) values='list refresh --help' ;;
         session) values='start attach list stop logs replay ports invite invitations revoke join --help' ;;
         completion) values='bash zsh' ;;
-        cx)
+        c|claude|cx|codex)
           values="$("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')
             --resume --vm --keep-vm --gpu --nested-virt --cpus --memory
             --ports --udp-ports --1password --host-browser --help"
+          case "$first" in c|claude) values="$values --remote --fast" ;; esac
           values="$values $(_ai_browser_profile_options)"
           ;;
       esac

@@ -152,7 +152,7 @@ fallback_output="${tmpdir}/fallback-output"
   LIMACTL_LOG="$log" \
   TERM=xterm-ghostty \
   PATH="${fake_bin}:${PATH}" \
-    "$REPO_DIR/bin/ai" --vm >"$fallback_output" 2>&1
+    "$REPO_DIR/bin/ai" c --vm >"$fallback_output" 2>&1
 )
 grep -F '<TERM=xterm-256color>' "$log" >/dev/null
 grep -F 'falling back to xterm-256color' "$fallback_output" >/dev/null
@@ -171,7 +171,7 @@ if (
   LIMACTL_LOG="$log" \
   SHELL_STATUS=137 \
   PATH="${fake_bin}:${PATH}" \
-    "$REPO_DIR/bin/ai" --vm >"$failure_output" 2>&1
+    "$REPO_DIR/bin/ai" c --vm >"$failure_output" 2>&1
 ); then
   echo 'at=fatal msg="failed Lima console returned success"' >&2
   exit 1
@@ -197,7 +197,7 @@ grep -F 'limactl delete --force ai-00-project-with-spaces' "$failure_output" >/d
   BASE_VM_TYPE=qemu \
   LIMACTL_LOG="$log" \
   PATH="${fake_bin}:${PATH}" \
-    "$REPO_DIR/bin/ai" --keep-vm >/dev/null 2>&1
+    "$REPO_DIR/bin/ai" c --keep-vm >/dev/null 2>&1
 )
 
 if grep -F '<delete>' "$log" >/dev/null; then
@@ -217,13 +217,13 @@ fi
   AI_VM_HOST_PORT=45557 \
   LIMACTL_LOG="$log" \
   PATH="${fake_bin}:${PATH}" \
-    "$REPO_DIR/bin/ai" --vm --nested-virt --cpus 8 --memory=16 >/dev/null 2>&1
+    "$REPO_DIR/bin/ai" c --vm --nested-virt --cpus 8 --memory=16 >/dev/null 2>&1
 )
 
 grep -F '<clone> <--tty=false> <--nested-virt> <--cpus> <8> <--memory> <16>' "$log" >/dev/null
 
 if HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:${PATH}" \
-  "$REPO_DIR/bin/ai" --nested-virt >/dev/null 2>&1; then
+  "$REPO_DIR/bin/ai" c --nested-virt >/dev/null 2>&1; then
   echo 'at=fatal msg="--nested-virt worked without --vm"' >&2
   exit 1
 fi
@@ -236,7 +236,7 @@ fi
   AI_VM_HOST_PORT=45558 \
   LIMACTL_LOG="$log" \
   PATH="${fake_bin}:${PATH}" \
-    "$REPO_DIR/bin/ai" --vm --gpu >/dev/null 2>&1
+    "$REPO_DIR/bin/ai" c --vm --gpu >/dev/null 2>&1
 )
 
 grep -F '<clone> <--tty=false>' "$log" | \
@@ -248,7 +248,7 @@ if grep -F '<--network=vzNAT>' "$log" >/dev/null; then
 fi
 
 if HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:${PATH}" \
-  "$REPO_DIR/bin/ai" --gpu >/dev/null 2>&1; then
+  "$REPO_DIR/bin/ai" c --gpu >/dev/null 2>&1; then
   echo 'at=fatal msg="--gpu worked without --vm"' >&2
   exit 1
 fi

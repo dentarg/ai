@@ -35,7 +35,7 @@ export PODMAN_ARGS_FILE="${tmpdir}/podman-args"
 HOME="${tmpdir}/home" \
 AI_DIR="$ai_dir" \
 PATH="${fake_bin}:${PATH}" \
-  "$REPO_DIR/bin/ai" --1password >/dev/null
+  "$REPO_DIR/bin/ai" c --1password >/dev/null
 
 grep -Fx -- "OP_BRIDGE_URL" "$PODMAN_ARGS_FILE" >/dev/null
 grep -Fx -- "OP_BRIDGE_TOKEN" "$PODMAN_ARGS_FILE" >/dev/null

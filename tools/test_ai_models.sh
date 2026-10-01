@@ -61,6 +61,16 @@ COMP_WORDS=(ai pro)
 COMP_CWORD=1
 _ai_complete
 [[ ${COMPREPLY[*]} == profile ]]
+COMP_WORDS=(ai c)
+COMP_CWORD=1
+_ai_complete
+[[ ${COMPREPLY[*]} == 'completion c claude cx codex' ]]
+for selector in c claude cx codex; do
+  COMP_WORDS=(ai "$selector" al)
+  COMP_CWORD=2
+  AI_DIR="$ai_dir" _ai_complete
+  [[ ${COMPREPLY[*]} == alpha ]]
+done
 COMP_WORDS=(ai profile set)
 COMP_CWORD=2
 _ai_complete
@@ -93,6 +103,12 @@ AI_DIR="$ai_dir" REPO_DIR="$REPO_DIR" zsh -dfc '
   candidates=("${(@f)$(_ai)}")
   [[ $candidates[1] == *ai-arguments*profile*--host-browser* ]]
   [[ $candidates[1] == *--host-browser=work* ]]
+  [[ $candidates[1] == *" c claude cx codex "* ]]
+  for selector in c claude cx codex; do
+    words=(ai "$selector" al)
+    CURRENT=3
+    [[ $(_ai) == *alpha* ]]
+  done
   words=(ai profile set)
   CURRENT=3
   [[ $(_ai) == *set-model* ]]

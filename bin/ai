@@ -23,15 +23,15 @@ fatal_unexpected_arg() {
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [profile | cx [profile]] [options]
+Usage: $(basename "$0") <c|claude|cx|codex> [profile] [options]
        $(basename "$0") profile <command> [arguments]
        $(basename "$0") models <command> [arguments]
        $(basename "$0") session <command> [arguments]
        $(basename "$0") completion bash|zsh
 
-Start the AI development environment, optionally launching Claude Code with a
-profile or Codex with "cx [profile]". Podman is the default; --vm uses an
-ephemeral Lima VM.
+Start the AI development environment with Claude Code (c or claude) or Codex
+(cx or codex), optionally selecting a profile. An agent is required.
+Podman is the default; --vm uses an ephemeral Lima VM.
 
 Run $(basename "$0") profile --help to manage agent profiles or
 $(basename "$0") models --help to manage the cached model catalog.
@@ -98,12 +98,9 @@ is_true() {
 }
 
 # Parse arguments:
-#   [profile]            optional claude profile; auto-launches `c <profile>`.
-#   cx                   auto-launches `cx` once the container is up.
-#   cx [profile]         auto-launches Codex with the optional profile.
-#   -r, --resume <id>    resume a prior session; passed on to `c --resume <id>`
-#                        or `cx --resume <id>` when combined with `cx`.
-#                        Claude works with or without a profile (`c` auto-detects it).
+#   c|claude [profile]   launch Claude Code with an optional profile.
+#   cx|codex [profile]   launch Codex with an optional profile.
+#   -r, --resume <id>    resume a prior session with the selected agent.
 #   --ports <list>       extra ports to publish, comma-separated. Each entry is
 #                        "PORT" (host==container) or "SRC:DST" (host:container).
 #   --udp-ports <list>   extra UDP ports to publish, with the same syntax as
@@ -122,6 +119,7 @@ is_true() {
 #   --fast               enable fast mode; passed to `c --fast`.
 #                        Also enabled when AI_FAST is truthy (1/true/yes/on).
 #   -h, --help           show usage and exit.
+AGENT=""
 PROFILE=""
 CODEX_PROFILE=""
 RESUME=""
@@ -146,10 +144,12 @@ while [ $# -gt 0 ]; do
       usage
       exit 0
       ;;
-    cx)
-      [ -z "$PROFILE" ] || fatal_unexpected_arg "$1"
-      [ -z "$CODEX_AUTO_START" ] || fatal_unexpected_arg "$1"
-      CODEX_AUTO_START=1
+    c|claude|cx|codex)
+      [ -z "$AGENT" ] || fatal_unexpected_arg "$1"
+      case "$1" in
+        c|claude) AGENT=claude ;;
+        cx|codex) AGENT=codex; CODEX_AUTO_START=1 ;;
+      esac
       ;;
     -r|--resume)
       shift
@@ -231,6 +231,7 @@ while [ $# -gt 0 ]; do
       exit 1
       ;;
     *)
+      [ -n "$AGENT" ] || fatal_unexpected_arg "$1"
       if [ -n "$CODEX_AUTO_START" ]; then
         [ -z "$CODEX_PROFILE" ] || fatal_unexpected_arg "$1"
         CODEX_PROFILE=$1
@@ -242,6 +243,12 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+if [ -z "$AGENT" ]; then
+  echo 'at=fatal msg="specify an agent: c or claude, cx or codex"' >&2
+  usage >&2
+  exit 1
+fi
 
 if is_true "$HOST_BROWSER"; then
   case "$HOST_BROWSER_PROFILE" in
@@ -325,15 +332,8 @@ if [ -n "$RESUME" ]; then
   fi
 fi
 
-CODEX_ENV=""
-[ -n "$CODEX_AUTO_START" ] && CODEX_ENV="--env CODEX_AUTO_START=1"
-
-AGENT=""
-if [ -n "$CODEX_AUTO_START" ]; then
-  AGENT=codex
-elif [ -n "$PROFILE" ] || [ -n "$RESUME" ]; then
-  AGENT=claude
-fi
+AGENT_ENV="--env CLAUDE_AUTO_START=1"
+[ "$AGENT" = codex ] && AGENT_ENV="--env CODEX_AUTO_START=1"
 
 # Opt-in remote control; `c` reads AI_REMOTE in the container and enables it.
 REMOTE_ENV=""
@@ -972,7 +972,11 @@ run_lima_vm() {
       set -- "$@" CLAUDE_RESUME="$RESUME"
     fi
   fi
-  [ -n "$CODEX_AUTO_START" ] && set -- "$@" CODEX_AUTO_START=1
+  if [ "$AGENT" = codex ]; then
+    set -- "$@" CODEX_AUTO_START=1
+  else
+    set -- "$@" CLAUDE_AUTO_START=1
+  fi
   is_true "$REMOTE" && set -- "$@" AI_REMOTE=1
   is_true "$FAST" && set -- "$@" AI_FAST=1
   if [ -n "$BROKER_SESSION_DIR" ]; then
@@ -1039,7 +1043,7 @@ podman run --rm --interactive --tty \
   ${PROFILE_ENV:-} \
   ${CODEX_PROFILE_ENV:-} \
   ${RESUME_ENV:-} \
-  ${CODEX_ENV:-} \
+  ${AGENT_ENV} \
   ${REMOTE_ENV:-} \
   ${FAST_ENV:-} \
   ${ONEPASSWORD_ENV:-} \

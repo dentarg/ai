@@ -28,17 +28,15 @@ _ai_browser_profile_options() {
   done
 }
 
-_ai_commands_profiles_options() {
-  local command=$words[1]
-  local -a commands profiles options values
-  commands=(profile models session completion cx)
-  profiles=("${(@f)$("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')}" )
+_ai_commands_options() {
+  local -a commands options values
+  commands=(profile models session completion c claude cx codex)
   options=(
     --resume --ports --udp-ports --vm --keep-vm --gpu --nested-virt
     --cpus --memory --1password --host-browser --remote --fast --help
     "${(@f)$(_ai_browser_profile_options)}"
   )
-  values=("${commands[@]}" "${profiles[@]}" "${options[@]}")
+  values=("${commands[@]}" "${options[@]}")
   compadd -V ai-arguments -- "${values[@]}"
 }
 
@@ -51,6 +49,7 @@ _ai_profiles_options() {
     --cpus --memory --1password --host-browser --help
     "${(@f)$(_ai_browser_profile_options)}"
   )
+  case "$words[2]" in c|claude) options+=(--remote --fast) ;; esac
   values=("${profiles[@]}" "${options[@]}")
   compadd -V ai-arguments -- "${values[@]}"
 }
@@ -61,7 +60,7 @@ _ai() {
 
   case "$CURRENT" in
     2)
-      _ai_commands_profiles_options
+      _ai_commands_options
       ;;
     3)
       case "$first" in
@@ -69,7 +68,7 @@ _ai() {
         models) _values command list refresh --help ;;
         session) _values command start attach list stop logs replay ports invite invitations revoke join --help ;;
         completion) _values shell bash zsh ;;
-        cx) _ai_profiles_options ;;
+        c|claude|cx|codex) _ai_profiles_options ;;
       esac
       ;;
     4)

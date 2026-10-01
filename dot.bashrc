@@ -104,7 +104,7 @@ link_dotfiles
 # source user's bashrc from dotfiles if present (after container setup)
 [[ -f /settings/dotfiles/.bashrc ]] && source /settings/dotfiles/.bashrc
 
-# When bin/ai is given a profile, --resume, or cx, auto-launch the requested
+# When bin/ai selects an agent, auto-launch the requested
 # agent on the console shell. These flags live in the container env, so they
 # also leak into every later `podman exec` shell (e.g. bin/pod) — guard on the
 # console tty so only the systemd shell.service session auto-launches.
@@ -114,7 +114,7 @@ link_dotfiles
 # Unset first so nested shells (and claude's own subshells) don't relaunch;
 # on exit you're left at a normal prompt.
 auto_launch_requested=false
-if [[ -n "${CLAUDE_PROFILE:-}" || -n "${CLAUDE_RESUME:-}" || -n "${CODEX_AUTO_START:-}" || -n "${CODEX_PROFILE:-}" || -n "${CODEX_RESUME:-}" ]]; then
+if [[ -n "${CLAUDE_AUTO_START:-}" || -n "${CLAUDE_PROFILE:-}" || -n "${CLAUDE_RESUME:-}" || -n "${CODEX_AUTO_START:-}" || -n "${CODEX_PROFILE:-}" || -n "${CODEX_RESUME:-}" ]]; then
   auto_launch_requested=true
 fi
 
@@ -125,7 +125,7 @@ if [[ $- == *i* && "$auto_launch_requested" == true ]] && \
   codex_auto_start="${CODEX_AUTO_START:-}"
   codex_profile="${CODEX_PROFILE:-}"
   codex_resume="${CODEX_RESUME:-}"
-  unset AI_AUTO_LAUNCH CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_PROFILE CODEX_RESUME
+  unset AI_AUTO_LAUNCH CLAUDE_AUTO_START CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_PROFILE CODEX_RESUME
 
   if [[ -n "$codex_auto_start" || -n "$codex_resume" ]]; then
     start.sh || true

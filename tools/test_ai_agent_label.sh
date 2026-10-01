@@ -57,7 +57,52 @@ jq -n --argjson expires_at "$expires_at" \
 HOME="${tmpdir}/home" \
 AI_DIR="$ai_dir" \
 PATH="${fake_bin}:${REPO_DIR}/bin:${PATH}" \
-  "$REPO_DIR/bin/ai" alpha >/dev/null
+  "$REPO_DIR/bin/ai" c alpha >/dev/null
 assert_label claude
+
+# Each spelling selects the same agent, profile, and resume environment.
+for selector in c claude cx codex; do
+  case "$selector" in
+    c|claude) agent=claude; prefix=CLAUDE ;;
+    cx|codex) agent=codex; prefix=CODEX ;;
+  esac
+  HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:$PATH" \
+    "$REPO_DIR/bin/ai" "$selector" >/dev/null
+  assert_label "$agent"
+  grep -Fx "${prefix}_AUTO_START=1" "$PODMAN_ARGS_FILE" >/dev/null
+  HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:$PATH" \
+    "$REPO_DIR/bin/ai" --ports 9999 "$selector" alpha --resume session-id >/dev/null
+  assert_label "$agent"
+  grep -Fx "${prefix}_AUTO_START=1" "$PODMAN_ARGS_FILE" >/dev/null
+  grep -Fx "${prefix}_PROFILE=alpha" "$PODMAN_ARGS_FILE" >/dev/null
+  grep -Fx "${prefix}_RESUME=session-id" "$PODMAN_ARGS_FILE" >/dev/null
+done
+
+for arguments in '' '--ports 9999' alpha 'alpha c' 'c cx' 'codex claude' 'c c'; do
+  rm -f "$PODMAN_ARGS_FILE"
+  if HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:$PATH" \
+    "$REPO_DIR/bin/ai" $arguments >"$tmpdir/error" 2>&1; then
+    echo "at=fatal msg=\"invalid agent selection accepted\" args=\"$arguments\"" >&2
+    exit 1
+  fi
+  test ! -e "$PODMAN_ARGS_FILE"
+done
+
+# Exercise the shell's auto-launch block without guest-specific setup.
+cat > "$tmpdir/bashrc" <<'RC'
+c() { printf 'claude\n' >> "$AGENT_CALLS_FILE"; }
+cx() { printf 'codex\n' >> "$AGENT_CALLS_FILE"; }
+start.sh() { :; }
+RC
+sed -n '/^auto_launch_requested=false/,$p' "$REPO_DIR/dot.bashrc" >> "$tmpdir/bashrc"
+export AGENT_CALLS_FILE="$tmpdir/agent-calls"
+for agent in CLAUDE CODEX; do
+  env AI_AUTO_LAUNCH=1 "${agent}_AUTO_START=1" \
+    bash --noprofile --rcfile "$tmpdir/bashrc" -ic \
+    'test -z "${CLAUDE_AUTO_START:-}${CODEX_AUTO_START:-}" && source "$1"' \
+    bash "$tmpdir/bashrc" >"$tmpdir/shell-output" 2>&1
+done
+printf 'claude\ncodex\n' > "$tmpdir/expected-calls"
+diff -u "$tmpdir/expected-calls" "$AGENT_CALLS_FILE"
 
 echo 'at=info msg="ai agent label tests passed"'
