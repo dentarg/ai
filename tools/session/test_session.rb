@@ -5,6 +5,7 @@ require "net/http"
 require "open3"
 require "pty"
 require "tmpdir"
+require "timeout"
 require_relative "remote"
 
 class SessionTerminal
@@ -43,6 +44,10 @@ class SessionTerminal
     Process.waitpid(@pid)
   rescue Errno::ECHILD, Errno::ESRCH
     nil
+  end
+
+  def wait_status
+    Timeout.timeout(5) { Process.wait2(@pid).last }
   end
 end
 
@@ -121,6 +126,19 @@ class SessionTest < Minitest::Test
       sleep 0.1
       retry
     end
+  end
+
+  def test_follow_logs_prints_existing_and_new_events
+    directory = File.join(@env.fetch("AI_SESSION_DIR"), "demo")
+    FileUtils.mkdir_p(directory)
+    events = File.join(directory, "events.log")
+    File.write(events, "at=info event=session_started\n")
+    client = terminal("logs", "demo", "--follow")
+    client.expect("event=session_started")
+    File.open(events, "a") { |file| file.puts("at=info event=participant_joined") }
+    client.expect("event=participant_joined")
+    client.write("\x03")
+    assert_equal Signal.list.fetch("INT"), client.wait_status.termsig
   end
 
   def test_failed_bootstrap_removes_container_and_keeps_failure_log

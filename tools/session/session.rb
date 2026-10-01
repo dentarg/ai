@@ -50,6 +50,7 @@ class SessionCLI
         end
       end
       p.on("--read-only") { options[:read_only] = true } if action == "attach"
+      p.on("-f", "--follow", "Keep showing new session events") { options[:follow] = true } if action == "logs"
       p.on("--max-delay SECONDS", Float) { |v| options[:max_delay] = v } if action == "replay"
       p.on("-h", "--help") { puts p; return 0 }
     end
@@ -64,7 +65,10 @@ class SessionCLI
     when "attach" then attach(name, options)
     when "list" then list
     when "stop" then stop(name)
-    when "logs" then print path_for(name).join("events.log").read
+    when "logs"
+      path = path_for(name).join("events.log")
+      exec("tail", "-n", "+1", "-f", path.to_s) if options[:follow]
+      print path.read
     when "ports" then ports(name)
     when "replay"
       delay = options.fetch(:max_delay)

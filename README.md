@@ -1003,9 +1003,13 @@ the service name is in the invitation's `invitation.json` under session data.
 
 ```shell
 bin/ai session logs demo
+bin/ai session logs demo --follow
 bin/ai session replay demo
 bin/ai session stop demo
 ```
+
+Use `logs --follow` (or `logs -f`) to print existing lifecycle events and keep
+watching for new ones. Press Ctrl+C to stop following.
 
 Session data lives in `/history/multiplayer/<name>` when `/history` exists,
 otherwise `$AI_DIR/history/multiplayer/<name>` (`AI_DIR` defaults to `~/ai`).
