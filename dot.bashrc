@@ -1,5 +1,8 @@
 source /workspace/.bash_profile
 
+# The VM deliberately uses Bash, including Apple's bundled version.
+export BASH_SILENCE_DEPRECATION_WARNING=1
+
 # share installed gems across containers via a host-mounted volume (see bin/ai).
 # bundler namespaces installs as /bundle/ruby/<abi>/..., so multiple ruby
 # versions coexist and native extensions are reused. start.sh (run via `s`)
@@ -58,16 +61,19 @@ alias s=/usr/local/bin/start.sh
 alias x=exit
 
 link_dotfiles () {
-  local dir=/settings/dotfiles
+  local dir=${1:-/settings/dotfiles}
+  local file base target
 
-  for file in ${dir}/* ${dir}/.*; do
-    local base
-    base=$(basename "$file")
-    [[ "$base" == "*" ]] && continue
-    [[ "$base" == ".*" ]] && continue
-    [[ "$base" == ".bashrc" ]] && continue
-    [[ "$base" == ".bash_profile" ]] && continue
-    ln -sf "$file" "$HOME"
+  for file in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+    [[ -e "$file" || -L "$file" ]] || continue
+    base=${file##*/}
+    case "$base" in
+      .bashrc|.bash_profile) continue ;;
+    esac
+    target="$HOME/$base"
+    # Preserve real directories, but replace symlinks without following them.
+    [[ -d "$target" && ! -L "$target" ]] && continue
+    ln -sfn "$file" "$target"
   done
 }
 
