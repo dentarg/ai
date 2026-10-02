@@ -57,6 +57,7 @@ Options:
 
 Environment:
   AI_DIR              Directory for persistent AI data (default: \$HOME/ai)
+  XDG_CONFIG_HOME      Host configuration base (default: \$HOME/.config)
   AI_1PASSWORD        Enable the 1Password bridge when truthy
   AI_HOST_BROWSER     Enable the host browser when truthy
   AI_HOST_BROWSER_PROFILE
@@ -463,7 +464,10 @@ start_onepassword_bridge() {
     exit 1
   fi
 
-  policy_path="${AI_DIR}/1password-bridge.json"
+  case "${XDG_CONFIG_HOME:-}" in
+    /*) policy_path="${XDG_CONFIG_HOME}/ai/1password-bridge.json" ;;
+    *) policy_path="${HOME}/.config/ai/1password-bridge.json" ;;
+  esac
   if [ ! -f "$policy_path" ]; then
     echo "at=fatal msg=\"1Password bridge policy not found\" path=\"$policy_path\"" >&2
     exit 1

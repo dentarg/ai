@@ -25,7 +25,9 @@ module OnePasswordBridge
     end
 
     def self.run(args)
-      path = File.join(ENV.fetch("AI_DIR", File.expand_path("~/ai")), "1password-bridge.json")
+      config_home = ENV["XDG_CONFIG_HOME"].to_s
+      config_home = File.expand_path("~/.config") unless config_home.start_with?("/")
+      path = File.join(config_home, "ai", "1password-bridge.json")
       project = Dir.pwd
       parser = OptionParser.new do |options|
         options.banner = <<~HELP
@@ -39,7 +41,7 @@ module OnePasswordBridge
 
           Changes apply to newly started bridge sessions.
         HELP
-        options.on("--file PATH", "Policy file (default: $AI_DIR/1password-bridge.json)") { |value| path = value }
+        options.on("--file PATH", "Policy file (default: #{path})") { |value| path = value }
         options.on("--project PATH", "Project directory (default: current directory)") { |value| project = value }
         options.on("-h", "--help") { puts options; return }
       end

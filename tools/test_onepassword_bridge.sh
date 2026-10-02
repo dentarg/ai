@@ -24,18 +24,23 @@ chmod +x "${fake_bin}/uname" \
          "${fake_bin}/osascript" \
          "${fake_bin}/podman"
 
-project=$(pwd -P)
-jq -n \
-  --arg project "$project" \
-  '{projects: {($project): {account: "example.1password.com", secrets: {token: "op://Agent/Test/token"}}}}' \
-  > "${ai_dir}/1password-bridge.json"
-chmod 600 "${ai_dir}/1password-bridge.json"
-
 export PODMAN_ARGS_FILE="${tmpdir}/podman-args"
-HOME="${tmpdir}/home" \
-AI_DIR="$ai_dir" \
+export HOME="${tmpdir}/home" AI_DIR="$ai_dir"
+for config_home in "${tmpdir}/custom config" '' relative; do
+  export XDG_CONFIG_HOME="$config_home"
+  "$REPO_DIR/bin/1password-bridge" init example.1password.com >/dev/null
+  PATH="${fake_bin}:${PATH}" \
+    "$REPO_DIR/bin/ai" c --1password >/dev/null
+done
+unset XDG_CONFIG_HOME
+"$REPO_DIR/bin/1password-bridge" init example.1password.com >/dev/null
 PATH="${fake_bin}:${PATH}" \
   "$REPO_DIR/bin/ai" c --1password >/dev/null
+
+if grep -F '/.config/ai' "$PODMAN_ARGS_FILE" >/dev/null; then
+  echo 'at=fatal msg="host configuration was mounted into the container"' >&2
+  exit 1
+fi
 
 grep -Fx -- "OP_BRIDGE_URL" "$PODMAN_ARGS_FILE" >/dev/null
 grep -Fx -- "OP_BRIDGE_TOKEN" "$PODMAN_ARGS_FILE" >/dev/null

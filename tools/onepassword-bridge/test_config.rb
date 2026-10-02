@@ -4,6 +4,25 @@ require "open3"
 require_relative "config"
 
 class OnePasswordConfigTest < Minitest::Test
+  def test_default_policy_uses_the_xdg_config_directory
+    Dir.mktmpdir do |dir|
+      cli = File.expand_path("../../bin/1password-bridge", __dir__)
+      [nil, "", "relative", File.join(dir, "custom config")].each do |config_home|
+        home = File.join(dir, "home")
+        env = { "HOME" => home, "XDG_CONFIG_HOME" => config_home, "AI_DIR" => File.join(dir, "data") }
+        base = config_home&.start_with?("/") ? config_home : File.join(home, ".config")
+        path = File.join(base, "ai", "1password-bridge.json")
+
+        output, error, status = Open3.capture3(env, cli, "--project", dir, "init", "my.1password.com")
+
+        assert status.success?, error
+        assert_includes output, path
+        assert_equal "my.1password.com", OnePasswordBridge::Policy.load(path, File.realpath(dir)).account
+        refute File.exist?(File.join(env.fetch("AI_DIR"), "1password-bridge.json"))
+      end
+    end
+  end
+
   def test_cli_preserves_projects_and_validates_updates
     Dir.mktmpdir do |dir|
       path = File.join(dir, "policy.json")

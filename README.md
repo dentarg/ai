@@ -583,7 +583,7 @@ also require 1Password biometric authorization.
 First enable **Settings > Developer > Integrate with 1Password CLI** in the
 1Password app. Verify the host integration with `op vault list`.
 
-Manage `$HOME/ai/1password-bridge.json` on the host with the CLI (Ruby required):
+Manage `~/.config/ai/1password-bridge.json` on the host with the CLI (Ruby required):
 
 ```shell
 bin/1password-bridge --project /Users/me/src/example init my.1password.com
@@ -600,9 +600,25 @@ then `$EDITOR`, or `vi`. Changes are validated before an atomic save with mode
 `0600`; invalid edits leave the original policy untouched. The tool stores
 references only and does not retrieve secrets or invoke `op`.
 
-Set `AI_DIR` to change the default directory or use `--file PATH` to select a
-policy explicitly. Restart the bridge session after changing its policy.
+Host-only configuration follows `XDG_CONFIG_HOME`, defaulting to
+`$HOME/.config` when unset, empty, or relative. Both the CLI and launcher use
+`$XDG_CONFIG_HOME/ai/1password-bridge.json` when an absolute base is set.
+The CLI also accepts `--file PATH` for editing a policy explicitly; the
+launcher always reads the standard location. `AI_DIR` still controls container
+settings and persistent data, including bridge logs and runtime files.
+Restart the bridge session after changing its policy.
 Run the CLI tests with `ruby tools/onepassword-bridge/test_config.rb`.
+
+To move an existing policy to the default location, run on the host:
+
+```shell
+mkdir -p "$HOME/.config/ai"
+test ! -e "$HOME/.config/ai/1password-bridge.json" && \
+  mv "${AI_DIR:-$HOME/ai}/1password-bridge.json" "$HOME/.config/ai/1password-bridge.json"
+```
+
+If you set an absolute `XDG_CONFIG_HOME`, use that directory instead of
+`$HOME/.config`. Policies in the old location are not loaded automatically.
 
 The resulting policy has this structure:
 
@@ -625,7 +641,7 @@ get the exact value. Secret aliases may contain lowercase letters, digits,
 dots, underscores, and hyphens. Protect the policy from modification:
 
 ```shell
-chmod 600 "$HOME/ai/1password-bridge.json"
+chmod 600 "$HOME/.config/ai/1password-bridge.json"
 ```
 
 The policy deliberately lives outside directories mounted into containers.
