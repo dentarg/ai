@@ -576,7 +576,7 @@ server on `http://127.0.0.1:3000` to Canary.
 
 The optional bridge lets a container resolve individual secrets through the
 macOS 1Password app without giving the container access to `op` or its desktop
-session. Every retrieval must match the host-side project allowlist and is
+session. Every retrieval must match the host-side alias allowlist and is
 confirmed with a macOS dialog. The first `op` use in a terminal session may
 also require 1Password biometric authorization.
 
@@ -586,15 +586,15 @@ First enable **Settings > Developer > Integrate with 1Password CLI** in the
 Manage `~/.config/ai/1password-bridge.json` on the host with the CLI (Ruby required):
 
 ```shell
-bin/1password-bridge --project /Users/me/src/example init my.1password.com
-bin/1password-bridge --project /Users/me/src/example set github-token op://Agent/GitHub/token
-bin/1password-bridge --project /Users/me/src/example show
-bin/1password-bridge --project /Users/me/src/example remove github-token
+bin/1password-bridge init my.1password.com
+bin/1password-bridge set github-token op://Agent/GitHub/token
+bin/1password-bridge show
+bin/1password-bridge remove github-token
 bin/1password-bridge edit
 ```
 
-`--project` defaults to the current directory and resolves its canonical path.
-`init` also updates an existing project's account while retaining its secrets;
+The policy applies to every session launched with `--1password`, regardless
+of checkout. `init` updates the host account while retaining existing aliases;
 `set` adds or replaces an alias. `edit` opens the entire policy using `$VISUAL`,
 then `$EDITOR`, or `vi`. Changes are validated before an atomic save with mode
 `0600`; invalid edits leave the original policy untouched. The tool stores
@@ -609,36 +609,21 @@ settings and persistent data, including bridge logs and runtime files.
 Restart the bridge session after changing its policy.
 Run the CLI tests with `ruby tools/onepassword-bridge/test_config.rb`.
 
-To move an existing policy to the default location, run on the host:
-
-```shell
-mkdir -p "$HOME/.config/ai"
-test ! -e "$HOME/.config/ai/1password-bridge.json" && \
-  mv "${AI_DIR:-$HOME/ai}/1password-bridge.json" "$HOME/.config/ai/1password-bridge.json"
-```
-
-If you set an absolute `XDG_CONFIG_HOME`, use that directory instead of
-`$HOME/.config`. Policies in the old location are not loaded automatically.
-
 The resulting policy has this structure:
 
 ```json
 {
-  "projects": {
-    "/Users/me/src/example": {
-      "account": "my.1password.com",
-      "secrets": {
-        "github-token": "op://Agent/GitHub/token",
-        "anthropic-api-key": "op://Agent/Anthropic/credential"
-      }
-    }
+  "account": "my.1password.com",
+  "secrets": {
+    "github-token": "op://Agent/GitHub/token",
+    "anthropic-api-key": "op://Agent/Anthropic/credential"
   }
 }
 ```
 
-Project paths must be absolute and canonical; run `pwd -P` in the project to
-get the exact value. Secret aliases may contain lowercase letters, digits,
-dots, underscores, and hyphens. Protect the policy from modification:
+Secret aliases may contain lowercase letters, digits, dots, underscores, and
+hyphens. The launch directory appears in approval dialogs and audit logs,
+but does not select the policy. Protect the policy from modification:
 
 ```shell
 chmod 600 "$HOME/.config/ai/1password-bridge.json"
@@ -655,7 +640,7 @@ op-read github-token
 ```
 
 The broker starts with the container and stops when it exits. It loads the
-project policy once, accepts only fixed aliases over an authenticated ephemeral
+host policy once, accepts only fixed aliases over an authenticated ephemeral
 TLS connection, and never accepts arbitrary `op` arguments or `op://`
 references from the container. Audit events, without secret values or
 references, are appended to `$HOME/ai/logs/1password-bridge.log`.

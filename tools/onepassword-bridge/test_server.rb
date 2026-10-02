@@ -14,13 +14,9 @@ class OnePasswordBridgeTest < Minitest::Test
     File.write(
       @policy_path,
       JSON.generate(
-        "projects" => {
-          "/work/example" => {
-            "account" => "example.1password.com",
-            "secrets" => {
-              "github-token" => "op://Agent/GitHub/token",
-            },
-          },
+        "account" => "example.1password.com",
+        "secrets" => {
+          "github-token" => "op://Agent/GitHub/token",
         },
       ),
     )
@@ -32,7 +28,7 @@ class OnePasswordBridgeTest < Minitest::Test
   end
 
   def test_only_resolves_an_authenticated_allowlisted_alias_after_approval
-    policy = OnePasswordBridge::Policy.load(@policy_path, "/work/example")
+    policy = OnePasswordBridge::Policy.load(@policy_path)
     reads = []
     reader = Object.new
     reader.define_singleton_method(:read) do |account, reference|
@@ -62,13 +58,18 @@ class OnePasswordBridgeTest < Minitest::Test
       ["example.1password.com", "op://Agent/GitHub/token"],
     ], reads
     assert_equal "secret_read", logs.last[1]
+
+    approver.define_singleton_method(:approve?) { |_alias_name| false }
+    denied = broker.resolve("github-token", "session-token")
+    assert_equal 403, denied.status
+    assert_equal 1, reads.length
   end
 
   def test_rejects_a_policy_writable_by_other_users
     File.chmod(0o622, @policy_path)
 
     error = assert_raises(RuntimeError) do
-      OnePasswordBridge::Policy.load(@policy_path, "/work/example")
+      OnePasswordBridge::Policy.load(@policy_path)
     end
 
     assert_equal "policy must not be group- or world-writable", error.message

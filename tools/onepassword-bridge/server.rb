@@ -14,20 +14,28 @@ module OnePasswordBridge
 
     attr_reader :account
 
-    def self.load(path, project)
+    def self.load(path)
       stat = File.stat(path)
       raise "policy must be owned by the current user" unless stat.uid == Process.uid
       raise "policy must not be group- or world-writable" unless (stat.mode & 0o022).zero?
 
       document = JSON.parse(File.read(path))
-      project_policy = document.fetch("projects").fetch(project)
-      new(project_policy.fetch("account"), project_policy.fetch("secrets"))
+      from_document(document)
     rescue Errno::ENOENT
       raise "policy not found: #{path}"
     rescue KeyError
-      raise "no 1Password policy for project: #{project}"
+      raise "policy must contain account and secrets"
     rescue JSON::ParserError => error
       raise "invalid policy JSON: #{error.message}"
+    end
+
+    def self.from_document(document)
+      raise "policy must be an object" unless document.is_a?(Hash)
+      if document.key?("projects")
+        raise "checkout-based policy is no longer supported; run 1password-bridge init to configure host-wide access"
+      end
+
+      new(document.fetch("account"), document.fetch("secrets"))
     end
 
     def initialize(account, secrets)
@@ -279,7 +287,7 @@ module OnePasswordBridge
 
   def self.main
     project = ENV.fetch("OP_BRIDGE_PROJECT")
-    policy = Policy.load(ENV.fetch("OP_BRIDGE_POLICY"), project)
+    policy = Policy.load(ENV.fetch("OP_BRIDGE_POLICY"))
     certificate, private_key = certificate()
     File.write(ENV.fetch("OP_BRIDGE_CA_FILE"), certificate.to_pem)
 
