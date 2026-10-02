@@ -83,6 +83,7 @@ After=multi-user.target
 Type=simple
 Environment=HOME=$HOME
 PassEnvironment=HOST_DIR PORT CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_PROFILE CODEX_RESUME AI_REMOTE AI_FAST OP_BRIDGE_URL OP_BRIDGE_TOKEN OP_BRIDGE_CA
+PassEnvironment=GH_BRIDGE_URL GH_BRIDGE_TOKEN GH_BRIDGE_CA
 PassEnvironment=HOST_BROWSER_URL HOST_BROWSER_TOKEN HOST_BROWSER_CA NODE_EXTRA_CA_CERTS
 ExecStart=/bin/bash
 WorkingDirectory=/app
@@ -148,6 +149,8 @@ RUN rm -rf $HOME/.claude $HOME/.claude.json
 
 # last, so editing the blocklist doesn't re-clone the marketplaces above
 COPY claude/plugins.blocklist /opt/claude-plugins/blocklist
+COPY skills /opt/ai-skills
+COPY tools/agent-skills.sh /usr/local/bin/agent-skills.sh
 
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
@@ -160,6 +163,7 @@ COPY ./tools/gemini.sh /usr/local/bin/g
 COPY ./tools/codex.sh /usr/local/bin/cx
 COPY ./tools/exit.sh /usr/local/bin/x
 COPY ./tools/loki.sh /usr/local/bin/loki
+COPY ./tools/gh-host.sh /usr/local/bin/gh-host
 COPY ./tools/op-read.sh /usr/local/bin/op-read
 COPY ./tools/claude-hook.sh /usr/local/bin/claude-hook
 COPY ./tools/claude-permission-hook.sh /usr/local/bin/claude-permission-hook
@@ -178,6 +182,7 @@ RUN chmod +x /usr/local/bin/start.sh \
              /usr/local/bin/cx \
              /usr/local/bin/x \
              /usr/local/bin/loki \
+             /usr/local/bin/gh-host \
              /usr/local/bin/op-read \
              /usr/local/bin/claude-hook \
              /usr/local/bin/claude-permission-hook \

@@ -649,6 +649,124 @@ Any value returned by `op-read` is visible to the container and can be retained
 by the agent. The bridge limits which secrets can be requested and requires
 approval when they are requested; it cannot protect a secret after release.
 
+## GitHub bridge
+
+Use `bin/ai c --github=work` (or `AI_GITHUB=1 AI_GITHUB_PROFILE=work`) to enable restricted host `gh`
+operations. Like the 1Password bridge, this requires a macOS host with `ruby`,
+`op`, and the 1Password desktop integration enabled. Install `gh` on the host
+as well. The container and Lima guests use the `gh-host` client; rebuild the
+image or VM base to install it.
+
+The image and both VM bases also ship the shared
+[`gh-host` skill](skills/gh-host/SKILL.md). On bridge-enabled launches, `c`
+links it into the session's `~/.claude/skills/` and `cx` links it into
+`~/.agents/skills/`. Both agents can select it automatically for PR tasks;
+you can also invoke `/gh-host` in Claude Code or `$gh-host` in Codex.
+It explains repository selection, supported commands, approval, and safe
+handling of denied or uncertain requests. Launching without the bridge removes
+only the link managed by the wrapper; an existing user-authored skill is
+preserved. The host broker remains responsible for enforcing permissions.
+
+Store a fine-grained GitHub token in 1Password, restricted to the repositories
+needed and with an expiration. Pull requests read permission supports the read
+operations; write permission is needed to create PRs. The bridge resolves the
+configured reference through host `op` for each request and passes the token
+only to host `gh`. It does not use your normal `gh` login or expose a token-read
+operation to the container.
+
+Configure access once on the host, from any directory:
+
+```shell
+bin/github-bridge init \
+  work my.1password.com op://Agent/GitHub/token \
+  'company/*' 'another-org/*' owner/example
+bin/github-bridge show work
+
+# Optional: replace the allowed operations, including draft PR creation.
+bin/github-bridge allow work \
+  pr-list pr-view pr-diff pr-create
+bin/github-bridge check work
+bin/github-bridge list
+bin/ai cx --github=work
+```
+
+Each named profile has its own token, repository scopes, and allowed operations,
+independent of checkout. Mix exact `OWNER/REPO` entries with quoted `ORG/*`
+entries to allow all current and future repositories under one or more owners.
+Matching is case-insensitive; owner scopes also work for personal accounts.
+Only an entire repository component may be `*`; arbitrary globs are rejected.
+The token must also have access to each target repository.
+
+`init` replaces only the named profile and resets its operations to read-only;
+`allow` replaces only that profile's operation list. Other profiles are preserved.
+Both validate and save atomically with mode `0600`. The 1Password reference is
+configurable per profile. Each session uses exactly one profile and cannot switch
+tokens through `gh-host`. Bare `--github` selects `AI_GITHUB_PROFILE`, defaulting
+to `default`; unknown profiles fail at startup.
+The launch directory is included only in audit logs and approval dialogs.
+
+The policy lives at `~/.config/ai/github-bridge.json`, honoring an absolute
+`XDG_CONFIG_HOME`, with the same defaults as the 1Password policy. `--file`
+selects a different file for the configuration CLI only. The launcher reads
+the standard location. Restart enabled sessions after policy changes.
+
+```json
+{
+  "profiles": {
+    "work": {
+      "account": "my.1password.com",
+      "token": "op://Agent/GitHub/token",
+      "repositories": ["company/*", "another-org/*", "owner/example"],
+      "operations": ["pr-list", "pr-view", "pr-diff"]
+    }
+  }
+}
+```
+
+Inside an enabled container or VM:
+
+```shell
+gh-host pr-list owner/example
+gh-host pr-view owner/example 123
+gh-host pr-diff owner/example 123
+printf '%s\n' 'Describe the change here.' | \
+  gh-host pr-create owner/example feature-branch main 'PR title'
+```
+
+`pr-list` returns up to 30 open PRs. Read operations return GitHub JSON or a
+plain diff. Creation uses an already-pushed branch in the selected repository,
+creates a draft with maintainer edits disabled, and requires a macOS dialog
+showing the exact request. Denial or a 60-second approval timeout prevents the
+write. Reads rely on the host allowlist without an extra approval dialog;
+1Password may still require authorization. Creating a PR may trigger repository
+automation. A failed or timed-out create can have succeeded remotely; inspect
+the PR list before retrying.
+
+The broker supports github.com and these four operations only. It constructs
+fixed `gh api` requests, validates all arguments on the host, and rejects extra
+fields. Each `gh` process uses an empty configuration directory and a restricted
+environment, outside the project checkout. Neither arbitrary commands, API
+paths, host file paths, nor caller-supplied environment variables are accepted.
+
+Each enabled session gets a bearer token and ephemeral TLS certificate. Only
+the public bridge directory is mounted into the guest; the policy and command
+configuration stay on the host. Requests are limited to 16 KiB, PR bodies to
+8 KiB, command output to 2 MiB, and each `op`/`gh` process to 60 seconds. TLS and
+request reads have a 10-second deadline. The broker handles one request at a
+time. It exits with the session and removes its runtime directory.
+
+Audit events go to `$AI_DIR/logs/github-bridge.log` (default
+`~/ai/logs/github-bridge.log`) without tokens, token references, PR bodies, or
+subprocess error output. Returned repository content is visible to the agent.
+
+Run the bridge tests with:
+
+```shell
+for test in tools/github-bridge/test_*.rb; do ruby "$test" || break; done
+bash tools/test_github_bridge.sh
+bash tools/test_agent_skills.sh
+```
+
 ## OAuth Login
 
 First-time setup to get OAuth credentials.

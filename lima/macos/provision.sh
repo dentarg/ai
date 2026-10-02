@@ -33,9 +33,12 @@ sudo mkdir -p /usr/local/bin /opt/codex-plugins
 sudo chown "$(id -un)":staff /opt/codex-plugins
 bash "$assets/inside_deps/_codex_plugins.sh" "$assets/versions/codex-plugins" /opt/codex-plugins
 sudo chown -R root:wheel /opt/codex-plugins
+sudo install -m 644 "$assets/tools/agent-skills.sh" /usr/local/bin/agent-skills.sh
+sudo install -d /opt/ai-skills/gh-host
+sudo install -m 644 "$assets/skills/gh-host/SKILL.md" /opt/ai-skills/gh-host/SKILL.md
 for mapping in claude.sh:c codex.sh:cx gemini.sh:g claude-hook.sh:claude-hook \
   claude-permission-hook.sh:claude-permission-hook claude-login.sh:claude-login \
-  op-read.sh:op-read exit.sh:x; do
+  gh-host.sh:gh-host op-read.sh:op-read exit.sh:x; do
   sudo install -m 755 "$assets/tools/${mapping%:*}" "/usr/local/bin/${mapping#*:}"
 done
 for tool in codex-login refresh-tokens; do

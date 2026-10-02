@@ -1,3 +1,10 @@
+_ai_github_profile_options() {
+  local base=${XDG_CONFIG_HOME:-}
+  case "$base" in /*) ;; *) base="$HOME/.config" ;; esac
+  jq -r '.profiles | keys[] | select(test("^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")) | "--github=" + .' \
+    "$base/ai/github-bridge.json" 2>/dev/null || true
+}
+
 _ai_browser_profile_options() {
   local path
   printf '%s\n' --host-browser=default
@@ -18,9 +25,9 @@ _ai_complete() {
   case "$COMP_CWORD" in
     1)
       values="profile models session completion c claude cx codex --resume --ports --udp-ports --vm
-        --keep-vm --gpu --nested-virt --cpus --memory --1password
+        --keep-vm --gpu --nested-virt --cpus --memory --github --1password
         --host-browser --remote --fast --help
-        $(_ai_browser_profile_options)"
+        $(_ai_browser_profile_options) $(_ai_github_profile_options)"
       ;;
     2)
       case "$first" in
@@ -31,9 +38,9 @@ _ai_complete() {
         c|claude|cx|codex)
           values="$("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')
             --resume --vm --keep-vm --gpu --nested-virt --cpus --memory
-            --ports --udp-ports --1password --host-browser --help"
+            --ports --udp-ports --github --1password --host-browser --help"
           case "$first" in c|claude) values="$values --remote --fast" ;; esac
-          values="$values $(_ai_browser_profile_options)"
+          values="$values $(_ai_browser_profile_options) $(_ai_github_profile_options)"
           ;;
       esac
       ;;

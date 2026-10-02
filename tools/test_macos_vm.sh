@@ -63,7 +63,8 @@ grep -F 'hide-display <-l JavaScript - /tmp/test-macos-vm/ha.pid>' "$MACOS_TEST_
 tar -tzf "$MACOS_TEST_ARCHIVE" | grep -Fx 'lima/macos/provision.sh' >/dev/null
 mkdir "$tmpdir/extracted"
 tar -xzf "$MACOS_TEST_ARCHIVE" -C "$tmpdir/extracted"
-for asset in lima/assets/claude.sh lima/assets/gitconfig; do
+for asset in lima/assets/claude.sh lima/assets/gitconfig \
+  tools/agent-skills.sh skills/gh-host/SKILL.md; do
   test -f "$tmpdir/extracted/$asset"
   test ! -L "$tmpdir/extracted/$asset"
   cmp "$REPO_DIR/$asset" "$tmpdir/extracted/$asset"

@@ -2,6 +2,9 @@
 
 set -e
 
+# shellcheck source=tools/agent-skills.sh
+source "$(dirname "${BASH_SOURCE[0]}")/agent-skills.sh"
+
 HISTORY_ROOT=${HISTORY_ROOT:-/history}
 SETTINGS_ROOT=${SETTINGS_ROOT:-/settings}
 CLAUDE_SETTINGS_FILE=${CLAUDE_SETTINGS_FILE:-/claude/settings.json}
@@ -282,6 +285,7 @@ main () {
   [[ -f /settings/AGENTS.md ]] && cp -f /settings/AGENTS.md "$HOME/.claude/CLAUDE.md"
 
   link_image_plugins "$settings_claude_home"
+  configure_host_skills "$settings_claude_home/skills"
 
   # claude/claude.json -> ~/.claude.json (preserve existing one when resuming)
   if [[ -f /claude/claude.json ]]; then

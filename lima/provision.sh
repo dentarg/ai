@@ -113,6 +113,10 @@ install -m 755 /tmp/ai-build/gemini.sh /usr/local/bin/g
 install -m 755 /tmp/ai-build/codex.sh /usr/local/bin/cx
 install -m 755 /tmp/ai-build/exit.sh /usr/local/bin/x
 install -m 755 /tmp/ai-build/loki.sh /usr/local/bin/loki
+install -m 755 /tmp/ai-build/gh-host.sh /usr/local/bin/gh-host
+install -m 644 /tmp/ai-build/agent-skills.sh /usr/local/bin/agent-skills.sh
+install -d /opt/ai-skills/gh-host
+install -m 644 /tmp/ai-build/gh-host-SKILL.md /opt/ai-skills/gh-host/SKILL.md
 install -m 755 /tmp/ai-build/op-read.sh /usr/local/bin/op-read
 install -m 755 /tmp/ai-build/claude-hook.sh /usr/local/bin/claude-hook
 install -m 755 /tmp/ai-build/claude-permission-hook.sh /usr/local/bin/claude-permission-hook

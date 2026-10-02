@@ -43,6 +43,9 @@ gemini.sh tools/gemini.sh project
 codex.sh tools/codex.sh project
 exit.sh tools/exit.sh project
 loki.sh tools/loki.sh project
+gh-host.sh tools/gh-host.sh project
+agent-skills.sh tools/agent-skills.sh project
+gh-host-SKILL.md skills/gh-host/SKILL.md project
 op-read.sh tools/op-read.sh project
 claude-hook.sh tools/claude-hook.sh project
 claude-permission-hook.sh tools/claude-permission-hook.sh project

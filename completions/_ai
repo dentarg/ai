@@ -28,13 +28,21 @@ _ai_browser_profile_options() {
   done
 }
 
+_ai_github_profile_options() {
+  local base=${XDG_CONFIG_HOME:-}
+  case "$base" in /*) ;; *) base="$HOME/.config" ;; esac
+  jq -r '.profiles | keys[] | select(test("^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")) | "--github=" + .' \
+    "$base/ai/github-bridge.json" 2>/dev/null || true
+}
+
 _ai_commands_options() {
   local -a commands options values
   commands=(profile models session completion c claude cx codex)
   options=(
     --resume --ports --udp-ports --vm --keep-vm --gpu --nested-virt
-    --cpus --memory --1password --host-browser --remote --fast --help
+    --cpus --memory --github --1password --host-browser --remote --fast --help
     "${(@f)$(_ai_browser_profile_options)}"
+    "${(@f)$(_ai_github_profile_options)}"
   )
   values=("${commands[@]}" "${options[@]}")
   compadd -V ai-arguments -- "${values[@]}"
@@ -46,8 +54,9 @@ _ai_profiles_options() {
   profiles=("${(@f)$("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')}" )
   options=(
     --resume --ports --udp-ports --vm --keep-vm --gpu --nested-virt
-    --cpus --memory --1password --host-browser --help
+    --cpus --memory --github --1password --host-browser --help
     "${(@f)$(_ai_browser_profile_options)}"
+    "${(@f)$(_ai_github_profile_options)}"
   )
   case "$words[2]" in c|claude) options+=(--remote --fast) ;; esac
   values=("${profiles[@]}" "${options[@]}")

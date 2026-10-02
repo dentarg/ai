@@ -2,6 +2,9 @@
 
 set -e
 
+# shellcheck source=tools/agent-skills.sh
+source "$(dirname "${BASH_SOURCE[0]}")/agent-skills.sh"
+
 HISTORY_ROOT=${HISTORY_ROOT:-/history}
 SETTINGS_ROOT=${SETTINGS_ROOT:-/settings}
 CODEX_PLUGIN_ROOT=${CODEX_PLUGIN_ROOT:-/opt/codex-plugins}
@@ -284,6 +287,7 @@ trust_level = "trusted"
 EOF
 
   install_image_plugins
+  configure_host_skills "$HOME/.agents/skills"
 
   sync_auth_back() {
     local session_auth="$HOME/.codex/auth.json"

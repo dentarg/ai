@@ -1,0 +1,98 @@
+require "open3"
+require "timeout"
+require_relative "broker"
+
+module GitHubBridge
+  class Runner
+    def call(argv, env:, directory:, input: "", timeout: 60, limit: 2 * 1024 * 1024)
+      Open3.popen3(env, *argv, chdir: directory, unsetenv_others: true, pgroup: true) do |stdin, stdout, stderr, process|
+        begin
+          Timeout.timeout(timeout) do
+            stdin.write(input)
+            stdin.close
+            streams = [stdout, stderr]
+            output = +"".b
+            bytes = 0
+            until streams.empty?
+              IO.select(streams).first.each do |stream|
+                chunk = stream.read_nonblock(16 * 1024, exception: false)
+                next if chunk == :wait_readable
+                if chunk.nil?
+                  streams.delete(stream)
+                  next
+                end
+                bytes += chunk.bytesize
+                raise "command output limit exceeded" if bytes > limit
+                output << chunk if stream == stdout
+              end
+            end
+            raise "command failed" unless process.value.success?
+            output
+          end
+        ensure
+          # Also stop descendants that outlive their parent or hold its pipes.
+          begin
+            Process.kill("KILL", -process.pid)
+          rescue Errno::ESRCH
+            nil
+          end
+        end
+      end
+    end
+  end
+
+  class Executor
+    def initialize(policy:, gh:, op:, directory:, runner: Runner.new)
+      @policy, @gh, @op, @directory, @runner = policy, gh, op, directory, runner
+    end
+
+    def call(request)
+      token = @runner.call(
+        [@op, "read", "--account", @policy.account, @policy.token],
+        env: { "HOME" => Dir.home, "PATH" => "/usr/bin:/bin:/usr/sbin:/sbin" },
+        directory: @directory, limit: 4096,
+      ).strip
+      raise "invalid token" unless token.match?(/\A[A-Za-z0-9_]+\z/)
+
+      operation = request.fetch("operation")
+      endpoint = "repos/#{request.fetch('repository')}/pulls"
+      endpoint += "/#{request.fetch('number')}" if %w[pr-view pr-diff].include?(operation)
+      endpoint += "?state=open&per_page=30" if operation == "pr-list"
+      accept = operation == "pr-diff" ? "application/vnd.github.diff" : "application/vnd.github+json"
+      method = operation == "pr-create" ? "POST" : "GET"
+      argv = [@gh, "api", "--hostname", "github.com", "--method", method, "-H", "Accept: #{accept}", endpoint]
+      input = ""
+      if operation == "pr-create"
+        argv += ["--input", "-"]
+        input = JSON.generate(request.slice("head", "base", "title", "body").merge("draft" => true, "maintainer_can_modify" => false))
+      end
+      env = {
+        "HOME" => @directory, "GH_CONFIG_DIR" => @directory, "GH_TOKEN" => token,
+        "PATH" => "/usr/bin:/bin:/usr/sbin:/sbin", "GH_PROMPT_DISABLED" => "1",
+        "GH_PAGER" => "cat", "NO_COLOR" => "1", "GH_NO_UPDATE_NOTIFIER" => "1",
+      }
+      @runner.call(argv, env: env, directory: @directory, input: input).gsub(token, "[REDACTED]")
+    end
+  end
+
+  class Approver
+    def initialize(project, directory:, runner: Runner.new)
+      @project, @directory, @runner = project, directory, runner
+    end
+
+    def call(request)
+      message = "Project: #{@project}\n\nCreate this draft PR?\n#{JSON.pretty_generate(request)}"
+      script = <<~APPLESCRIPT
+        on run arguments
+          set decision to display dialog (item 1 of arguments) buttons {"Deny", "Allow"} default button "Deny" cancel button "Deny" with title "AI GitHub request" giving up after 60
+          if gave up of decision then error "Approval timed out"
+        end run
+      APPLESCRIPT
+      @runner.call(["/usr/bin/osascript", "-", message], env: { "HOME" => Dir.home },
+                   directory: @directory, input: script, timeout: 65, limit: 4096)
+      true
+    rescue StandardError
+      false
+    end
+  end
+end
