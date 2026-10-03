@@ -315,8 +315,20 @@ EOF
     printf '\033[?2004l\033[?1004l\033[0 q\033[?25h'
   }
 
+  # codex-hook records the session ID so it can be shown like Codex does
+  # on a Ctrl-C quit.
+  CODEX_EXIT_SESSION_FILE=$(mktemp)
+  export CODEX_EXIT_SESSION_FILE
+
+  print_exit_session() {
+    [[ -s "$CODEX_EXIT_SESSION_FILE" ]] || return 0
+    printf 'Session ID: %s\n' "$(cat "$CODEX_EXIT_SESSION_FILE")"
+  }
+
   cleanup() {
     reset_terminal
+    print_exit_session
+    rm -f "$CODEX_EXIT_SESSION_FILE"
     sync_auth_back
   }
 
