@@ -847,13 +847,13 @@ append_lima_forwards() {
 }
 
 next_instance_name() {
-  name_prefix=ai
+  name_prefix=ai-l
   if [ "$VM_BACKEND" -eq 0 ]; then
     name_prefix=ai-c
   elif [ "$MACOS" -eq 1 ]; then
-    name_prefix=ai-macos
+    name_prefix=ai-m
   elif [ "$GPU" -eq 1 ]; then
-    name_prefix=ai-gpu
+    name_prefix=ai-g
   fi
   project_limit=$((63 - ${#name_prefix} - 4))
   project_name=$(basename "$(pwd -P)" | tr '[:upper:]' '[:lower:]')

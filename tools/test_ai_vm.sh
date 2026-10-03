@@ -109,10 +109,10 @@ if grep -F '<--nested-virt>' "$log" >/dev/null; then
   echo 'at=fatal msg="Lima launcher enabled nested virtualization by default"' >&2
   exit 1
 fi
-grep -F '<ai-base> <ai-00-project-with-spaces>' "$log" >/dev/null
+grep -F '<ai-base> <ai-l-00-project-with-spaces>' "$log" >/dev/null
 grep -F '.timezone = "UTC"' "$log" >/dev/null
-grep -F '<shell> <--workdir> </app> <ai-00-project-with-spaces> <sudo> <hostnamectl> <set-hostname> <ai-00-project-with-spaces>' "$log" >/dev/null
-grep -F '<shell> <--workdir> </app> <ai-00-project-with-spaces> <--> <sudo> <tic> <-x> <-o> </etc/terminfo> </dev/stdin>' "$log" >/dev/null
+grep -F '<shell> <--workdir> </app> <ai-l-00-project-with-spaces> <sudo> <hostnamectl> <set-hostname> <ai-l-00-project-with-spaces>' "$log" >/dev/null
+grep -F '<shell> <--workdir> </app> <ai-l-00-project-with-spaces> <--> <sudo> <tic> <-x> <-o> </etc/terminfo> </dev/stdin>' "$log" >/dev/null
 grep -F '<TERM=xterm-ghostty>' "$log" >/dev/null
 if grep -F '<--yes>' "$log" >/dev/null; then
   echo 'at=fatal msg="Lima launcher used deprecated --yes flag"' >&2
@@ -186,7 +186,7 @@ if grep -F '<stop>' "$log" >/dev/null || grep -F '<delete>' "$log" >/dev/null; t
 fi
 grep -F 'keeping Lima VM after abnormal console exit' "$failure_output" >/dev/null
 grep -F 'status=137' "$failure_output" >/dev/null
-grep -F 'limactl delete --force ai-00-project-with-spaces' "$failure_output" >/dev/null
+grep -F 'limactl delete --force ai-l-00-project-with-spaces' "$failure_output" >/dev/null
 
 : > "$log"
 (
@@ -240,7 +240,7 @@ fi
 )
 
 grep -F '<clone> <--tty=false>' "$log" | \
-  grep -F '<ai-base-gpu> <ai-gpu-00-project-with-spaces>' >/dev/null
+  grep -F '<ai-base-gpu> <ai-g-00-project-with-spaces>' >/dev/null
 
 if grep -F '<--network=vzNAT>' "$log" >/dev/null; then
   echo 'at=fatal msg="vzNAT was enabled for krunkit"' >&2

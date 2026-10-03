@@ -200,7 +200,7 @@ directory when it launches Codex. Terminal tabs show
 `project [oauth-profile] - Codex`, with the host working directory name
 first so it stays visible in narrow tabs. Hostnames are omitted from the title.
 Containers still use matching names and hostnames of `ai-c-XX-<project>`,
-distinct from the VM prefixes `ai-`, `ai-gpu-`, and `ai-macos-`. Containers
+distinct from the VM prefixes `ai-l-`, `ai-g-`, and `ai-m-`. Containers
 choose the first free number from `00` to `99`, including stopped containers
 when checking availability. Codex title updates are disabled so they do not
 replace the title with `app`. Its generated statusline
@@ -338,8 +338,8 @@ provisioning runs separately from Lima's boot scripts, and `build_vm` streams
 its output. This avoids Lima's fixed ten-minute boot-script and cloud-init
 progress-monitor limits.
 
-Runtime instances and guest hostnames use `ai-XX-<project>` for standard Linux
-VMs, `ai-gpu-XX-<project>` for GPU VMs, and `ai-macos-XX-<project>` for macOS VMs.
+Runtime instances and guest hostnames use `ai-l-XX-<project>` for standard Linux
+VMs, `ai-g-XX-<project>` for GPU VMs, and `ai-m-XX-<project>` for macOS VMs.
 `XX` is the first available two-digit index for that type and project, and
 `project` is the sanitized current directory name, truncated to keep the VM
 name within 63 characters.

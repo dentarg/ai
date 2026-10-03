@@ -158,7 +158,7 @@ from pathlib import Path
 
 wrapper, root, session_id = sys.argv[1:]
 for hostname, arguments in (("ai-c-00-my-project", ["alpha"]),
-                            ("ai-01-my-project", ["--resume", session_id])):
+                            ("ai-l-01-my-project", ["--resume", session_id])):
     hostname_command = Path(root, "bin", "hostname")
     hostname_command.write_text(f"#!/bin/sh\nprintf '%s\\n' '{hostname}'\n")
     hostname_command.chmod(0o755)

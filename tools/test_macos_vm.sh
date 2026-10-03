@@ -101,7 +101,7 @@ grep -F '<delete><--force><ai-base-macos>' "$MACOS_TEST_LOG" >/dev/null
   MACOS_BASE_EXISTS=1 AI_DIR="$tmpdir/ai" AI_VM_HOST_PORT=45555 \
     "$REPO_DIR/bin/ai" --macos cx --ports 9999,8888:7777 >/dev/null
 )
-grep -F '<ai-base-macos><ai-macos-00-project-with-spaces>' "$MACOS_TEST_LOG" >/dev/null
+grep -F '<ai-base-macos><ai-m-00-project-with-spaces>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '/Users/Shared/ai/app' "$MACOS_TEST_LOG" >/dev/null
 grep -F 'bundle-macos' "$MACOS_TEST_LOG" >/dev/null
 grep -F '.portForwards = []' "$MACOS_TEST_LOG" >/dev/null
@@ -109,8 +109,8 @@ grep -F '<-L><127.0.0.1:45555:127.0.0.1:1337>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '<-L><127.0.0.1:8888:127.0.0.1:7777>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '</opt/homebrew/bin/bash>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '<CODEX_AUTO_START=1>' "$MACOS_TEST_LOG" >/dev/null
-grep -F '<-O><exit><lima-ai-macos-00-project-with-spaces>' "$MACOS_TEST_LOG" >/dev/null
-grep -F '<delete><--force><ai-macos-00-project-with-spaces>' "$MACOS_TEST_LOG" >/dev/null
+grep -F '<-O><exit><lima-ai-m-00-project-with-spaces>' "$MACOS_TEST_LOG" >/dev/null
+grep -F '<delete><--force><ai-m-00-project-with-spaces>' "$MACOS_TEST_LOG" >/dev/null
 ! grep -F 'hostnamectl' "$MACOS_TEST_LOG"
 : > "$MACOS_TEST_LOG"
 AI_VM_SHOW_DISPLAY=1 sh "$REPO_DIR/lima/macos/hide-display.sh" test-vm
