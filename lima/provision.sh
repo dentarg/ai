@@ -121,6 +121,7 @@ install -m 755 /tmp/ai-build/op-read.sh /usr/local/bin/op-read
 install -m 755 /tmp/ai-build/claude-hook.sh /usr/local/bin/claude-hook
 install -m 755 /tmp/ai-build/claude-permission-hook.sh /usr/local/bin/claude-permission-hook
 install -m 755 /tmp/ai-build/claude-login.sh /usr/local/bin/claude-login
+install -m 755 /tmp/ai-build/codex-hook.sh /usr/local/bin/codex-hook
 install -m 755 /tmp/ai-build/codex-login /usr/local/bin/codex-login
 install -m 755 /tmp/ai-build/refresh-tokens /usr/local/bin/refresh-tokens
 install -m 644 /tmp/ai-build/bashrc /workspace/.bashrc

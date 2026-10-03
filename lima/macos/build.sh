@@ -70,7 +70,7 @@ COPYFILE_DISABLE=1 /usr/bin/tar -chzf "$build_dir/assets.tar.gz" -C "$REPO_DIR" 
   dot.bashrc gitignore-global versions inside_deps/_codex_plugins.sh \
   inside_deps/npm-packages.txt tools/claude.sh tools/codex.sh tools/gemini.sh \
   tools/claude-hook.sh tools/claude-permission-hook.sh tools/claude-login.sh \
-  tools/gh-host.sh tools/agent-skills.sh skills \
+  tools/codex-hook.sh tools/gh-host.sh tools/agent-skills.sh skills \
   tools/op-read.sh tools/exit.sh bin/codex-login bin/refresh-tokens
 if [ "$RESUME" -ne 1 ]; then
   limactl create --tty=false --name "$BASE_NAME" \

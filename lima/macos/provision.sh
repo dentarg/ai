@@ -38,7 +38,7 @@ sudo install -d /opt/ai-skills/gh-host
 sudo install -m 644 "$assets/skills/gh-host/SKILL.md" /opt/ai-skills/gh-host/SKILL.md
 for mapping in claude.sh:c codex.sh:cx gemini.sh:g claude-hook.sh:claude-hook \
   claude-permission-hook.sh:claude-permission-hook claude-login.sh:claude-login \
-  gh-host.sh:gh-host op-read.sh:op-read exit.sh:x; do
+  codex-hook.sh:codex-hook gh-host.sh:gh-host op-read.sh:op-read exit.sh:x; do
   sudo install -m 755 "$assets/tools/${mapping%:*}" "/usr/local/bin/${mapping#*:}"
 done
 for tool in codex-login refresh-tokens; do

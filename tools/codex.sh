@@ -282,6 +282,11 @@ status_line = ["current-dir", "git-branch", "model-with-reasoning", "context-use
 # The wrapper sets a title with host metadata; /app alone is ambiguous.
 terminal_title = []
 
+[[hooks.UserPromptSubmit]]
+[[hooks.UserPromptSubmit.hooks]]
+type = "command"
+command = "codex-hook"
+
 [projects.$codex_cwd_toml]
 trust_level = "trusted"
 EOF
@@ -298,7 +303,20 @@ EOF
     fi
   }
 
+  # Codex only restores the terminal when quit with Ctrl-C, not when killed
+  # by a signal, e.g. by codex-hook. Replay its Ctrl-C restore: mouse
+  # reporting, alternate scroll, alternate screen, kitty keyboard flags,
+  # modifyOtherKeys, bracketed paste, focus events, cursor shape and
+  # visibility.
+  reset_terminal() {
+    [[ -t 1 ]] || return 0
+    printf '\033[?1006l\033[?1015l\033[?1003l\033[?1002l\033[?1000l'
+    printf '\033[?1007l\033[?1049l\033[<3u\033[>4;0m'
+    printf '\033[?2004l\033[?1004l\033[0 q\033[?25h'
+  }
+
   cleanup() {
+    reset_terminal
     sync_auth_back
   }
 
@@ -320,6 +338,8 @@ EOF
   codex_cmd+=(
     --cd "$codex_cwd"
     --dangerously-bypass-approvals-and-sandbox
+    # config.toml is regenerated each launch, so hook trust never persists.
+    --dangerously-bypass-hook-trust
     --search
   )
   [[ -n "$resume_id" ]] && codex_cmd+=(resume "$resume_id")

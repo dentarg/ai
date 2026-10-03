@@ -168,6 +168,7 @@ COPY ./tools/op-read.sh /usr/local/bin/op-read
 COPY ./tools/claude-hook.sh /usr/local/bin/claude-hook
 COPY ./tools/claude-permission-hook.sh /usr/local/bin/claude-permission-hook
 COPY ./tools/claude-login.sh /usr/local/bin/claude-login
+COPY ./tools/codex-hook.sh /usr/local/bin/codex-hook
 COPY dot.bashrc $HOME/.bashrc
 COPY .gitconfig /etc/gitconfig
 RUN git lfs install --system \
@@ -187,6 +188,7 @@ RUN chmod +x /usr/local/bin/start.sh \
              /usr/local/bin/claude-hook \
              /usr/local/bin/claude-permission-hook \
              /usr/local/bin/claude-login \
+             /usr/local/bin/codex-hook \
              /usr/local/bin/codex-login \
              /usr/local/bin/refresh-tokens
 
