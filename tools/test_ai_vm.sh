@@ -204,6 +204,18 @@ if grep -F '<delete>' "$log" >/dev/null; then
   echo 'at=fatal msg="--keep-vm deleted the Lima VM"' >&2
   exit 1
 fi
+
+: > "$log"
+(
+  cd "$project"
+  HOME="${tmpdir}/home" \
+  AI_DIR="$ai_dir" \
+  AI_VM_HOST_PORT=45556 \
+  BASE_VM_TYPE=qemu \
+  LIMACTL_LOG="$log" \
+  PATH="${fake_bin}:${PATH}" \
+    "$REPO_DIR/bin/ai" c --keep 2>&1 >/dev/null
+) | grep -F 'msg="keeping Lima VM"' >/dev/null
 if grep -F '<--network=vzNAT>' "$log" >/dev/null; then
   echo 'at=fatal msg="vzNAT was enabled for QEMU"' >&2
   exit 1

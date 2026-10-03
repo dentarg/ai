@@ -44,6 +44,7 @@ Options:
       --vm            Use an ephemeral Lima VM instead of a Podman container
       --macos         Use a macOS Lima VM (implies --vm)
       --keep-vm       Keep the Lima VM after exit (implies --vm)
+      --keep          Alias for --keep-vm
       --gpu           Use the GPU-enabled Lima base VM
       --nested-virt   Enable nested virtualization in the Lima VM
       --cpus <count>  Override CPU count for the Lima VM
@@ -111,6 +112,7 @@ is_true() {
 #                        --ports.
 #   --vm                 use an ephemeral Lima VM instead of Podman.
 #   --keep-vm            retain the Lima VM after exit; implies --vm.
+#   --keep               alias for --keep-vm.
 #   --gpu                use the GPU-enabled Lima base VM.
 #   --nested-virt        expose KVM inside the Lima VM.
 #   --cpus <count>       override the cloned Lima VM's CPU count.
@@ -188,7 +190,7 @@ while [ $# -gt 0 ]; do
     --vm)
       VM_BACKEND=1
       ;;
-    --keep-vm)
+    --keep-vm|--keep)
       VM_BACKEND=1
       KEEP_VM=1
       ;;
