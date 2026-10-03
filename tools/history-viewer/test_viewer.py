@@ -154,10 +154,28 @@ class SummarizeCodexSession(unittest.TestCase):
 
         self.assertEqual(s["sessionId"], "current-123")
         self.assertEqual(s["cwd"], "/tmp/codex-host-cwd.test/docker-image")
-        self.assertEqual(s["name"], "docker-image")
+        self.assertIsNone(s["name"])  # title falls back to the first prompt
         self.assertEqual(s["firstPrompt"], "fix the viewer")
         self.assertEqual((s["userMessages"], s["assistantMessages"], s["messages"]),
                          (1, 1, 2))
+
+    def test_name_from_latest_session_index_entry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            rollout = home / "sessions/2026/10/02/rollout-thread-1.jsonl"
+            rollout.parent.mkdir(parents=True)
+            rollout.write_text(json.dumps(
+                {"type": "session_meta", "payload": {"id": "thread-1", "cwd": "/app"}}
+            ) + "\n", encoding="utf-8")
+            (home / "session_index.jsonl").write_text("".join(
+                json.dumps(e) + "\n" for e in [
+                    {"id": "thread-1", "thread_name": "Review issues"},
+                    {"id": "thread-2", "thread_name": "Other thread"},
+                    {"id": "thread-1", "thread_name": "Review Sinatra issues"},
+                ]), encoding="utf-8")
+            s = viewer.summarize_codex_session(rollout)
+
+        self.assertEqual(s["name"], "Review Sinatra issues")
 
 
 class CodexToTranscript(unittest.TestCase):

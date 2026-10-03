@@ -372,6 +372,30 @@ def _codex_repo(cwd: str | None, repo_url: str | None) -> str | None:
     return Path(cwd).name if cwd else None
 
 
+def codex_thread_name(path: Path, sid: str | None) -> str | None:
+    """Look up the thread name Codex keeps in `session_index.jsonl`, next to
+    the `sessions/` tree. Renames append entries, so the last match wins."""
+    home = next((p.parent for p in path.parents if p.name == "sessions"), None)
+    if not sid or home is None:
+        return None
+    name = None
+    try:
+        with (home / "session_index.jsonl").open("r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if entry.get("id") == sid and entry.get("thread_name"):
+                    name = entry["thread_name"]
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        log("warn", op="read_session_index", path=str(home), err=repr(e))
+        return None
+    return name
+
+
 def summarize_codex_session(path: Path) -> dict:
     """Summarize a Codex rollout jsonl, returning the same shape as
     summarize_session so the manifest is agent-agnostic.
@@ -482,7 +506,7 @@ def summarize_codex_session(path: Path) -> dict:
         "repo": _codex_repo(cwd, repo_url),
         "gitBranch": branch,
         "version": version,
-        "name": Path(cwd).name if cwd else None,
+        "name": codex_thread_name(path, sid),
         "firstPrompt": first_prompt,
         "events": line_count,
         "messages": user_msgs + assistant_msgs,
