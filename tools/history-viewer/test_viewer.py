@@ -242,6 +242,7 @@ class CodexToTranscript(unittest.TestCase):
                                                       "content": [{"type": "input_text",
                                                                    "text": "show the prompt"}]}},
             {"type": "response_item", "payload": {"type": "message", "role": "assistant",
+                                                      "phase": "commentary",
                                                       "content": [{"type": "output_text",
                                                                    "text": "here it is"}]}},
             {"type": "response_item", "payload": {"type": "custom_tool_call",
@@ -258,6 +259,7 @@ class CodexToTranscript(unittest.TestCase):
         assistant = next(e for e in ev if e["type"] == "assistant")
         self.assertEqual([b["type"] for b in assistant["message"]["content"]],
                          ["text", "tool_use"])
+        self.assertEqual(assistant["message"]["content"][0]["phase"], "commentary")
         self.assertEqual(assistant["message"]["content"][1]["name"], "exec")
         result = next(e for e in users if isinstance(e["message"]["content"], list))
         self.assertEqual(result["message"]["content"][0]["content"], "file.txt")

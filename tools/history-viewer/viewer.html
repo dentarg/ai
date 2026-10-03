@@ -869,8 +869,12 @@ const INTERNAL_TYPES = new Set([
 
 // Older transcripts have no final-answer marker: keep the last prose response
 // between user prompts. Tool results are user events, but do not start a turn.
+// Codex progress updates are shown like the terminal does, without their tools.
 function conversationEvents(events) {
   const visible = new Map();
+  const show = (e, content) => content.length
+    ? visible.set(e, { ...e, message: { ...e.message, content } })
+    : visible.delete(e);
   let answer = null;
   for (const e of events) {
     const content = e.message?.content;
@@ -879,17 +883,21 @@ function conversationEvents(events) {
       : (content || []).filter(b => b.type === "text" && b.text?.trim());
     if (e.type === "user" && text.some(b => b.text.trim())) {
       answer = null;
-      visible.set(e, { ...e, message: { ...e.message, content: text } });
+      show(e, text);
     } else if (e.type === "assistant") {
-      const prose = text.filter(b => !b.channel || b.channel === "final");
+      const isUpdate = b => b.phase === "commentary";
+      const prose = text.filter(b => !isUpdate(b) && (!b.channel || b.channel === "final"));
       const usesTool = (content || []).some(b => b.type === "tool_use");
       if (usesTool || prose.length) {
-        if (answer) visible.delete(answer);
+        if (answer) show(answer.e, answer.updates);
         answer = null;
       }
+      const updates = text.filter(isUpdate);
       if (!usesTool && prose.length) {
-        answer = e;
-        visible.set(e, { ...e, message: { ...e.message, content: prose } });
+        answer = { e, updates };
+        show(e, text.filter(b => isUpdate(b) || prose.includes(b)));
+      } else {
+        show(e, updates);
       }
     } else if (e.type !== "user") {
       visible.set(e, e);

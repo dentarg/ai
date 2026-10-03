@@ -792,7 +792,8 @@ def codex_to_transcript(raw_events: list[dict]) -> list[dict]:
             text = codex_text(payload.get("content"))
             if text.strip():
                 add_assistant_block({"type": "text", "text": text,
-                                     "channel": payload.get("channel")}, ts)
+                                     "channel": payload.get("channel"),
+                                     "phase": payload.get("phase")}, ts)
             continue
 
         if etype == "response_item" and ptype in ("function_call", "custom_tool_call"):

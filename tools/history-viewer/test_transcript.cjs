@@ -77,3 +77,22 @@ test('default transcript shows prompts and answers; toggles restore steps and in
   vm.runInContext('state.showIntermediateSteps = false; state.showInternals = false', context);
   assert.equal(render(), compact);
 });
+
+test('default transcript keeps Codex progress updates but hides their tool calls', () => {
+  const event = (type, content) => ({ type, message: { content } });
+  const text = (text, phase) => ({ type: 'text', text, phase });
+  context.events = [
+    event('user', 'Review the backlog'),
+    event('assistant', [text('Fixed issue 162', 'commentary'), { type: 'tool_use', name: 'shell', input: { cmd: 'rake' } }]),
+    event('user', [{ type: 'tool_result', content: 'Tool output' }]),
+    event('assistant', [{ type: 'thinking', thinking: 'Private reasoning' }, text('Review done', 'final_answer')]),
+  ];
+  const compact = vm.runInContext('transcriptHtml(events)', context);
+  for (const expected of ['Review the backlog', 'Fixed issue 162', 'Review done']) {
+    assert.ok(compact.includes(expected), expected);
+  }
+  for (const hidden of ['rake', 'Tool output', 'Private reasoning']) {
+    assert.ok(!compact.includes(hidden), hidden);
+  }
+  assert.ok(compact.indexOf('Fixed issue 162') < compact.indexOf('Review done'));
+});
