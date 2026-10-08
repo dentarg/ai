@@ -29,9 +29,11 @@ download() {
     --connect-timeout 15 --max-time 120 "$@"
 }
 
+# debconf's noninteractive mode does not handle dpkg conffile prompts.
+# Keep the hosted environment's existing configuration on package conflicts.
 printf 'at=info event=install_packages\n'
 apt-get update -qq
-apt-get install -y --no-install-recommends \
+apt-get -o Dpkg::Options::=--force-confold install -y --no-install-recommends \
   bat build-essential ca-certificates cmake curl file git git-lfs gnupg \
   htop jq less libcurl4-openssl-dev libffi-dev libgmp-dev liblz4-dev \
   libpq-dev libreadline-dev libssl-dev libyaml-dev libzstd-dev lsof \
@@ -53,7 +55,7 @@ for entry in 84codes/crystal cloudamqp/lavinmq; do
     "$name" "$entry" > "/etc/apt/sources.list.d/ai-$name.list"
 done
 apt-get update -qq
-apt-get install -y --no-install-recommends crystal lavinmq
+apt-get -o Dpkg::Options::=--force-confold install -y --no-install-recommends crystal lavinmq
 
 printf 'at=info event=install_ruby\n'
 download "https://raw.githubusercontent.com/dentarg/ai/$ai_revision/inside_deps/_rv.sh" \
