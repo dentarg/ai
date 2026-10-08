@@ -63,14 +63,13 @@ download "https://raw.githubusercontent.com/dentarg/ai/$ai_revision/inside_deps/
 # RV_INSTALL_DIR is a prefix; the installer adds /bin.
 RV_INSTALL_DIR=/usr/local RV_NO_MODIFY_PATH=1 \
   sh "$setup_tmp/rv-installer.sh"
+# Verify the installed versions independently of the checkout's .ruby-version.
+# Keep the hosted default Ruby and shell initialization files unchanged.
 for version in "${ruby_versions[@]}"; do
   /usr/local/bin/rv ruby install "$version"
+  /usr/local/bin/rv run --ruby "$version" --no-install ruby --version
+  /usr/local/bin/rv run --ruby "$version" --no-install bundle --version
 done
-
-# Explicit rv commands respect each project's .ruby-version. Do not replace
-# the hosting environment's default Ruby or shell initialization files.
-/usr/local/bin/rv run ruby --version
-/usr/local/bin/rv run bundle --version
 
 printf 'at=info event=install_node_tools\n'
 # Claude's hosted image already provides Node 22 and npm.
