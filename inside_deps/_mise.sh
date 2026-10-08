@@ -22,8 +22,22 @@ else
   }
 fi
 
+warn() {
+  printf '%s\n' "$*" >&2
+}
+
 error() {
   echo "$@" >&2
+  exit 1
+}
+
+unsupported_arch() {
+  arch="$1"
+  warn "unsupported architecture: $arch"
+  warn ""
+  warn "mise does not provide prebuilt binaries for this platform."
+  warn "If Rust/Cargo is available, install from source with:"
+  warn "  cargo install --locked mise"
   exit 1
 }
 #endregion
@@ -63,7 +77,7 @@ get_arch() {
   elif [ "$arch" = armv7l ]; then
     echo "armv7$musl"
   else
-    error "unsupported architecture: $arch"
+    unsupported_arch "$arch"
   fi
 }
 
@@ -86,6 +100,11 @@ tar_supports_zstd() {
   # tar is bsdtar
   elif tar --version | grep -q 'bsdtar'; then
     true
+  # busybox tar reports a "1.3x" version that matches the GNU check below, but it
+  # cannot decompress .tar.zst itself. Detect it so we fall back to the zstd pipe
+  # (or a .tar.gz download) instead of running `tar -xf` on a zstd tarball.
+  elif tar --version 2>&1 | grep -qi 'busybox'; then
+    false
   # tar version is >= 1.31
   elif tar --version | grep -q '1\.\(3[1-9]\|[4-9][0-9]\)'; then
     true
@@ -110,28 +129,28 @@ get_checksum() {
   arch=$3
   ext=$4
   url="https://github.com/jdx/mise/releases/download/v${version}/SHASUMS256.txt"
-  current_version="v2026.5.15"
+  current_version="v2026.10.4"
   current_version="${current_version#v}"
 
   # For current version use static checksum otherwise
   # use checksum from releases
   if [ "$version" = "$current_version" ]; then
-    checksum_linux_x86_64="1c47c32a2bf6d40ef48e31272335845cbeeaa5184883fc0222f8ad29a3594d6c  ./mise-v2026.5.15-linux-x64.tar.gz"
-    checksum_linux_x86_64_musl="7d0460ccf507d468776bd8520002209cb3864e85c73c87bb0e9abad2276594c1  ./mise-v2026.5.15-linux-x64-musl.tar.gz"
-    checksum_linux_arm64="adbf15b370aac0075563c26bf20a868cc64e2d54edfdc9a1b29efffa597cc830  ./mise-v2026.5.15-linux-arm64.tar.gz"
-    checksum_linux_arm64_musl="f88bcb2fb3ad5c6f923672a06907d929d451b787f4b35fd9d3529f4f31acdaa8  ./mise-v2026.5.15-linux-arm64-musl.tar.gz"
-    checksum_linux_armv7="1d094c5bfed6de50016caf022f2af78667b60d8777f34718f7b1f0c41355a642  ./mise-v2026.5.15-linux-armv7.tar.gz"
-    checksum_linux_armv7_musl="153ba2fcb5e62acc1649ab03074655ba455c0fe52465a6f79c2b0ec49debd5b4  ./mise-v2026.5.15-linux-armv7-musl.tar.gz"
-    checksum_macos_x86_64="e2b28f734b7fe86c55fa7beddb9bd4d53c58a5d5b438c218f9c5bb94f1d8e7cf  ./mise-v2026.5.15-macos-x64.tar.gz"
-    checksum_macos_arm64="5b0652ac2dd55d9e454e9ecede353d999feb3f10391a79c90bc2067631cbd828  ./mise-v2026.5.15-macos-arm64.tar.gz"
-    checksum_linux_x86_64_zstd="d8377c3c7832fbdfc60f5b5de1beb2f526d4a77e428412ae48376e7b1229b5f3  ./mise-v2026.5.15-linux-x64.tar.zst"
-    checksum_linux_x86_64_musl_zstd="9b4bcc49dcdfbe438536cb39911088a348c6571741c455c340e4f2f584f23c3e  ./mise-v2026.5.15-linux-x64-musl.tar.zst"
-    checksum_linux_arm64_zstd="b61cd714253db2df07c0d7eb9980310ebe4d723d0c5cb826347ff43fa45adf2a  ./mise-v2026.5.15-linux-arm64.tar.zst"
-    checksum_linux_arm64_musl_zstd="254821dcd70626f4046b6412c567932fd7ec00e241f5401f7343d50238710607  ./mise-v2026.5.15-linux-arm64-musl.tar.zst"
-    checksum_linux_armv7_zstd="6e382006ff5ab4b6767d930c4e16606d1bb67a59f60cee342cbec321af83b252  ./mise-v2026.5.15-linux-armv7.tar.zst"
-    checksum_linux_armv7_musl_zstd="d7df9a7aa7f05f53ff5d1b381f1ab0342fb00ad22c1ce3bc6cd3ba0f4857c422  ./mise-v2026.5.15-linux-armv7-musl.tar.zst"
-    checksum_macos_x86_64_zstd="ae3c86effedbfcd416a243e956d0556e9d0de2354768b9c66d7db482e1420fe2  ./mise-v2026.5.15-macos-x64.tar.zst"
-    checksum_macos_arm64_zstd="11979312f323669776f41fe607b53ca38df139b95e86f27d15f4cc4746d46d91  ./mise-v2026.5.15-macos-arm64.tar.zst"
+    checksum_linux_x86_64="2fc793020b442d08163603400236b2c693f8cede810c7e432fc77220e6c9e8a1  ./mise-v2026.10.4-linux-x64.tar.gz"
+    checksum_linux_x86_64_musl="593d57eaa0b6c1b8d3bb9eaa3a1c16b081cea10599276ce69bed2ad5dbe7c361  ./mise-v2026.10.4-linux-x64-musl.tar.gz"
+    checksum_linux_arm64="8760841cdbf964ecf9902a50c94716c77185a99af7f8eb55c9c51ec73ecd8880  ./mise-v2026.10.4-linux-arm64.tar.gz"
+    checksum_linux_arm64_musl="3248895cf5f6445580a6887eaf7d57476bc7d3afce3c8cf213b7d4ab9aae8a88  ./mise-v2026.10.4-linux-arm64-musl.tar.gz"
+    checksum_linux_armv7="86b8b7db2caa458a22effb16b22ef8d15298a9b4083b9f2712a6c41bc0ec3b55  ./mise-v2026.10.4-linux-armv7.tar.gz"
+    checksum_linux_armv7_musl="6e68f57ff08baa81410862f0262ff1129dce72d9dd5369b4c9edf6c062aea4ad  ./mise-v2026.10.4-linux-armv7-musl.tar.gz"
+    checksum_macos_x86_64="3bf65cfdb543f69685afde3ae9ccd0b819b8f5ea5d12c67c73487bf2a1b16bf4  ./mise-v2026.10.4-macos-x64.tar.gz"
+    checksum_macos_arm64="744ae45f9b7c2a443adfa61df48397930e88b13c541834b7bd22ca31d4dfcfcd  ./mise-v2026.10.4-macos-arm64.tar.gz"
+    checksum_linux_x86_64_zstd="48beefca08c38512989a296a92740758965fca4e421a7704ad9017b86f3a8403  ./mise-v2026.10.4-linux-x64.tar.zst"
+    checksum_linux_x86_64_musl_zstd="ea4488d3562902080053fdb8948b3af24a2c03772ea1db5ea055c955eb1b40e5  ./mise-v2026.10.4-linux-x64-musl.tar.zst"
+    checksum_linux_arm64_zstd="56c2e9b175101592cd6af8b465a8e66786ebe56752d7465e21e95b7552158018  ./mise-v2026.10.4-linux-arm64.tar.zst"
+    checksum_linux_arm64_musl_zstd="7c426ead1eb3af618fc873b82f3504cbe22db75135170a0f2ced88876861036f  ./mise-v2026.10.4-linux-arm64-musl.tar.zst"
+    checksum_linux_armv7_zstd="02098b8017ea4d426fe3210469832ce8083fa4d6d293aa82c2acabf5d03b2b52  ./mise-v2026.10.4-linux-armv7.tar.zst"
+    checksum_linux_armv7_musl_zstd="2a96f4adce69ee935bd844b53a34ecda14b04d33375f61c80a6a27f3e98393a8  ./mise-v2026.10.4-linux-armv7-musl.tar.zst"
+    checksum_macos_x86_64_zstd="b1501019f8bb4456a8ad8f4d461b5a90106d667d3c8525771aec54cefc9d3068  ./mise-v2026.10.4-macos-x64.tar.zst"
+    checksum_macos_arm64_zstd="7819af9b7507c180f3600e34cf5cde921104eb141ddf82c9b760614a2fe7ad37  ./mise-v2026.10.4-macos-arm64.tar.zst"
 
     # TODO: refactor this, it's a bit messy
     if [ "$ext" = "tar.zst" ]; then
@@ -241,10 +260,64 @@ download_file() {
   echo "$file"
 }
 
+# Prints the version of an installed mise binary (the first field of
+# `mise version`, e.g. "2025.6.0"), with any leading "v" stripped. Prints
+# nothing if the binary is missing or fails to report a version.
+installed_mise_version() {
+  bin="$1"
+  if [ -x "$bin" ]; then
+    installed_version="$("$bin" version 2>/dev/null | head -n1 | cut -d' ' -f1)"
+    echo "${installed_version#v}"
+  fi
+}
+
+# Keep bootstrap dependencies to POSIX sh/awk and curl or wget. The native CLI
+# additionally supports calendar durations and absolute cutoff dates.
+release_age_cutoff() {
+  awk -v age="$1" -v now="$(date +%s)" 'BEGIN {
+    if (age !~ /^[0-9]+[smhdw]$/) exit 1
+    unit = substr(age, length(age)); value = substr(age, 1, length(age)-1)
+    seconds = (unit == "s" ? 1 : unit == "m" ? 60 : unit == "h" ? 3600 : unit == "d" ? 86400 : 604800)
+    printf "%.0f\n", now - value * seconds
+  }'
+}
+
+select_release() {
+  awk -v cutoff="$1" '
+    NF != 2 || $1 !~ /^v[0-9]+\.[0-9]+\.[0-9]+$/ || $2 !~ /^[0-9]+$/ { invalid = 1; next }
+    $2 <= cutoff {
+      split(substr($1, 2), v, ".")
+      if (!selected || v[1]+0 > year || (v[1]+0 == year && v[2]+0 > month) || (v[1]+0 == year && v[2]+0 == month && v[3]+0 > patch)) {
+        selected = substr($1, 2); year = v[1]+0; month = v[2]+0; patch = v[3]+0
+      }
+    }
+    END { if (invalid || !selected) exit 1; print selected }
+  '
+}
+
+resolve_release() {
+  if [ -n "${MISE_VERSION:-}" ]; then
+    printf '%s\n' "${MISE_VERSION#v}"
+    return
+  fi
+  age="${MISE_SELF_UPDATE_MINIMUM_RELEASE_AGE-${MISE_MINIMUM_RELEASE_AGE-24h}}"
+  cutoff=$(release_age_cutoff "$age") || error "invalid minimum release age: $age (use an integer with s, m, h, d, or w)"
+  if command -v curl >/dev/null 2>&1; then
+    index=$(curl -fsSL https://mise.jdx.dev/releases.tsv) || error "could not fetch mise release index"
+  elif command -v wget >/dev/null 2>&1; then
+    index=$(wget -qO- https://mise.jdx.dev/releases.tsv) || error "could not fetch mise release index"
+  else
+    error "mise install requires curl or wget"
+  fi
+  selected=$(printf '%s\n' "$index" | select_release "$cutoff") || error "no eligible mise release or invalid release index; lower MISE_SELF_UPDATE_MINIMUM_RELEASE_AGE or set MISE_VERSION"
+  info "mise: selected $selected (minimum release age: $age)"
+  printf '%s\n' "$selected"
+}
+
 install_mise() {
-  version="${MISE_VERSION:-v2026.5.15}"
+  version="$(resolve_release)"
   version="${version#v}"
-  current_version="v2026.5.15"
+  current_version="v2026.10.4"
   current_version="${current_version#v}"
   os="${MISE_INSTALL_OS:-$(get_os)}"
   arch="${MISE_INSTALL_ARCH:-$(get_arch)}"
@@ -252,12 +325,40 @@ install_mise() {
   install_path="${MISE_INSTALL_PATH:-$HOME/.local/bin/mise}"
   install_dir="$(dirname "$install_path")"
   install_from_github="${MISE_INSTALL_FROM_GITHUB:-}"
+
+  # Keep a newer manually installed release when resolving an unpinned install.
+  if [ -z "${MISE_VERSION:-}" ] && [ -x "$install_path" ]; then
+    existing_version="$(installed_mise_version "$install_path")"
+    [ -n "$existing_version" ] || error "cannot compare installed mise version; set MISE_VERSION explicitly"
+    if [ -n "$existing_version" ]; then
+      compare_version="${existing_version%-DEBUG}"
+      newest=$(printf 'v%s 0\nv%s 0\n' "$compare_version" "$version" | select_release 0) || error "cannot compare installed mise version; set MISE_VERSION explicitly"
+      if [ "$newest" = "$compare_version" ]; then
+        info "mise: $install_path is already at $existing_version, keeping installed version"
+        return 0
+      fi
+    fi
+  fi
+
+  # Opt-in: skip the download/install if the binary already at the install
+  # path matches the requested version. Only the install path is checked (not
+  # the wider PATH) so that skipping never leaves install_path missing.
+  skip_if_exists="${MISE_INSTALL_SKIP_IF_EXISTS-}"
+  if [ "$skip_if_exists" = "1" ] || [ "$skip_if_exists" = "true" ]; then
+    if [ -x "$install_path" ]; then
+      existing_version="$(installed_mise_version "$install_path")"
+      if [ -n "$existing_version" ] && [ "$existing_version" = "$version" ]; then
+        info "mise: $install_path is already at version $version, skipping install"
+        return 0
+      fi
+    fi
+  fi
   if [ "$version" != "$current_version" ] || [ "$install_from_github" = "1" ] || [ "$install_from_github" = "true" ]; then
     tarball_url="https://github.com/jdx/mise/releases/download/v${version}/mise-v${version}-${os}-${arch}.${ext}"
   elif [ -n "${MISE_TARBALL_URL-}" ]; then
     tarball_url="$MISE_TARBALL_URL"
   else
-    tarball_url="https://mise.en.dev/v${version}/mise-v${version}-${os}-${arch}.${ext}"
+    tarball_url="https://mise.jdx.dev/v${version}/mise-v${version}-${os}-${arch}.${ext}"
   fi
 
   download_dir="$(mktemp -d)"
@@ -276,9 +377,13 @@ install_mise() {
   extract_dir="$(mktemp -d)"
   cd "$extract_dir"
   if [ "$ext" = "tar.zst" ] && ! tar_supports_zstd; then
-    zstd -d -c "$cache_file" | tar -xf -
+    zstd -d -c "$cache_file" | tar --no-same-owner -xf -
   else
-    tar -xf "$cache_file"
+    tar --no-same-owner -xf "$cache_file"
+  fi
+  if [ "$(id -u)" = "0" ]; then
+    chown 0:0 mise/bin/mise
+    chmod 755 mise/bin/mise
   fi
   mv mise/bin/mise "$install_path"
 
