@@ -2,6 +2,26 @@
 
 A disposable Podman container or Lima virtual machine for running coding agents (Claude Code, Gemini CLI, OpenAI Codex, GitHub Copilot) with `--dangerously-skip-permissions` / `--dangerously-bypass-approvals-and-sandbox` enabled by default.
 
+## Contents
+
+- [Why](#why)
+- [Setup](#setup)
+- [Prerequisites](#prerequisites)
+- [Host browser](#host-browser)
+- [1Password bridge](#1password-bridge)
+- [GitHub bridge](#github-bridge)
+- [Claude Code cloud setup](#claude-code-cloud-setup)
+- [OAuth Login](#oauth-login)
+- [Token Refresh Service](#token-refresh-service)
+- [Claude Code plugins](#claude-code-plugins)
+- [Codex plugins](#codex-plugins)
+- [MCP Servers](#mcp-servers)
+- [Persistent terminals inside a Linux VM](#persistent-terminals-inside-a-linux-vm)
+- [Remote control](#remote-control)
+- [Fast mode](#fast-mode)
+- [Tricks](#tricks)
+- [Stuff](#stuff)
+
 ## Why
 
 Agents work best when they can freely run shell commands, edit files, install packages, and poke at databases — but you don't want them doing that against your host. This image gives each session its own throwaway Linux environment with:
