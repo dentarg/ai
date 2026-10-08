@@ -767,6 +767,27 @@ bash tools/test_github_bridge.sh
 bash tools/test_agent_skills.sh
 ```
 
+## Claude Code cloud setup
+
+Paste this into the cloud environment's **Setup script** field:
+
+```bash
+#!/bin/bash
+# provisioning-revision: 2026-10-08-1 (change to refresh the cache)
+set -euo pipefail
+
+script=$(mktemp)
+trap 'rm -f "$script"' EXIT
+curl --fail --silent --show-error --location --retry 3 \
+  --connect-timeout 15 --max-time 120 \
+  https://raw.githubusercontent.com/dentarg/ai/main/tools/claude-cloud-setup.sh \
+  --output "$script"
+bash "$script"
+```
+
+Set **Network access** to **Full** in the Claude Code cloud environment.
+See the [setup script](tools/claude-cloud-setup.sh) for what it installs.
+
 ## OAuth Login
 
 First-time setup to get OAuth credentials.
