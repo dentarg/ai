@@ -60,7 +60,8 @@ apt-get -o Dpkg::Options::=--force-confold install -y --no-install-recommends cr
 printf 'at=info event=install_ruby\n'
 download "https://raw.githubusercontent.com/dentarg/ai/$ai_revision/inside_deps/_rv.sh" \
   --output "$setup_tmp/rv-installer.sh"
-RV_INSTALL_DIR=/usr/local/bin RV_NO_MODIFY_PATH=1 \
+# RV_INSTALL_DIR is a prefix; the installer adds /bin.
+RV_INSTALL_DIR=/usr/local RV_NO_MODIFY_PATH=1 \
   sh "$setup_tmp/rv-installer.sh"
 for version in "${ruby_versions[@]}"; do
   /usr/local/bin/rv ruby install "$version"
