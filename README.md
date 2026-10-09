@@ -691,7 +691,7 @@ preserved. The host broker remains responsible for enforcing permissions.
 Store a fine-grained GitHub token in 1Password, restricted to the repositories
 needed and with an expiration. Grant Pull requests read permission for PR reads
 and Issues read permission for issue reads; Pull requests write permission is
-needed to create PRs. The bridge resolves the
+needed to create PRs or edit descriptions. The bridge resolves the
 configured reference through host `op` for each request and passes the token
 only to host `gh`. It does not use your normal `gh` login or expose a token-read
 operation to the container.
@@ -704,10 +704,10 @@ bin/github-bridge init \
   'company/*' 'another-org/*' owner/example
 bin/github-bridge show work
 
-# Optional: replace the allowed operations, including draft PR creation.
+# Optional: replace the allowed operations, including PR writes.
 bin/github-bridge allow work \
   pr-list pr-view pr-diff pr-comments pr-reviews pr-review-comments \
-  issue-list issue-view issue-comments issue-timeline pr-create
+  issue-list issue-view issue-comments issue-timeline pr-create pr-edit-body
 bin/github-bridge check work
 bin/github-bridge list
 bin/ai cx --github=work
@@ -765,6 +765,7 @@ gh-host issue-comments owner/example 456
 gh-host issue-timeline owner/example 456
 printf '%s\n' 'Describe the change here.' | \
   gh-host pr-create owner/example feature-branch main 'PR title'
+gh-host pr-edit-body owner/example 123 < pr-body.txt
 ```
 
 `pr-comments` reads discussion comments, `pr-reviews` reads review summaries and
@@ -787,6 +788,15 @@ write. Reads rely on the host allowlist without an extra approval dialog;
 1Password may still require authorization. Creating a PR may trigger repository
 automation. A failed or timed-out create can have succeeded remotely; inspect
 the PR list before retrying.
+
+`pr-edit-body` replaces an existing PR's description with the exact text from
+stdin (up to 8 KiB); empty input clears it. It sends only the body field and
+returns the updated PR as JSON. Enable `pr-edit-body` in the host operation
+allowlist and restart the session. Like creation, it requires Pull requests
+write permission and a host dialog showing the repository, PR number, and new
+body. Read the current description with `pr-view` before editing. Replacement
+can overwrite concurrent edits; after a failed or timed-out update, read the
+PR again before deciding whether to retry. New profiles remain read-only.
 
 The broker supports github.com and the operations listed above only. It constructs
 fixed `gh api` requests, validates all arguments on the host, and rejects extra

@@ -70,6 +70,33 @@ class GitHubExecutorTest < Minitest::Test
     assert_equal [], JSON.parse(executor.call("operation" => "issue-list", "repository" => "owner/repo"))
   end
 
+  def test_description_edit_sends_only_body_as_json_and_names_the_edit_in_approval
+    calls = []
+    runner = Object.new
+    runner.define_singleton_method(:call) do |argv, **options|
+      calls << [argv, options]
+      argv.first == "/host/op" ? "secret_token\n" : "{}\n"
+    end
+    policy = GitHubBridge::Policy.new(
+      "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+      "repositories" => ["owner/repo"], "operations" => ["pr-edit-body"],
+    )
+    request = { "operation" => "pr-edit-body", "repository" => "owner/repo", "number" => 12,
+                "body" => "## Description\n\nLiteral $(command), `code`, and @/etc/passwd\n" }
+    approver = GitHubBridge::Approver.new("project", directory: Dir.tmpdir, runner: runner)
+    assert approver.call(request)
+    message = calls.last.first.last
+    assert_includes message, "Replace this PR description?"
+    assert_includes message, JSON.pretty_generate(request)
+    refute_includes message, "Create this draft PR?"
+    executor = GitHubBridge::Executor.new(policy: policy, gh: "/host/gh", op: "/host/op", directory: Dir.tmpdir, runner: runner)
+    assert_equal "{}\n", executor.call(request)
+    argv, options = calls.last
+    assert_equal ["/host/gh", "api", "--hostname", "github.com", "--method", "PATCH",
+                  "-H", "Accept: application/vnd.github+json", "repos/owner/repo/pulls/12", "--input", "-"], argv
+    assert_equal({ "body" => request.fetch("body") }, JSON.parse(options[:input]))
+  end
+
   def test_gh_receives_only_fixed_arguments_and_an_isolated_environment
     Dir.mktmpdir do |dir|
       calls = []

@@ -14,9 +14,11 @@ Usage: gh-host pr-list OWNER/REPO
        gh-host issue-comments OWNER/REPO NUMBER
        gh-host issue-timeline OWNER/REPO NUMBER
        gh-host pr-create OWNER/REPO HEAD BASE TITLE < body.txt
+       gh-host pr-edit-body OWNER/REPO NUMBER < body.txt
 
 PR creation requires host approval and creates a draft. HEAD must already
-exist in the repository. Read operations return GitHub JSON or a diff.
+exist in the repository. Description edits require host approval.
+Read operations return GitHub JSON or a diff.
 EOF
   exit 2
 }
@@ -34,6 +36,11 @@ case "$operation" in
     [ "$#" -eq 1 ] || usage
     case "$1" in ''|*[!0-9]*) usage ;; esac
     payload=$(jq -cn --arg operation "$operation" --arg repository "$repository" --arg number "$1" '{operation:$operation,repository:$repository,number:($number|tonumber)}')
+    ;;
+  pr-edit-body)
+    [ "$#" -eq 1 ] || usage
+    case "$1" in ''|*[!0-9]*) usage ;; esac
+    payload=$(jq -Rsc --arg operation "$operation" --arg repository "$repository" --arg number "$1" '{operation:$operation,repository:$repository,number:($number|tonumber),body:.}')
     ;;
   pr-create)
     [ "$#" -eq 3 ] || usage

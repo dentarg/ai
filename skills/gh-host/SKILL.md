@@ -1,6 +1,6 @@
 ---
 name: gh-host
-description: Use the host GitHub bridge to read GitHub issues and pull request comments, list, inspect, or diff pull requests, or create a draft PR from an already-pushed branch. Prefer it for these tasks in bridge-enabled ai sandbox sessions, including PR reviews and explicit gh-host requests.
+description: Use the host GitHub bridge to read GitHub issues and pull request comments, list, inspect, or diff pull requests, create a draft PR from an already-pushed branch, or edit a PR description. Prefer it for these tasks in bridge-enabled ai sandbox sessions, including PR reviews and explicit gh-host requests.
 ---
 
 # Host GitHub bridge
@@ -93,6 +93,22 @@ its connection, do not automatically repeat it: the PR may already exist.
 Inspect `pr-list` for the same head and base first. Its limited results cannot
 prove absence; report an uncertain result rather than risk a duplicate.
 
+## Edit a PR description
+
+Use `pr-edit-body` when updating an existing PR description is authorized.
+Read `pr-view` first, then write the full replacement body to a local file.
+
+```sh
+gh-host pr-edit-body OWNER/REPO NUMBER < /tmp/pr-body.txt
+```
+
+The command replaces only the description and returns the updated PR as JSON.
+The body limit is 8 KiB; empty input clears the description. The host profile
+must allow `pr-edit-body`, and its token needs Pull requests write permission.
+The broker asks for host approval showing the PR number and replacement text.
+Replacement can overwrite concurrent changes. If the result is uncertain,
+read `pr-view` before retrying and account for any intervening edits.
+
 ## Failures and unsupported operations
 
 An allowlist refusal or denied host approval ends that operation. Explain
@@ -100,7 +116,7 @@ which operation or repository was refused and continue independent work.
 Do not retry unchanged denied requests. Authentication, connection, and generic
 502 errors require checking host setup; they do not justify exposing tokens.
 
-The bridge cannot merge, comment, edit PRs, run arbitrary `gh`/API commands,
+The bridge cannot merge, comment, edit other PR fields, run arbitrary `gh`/API commands,
 write issues or manage workflows, or access host files. State the limitation when
 such work is requested. Do not silently switch to direct authenticated `gh`,
 `curl`, or a different repository to evade the bridge's restrictions.

@@ -4,6 +4,46 @@ require "open3"
 require_relative "server"
 
 class GitHubServerTest < Minitest::Test
+  def test_description_client_preserves_stdin_and_waits_for_approval
+    Dir.mktmpdir do |directory|
+      calls, approvals = [], []
+      allowed = false
+      policy = GitHubBridge::Policy.new(
+        "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+        "repositories" => ["owner/repo"], "operations" => ["pr-edit-body"],
+      )
+      broker = GitHubBridge::Broker.new(policy: policy, token: "session-token",
+        executor: ->(request) { calls << request; JSON.generate(request.slice("body")) },
+        approver: ->(request) { approvals << request; allowed }, logger: ->(*) {})
+      certificate, key = OnePasswordBridge.certificate
+      server = GitHubBridge::Server.new(broker: broker, certificate: certificate, private_key: key, bind: "127.0.0.1")
+      thread = Thread.new { server.run }
+      ca = File.join(directory, "ca.pem")
+      File.write(ca, certificate.to_pem)
+      env = { "GH_BRIDGE_URL" => "https://127.0.0.1:#{server.port}", "GH_BRIDGE_TOKEN" => "session-token", "GH_BRIDGE_CA" => ca }
+      client = File.expand_path("../gh-host.sh", __dir__)
+      body = "## Description\n\nLiteral $(command), `code`, and @/etc/passwd\n"
+      _, _, status = Open3.capture3(env, client, "pr-edit-body", "owner/repo", "12", stdin_data: body)
+      refute status.success?
+      assert_empty calls
+      assert_equal body, approvals.last.fetch("body")
+      allowed = true
+      [body, ""].each do |description|
+        output, error, status = Open3.capture3(env, client, "pr-edit-body", "owner/repo", "12", stdin_data: description)
+        assert status.success?, error
+        assert_equal({ "body" => description }, JSON.parse(output))
+        assert_equal({ "operation" => "pr-edit-body", "repository" => "owner/repo", "number" => 12, "body" => description }, calls.last)
+      end
+      _, _, status = Open3.capture3(env, client, "pr-edit-body", "owner/repo", "invalid", stdin_data: body)
+      refute status.success?
+      assert_equal 2, calls.size
+      assert_equal 3, approvals.size
+    ensure
+      server&.close
+      thread&.join
+    end
+  end
+
   def test_client_tls_authentication_and_invalid_requests
     Dir.mktmpdir do |directory|
       calls = []

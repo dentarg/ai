@@ -59,7 +59,7 @@ module GitHubBridge
       number = request["number"]
       endpoint, paginated = case operation
       when "pr-list" then ["#{repository}/pulls?state=open&per_page=30", false]
-      when "pr-view", "pr-diff" then ["#{repository}/pulls/#{number}", false]
+      when "pr-view", "pr-diff", "pr-edit-body" then ["#{repository}/pulls/#{number}", false]
       when "pr-create" then ["#{repository}/pulls", false]
       when "pr-comments", "issue-comments" then ["#{repository}/issues/#{number}/comments?per_page=100", true]
       when "pr-reviews" then ["#{repository}/pulls/#{number}/reviews?per_page=100", true]
@@ -70,13 +70,17 @@ module GitHubBridge
       else raise "unsupported operation"
       end
       accept = operation == "pr-diff" ? "application/vnd.github.diff" : "application/vnd.github+json"
-      method = operation == "pr-create" ? "POST" : "GET"
+      method = { "pr-create" => "POST", "pr-edit-body" => "PATCH" }.fetch(operation, "GET")
       argv = [@gh, "api", "--hostname", "github.com", "--method", method, "-H", "Accept: #{accept}", endpoint]
       argv += ["--paginate", "--slurp"] if paginated
       input = ""
       if operation == "pr-create"
         argv += ["--input", "-"]
         input = JSON.generate(request.slice("head", "base", "title", "body").merge("draft" => true, "maintainer_can_modify" => false))
+      end
+      if operation == "pr-edit-body"
+        argv += ["--input", "-"]
+        input = JSON.generate(request.slice("body"))
       end
       env = {
         "HOME" => @directory, "GH_CONFIG_DIR" => @directory, "GH_TOKEN" => token,
@@ -100,7 +104,8 @@ module GitHubBridge
     end
 
     def call(request)
-      message = "Project: #{@project}\n\nCreate this draft PR?\n#{JSON.pretty_generate(request)}"
+      action = request.fetch("operation") == "pr-edit-body" ? "Replace this PR description?" : "Create this draft PR?"
+      message = "Project: #{@project}\n\n#{action}\n#{JSON.pretty_generate(request)}"
       script = <<~APPLESCRIPT
         on run arguments
           set decision to display dialog (item 1 of arguments) buttons {"Deny", "Allow"} default button "Deny" cancel button "Deny" with title "AI GitHub request" giving up after 60

@@ -5,7 +5,8 @@ module GitHubBridge
   Response = Struct.new(:status, :body)
   READ_OPERATIONS = %w[pr-list pr-view pr-diff pr-comments pr-reviews pr-review-comments
                        issue-list issue-view issue-comments issue-timeline].freeze
-  OPERATIONS = (READ_OPERATIONS + %w[pr-create]).freeze
+  WRITE_OPERATIONS = %w[pr-create pr-edit-body].freeze
+  OPERATIONS = (READ_OPERATIONS + WRITE_OPERATIONS).freeze
   REPOSITORY = /\A[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_][A-Za-z0-9_.-]*\z/
 
   PROFILE = /\A[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\z/
@@ -91,7 +92,7 @@ module GitHubBridge
         return response(403, "operation or repository not allowed")
       end
       return response(400, "invalid request") unless valid?(request)
-      if operation == "pr-create" && !@approver.call(request)
+      if WRITE_OPERATIONS.include?(operation) && !@approver.call(request)
         @logger.call("info", "request_denied", operation, repository)
         return response(403, "request denied on host")
       end
@@ -114,9 +115,13 @@ module GitHubBridge
     def valid?(request)
       keys = %w[operation repository]
       case request.fetch("operation")
-      when *(READ_OPERATIONS - %w[pr-list issue-list])
+      when *(READ_OPERATIONS - %w[pr-list issue-list]), "pr-edit-body"
         keys += %w[number]
         return false unless request["number"].is_a?(Integer) && request["number"].between?(1, 2**31 - 1)
+        if request["operation"] == "pr-edit-body"
+          keys += %w[body]
+          return false unless text?(request["body"], 8192)
+        end
       when "pr-create"
         keys += %w[head base title body]
         %w[head base].each do |key|

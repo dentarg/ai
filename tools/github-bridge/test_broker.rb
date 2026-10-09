@@ -36,6 +36,40 @@ class GitHubBrokerTest < Minitest::Test
     assert_equal [request, create], calls
   end
 
+  def test_description_edits_validate_the_exact_request_before_host_approval
+    policy = GitHubBridge::Policy.new(
+      "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+      "repositories" => ["owner/repo"], "operations" => ["pr-edit-body"],
+    )
+    calls, approvals = [], []
+    allowed = false
+    broker = GitHubBridge::Broker.new(policy: policy, token: "session",
+      executor: ->(request) { calls << request; "ok" },
+      approver: ->(request) { approvals << request; allowed }, logger: ->(*) {})
+    request = { "operation" => "pr-edit-body", "repository" => "owner/repo", "number" => 12, "body" => "New description\n" }
+    assert_equal 401, broker.call(request, "wrong").status
+    assert_equal 403, broker.call(request.merge("repository" => "other/repo"), "session").status
+    [nil, 0, -1, 2**31, "12"].each do |number|
+      assert_equal 400, broker.call(request.merge("number" => number), "session").status
+    end
+    [nil, 42, "x" * 8193, "bad\u0000"].each do |body|
+      assert_equal 400, broker.call(request.merge("body" => body), "session").status
+    end
+    %w[title state base maintainer_can_modify].each do |key|
+      assert_equal 400, broker.call(request.merge(key => "changed"), "session").status
+    end
+    assert_empty approvals
+    assert_equal 403, broker.call(request, "session").status
+    assert_equal [request], approvals
+    assert_empty calls
+    allowed = true
+    [request, request.merge("body" => ""), request.merge("body" => "x" * 8192)].each do |edit|
+      assert_equal 200, broker.call(edit, "session").status
+      assert_equal edit, calls.last
+      assert_equal edit, approvals.last
+    end
+  end
+
   def test_new_reads_require_policy_permission_and_strict_arguments_without_approval
     operations = %w[pr-comments pr-reviews pr-review-comments issue-list issue-view issue-comments issue-timeline]
     policy = GitHubBridge::Policy.new(
@@ -89,6 +123,7 @@ class GitHubBrokerTest < Minitest::Test
       assert_equal 403, broker.call(request.merge("repository" => repository), "session").status
     end
     assert_equal 403, broker.call(request.merge("repository" => "company/repo", "operation" => "pr-create"), "session").status
+    assert_equal 403, broker.call(request.merge("repository" => "company/repo", "operation" => "pr-edit-body", "body" => "edit"), "session").status
     assert_equal 400, broker.call(request.merge("repository" => "company/repo", "profile" => "other"), "session").status
     assert_equal 4, calls.size
   end
