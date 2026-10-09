@@ -15,6 +15,61 @@ class GitHubExecutorTest < Minitest::Test
     end
   end
 
+  def test_read_operations_use_fixed_endpoints_and_paginate_collections
+    calls = []
+    runner = Object.new
+    runner.define_singleton_method(:call) do |argv, **options|
+      calls << [argv, options]
+      argv.first == "/host/op" ? "secret_token\n" : "[]\n"
+    end
+    policy = GitHubBridge::Policy.new(
+      "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+      "repositories" => ["owner/repo"], "operations" => GitHubBridge::READ_OPERATIONS,
+    )
+    executor = GitHubBridge::Executor.new(policy: policy, gh: "/host/gh", op: "/host/op", directory: Dir.tmpdir, runner: runner)
+    endpoints = {
+      "pr-comments" => "issues/12/comments?per_page=100",
+      "pr-reviews" => "pulls/12/reviews?per_page=100",
+      "pr-review-comments" => "pulls/12/comments?per_page=100",
+      "issue-list" => "issues?state=all&per_page=100",
+      "issue-view" => "issues/12",
+      "issue-comments" => "issues/12/comments?per_page=100",
+      "issue-timeline" => "issues/12/timeline?per_page=100",
+    }
+    endpoints.each do |operation, endpoint|
+      assert_equal "[]\n", executor.call("operation" => operation, "repository" => "owner/repo", "number" => 12)
+      argv, options = calls.last
+      expected = ["/host/gh", "api", "--hostname", "github.com", "--method", "GET",
+                  "-H", "Accept: application/vnd.github+json", "repos/owner/repo/#{endpoint}"]
+      unless operation == "issue-view"
+        expected += ["--paginate", "--slurp"]
+      end
+      assert_equal expected, argv
+      assert_equal "", options[:input]
+    end
+  end
+
+  def test_paginated_reads_combine_pages_and_exclude_pull_requests_from_issues
+    pages = [[{ "id" => 1, "body" => "first secret_token" }],
+             [{ "id" => 2, "body" => "second" }, { "id" => 3, "pull_request" => {} }]]
+    runner = Object.new
+    runner.define_singleton_method(:call) do |argv, **|
+      argv.first == "/host/op" ? "secret_token\n" : JSON.generate(pages)
+    end
+    policy = GitHubBridge::Policy.new(
+      "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+      "repositories" => ["owner/repo"], "operations" => GitHubBridge::READ_OPERATIONS,
+    )
+    executor = GitHubBridge::Executor.new(policy: policy, gh: "/host/gh", op: "/host/op", directory: Dir.tmpdir, runner: runner)
+    comments = JSON.parse(executor.call("operation" => "pr-comments", "repository" => "owner/repo", "number" => 12))
+    assert_equal [1, 2, 3], comments.map { |comment| comment.fetch("id") }
+    assert_equal "first [REDACTED]", comments.first.fetch("body")
+    issues = JSON.parse(executor.call("operation" => "issue-list", "repository" => "owner/repo"))
+    assert_equal comments.first(2), issues
+    pages.clear
+    assert_equal [], JSON.parse(executor.call("operation" => "issue-list", "repository" => "owner/repo"))
+  end
+
   def test_gh_receives_only_fixed_arguments_and_an_isolated_environment
     Dir.mktmpdir do |dir|
       calls = []

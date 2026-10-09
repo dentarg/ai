@@ -3,7 +3,9 @@ require "openssl"
 
 module GitHubBridge
   Response = Struct.new(:status, :body)
-  OPERATIONS = %w[pr-list pr-view pr-diff pr-create].freeze
+  READ_OPERATIONS = %w[pr-list pr-view pr-diff pr-comments pr-reviews pr-review-comments
+                       issue-list issue-view issue-comments issue-timeline].freeze
+  OPERATIONS = (READ_OPERATIONS + %w[pr-create]).freeze
   REPOSITORY = /\A[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_][A-Za-z0-9_.-]*\z/
 
   PROFILE = /\A[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\z/
@@ -112,7 +114,7 @@ module GitHubBridge
     def valid?(request)
       keys = %w[operation repository]
       case request.fetch("operation")
-      when "pr-view", "pr-diff"
+      when *(READ_OPERATIONS - %w[pr-list issue-list])
         keys += %w[number]
         return false unless request["number"].is_a?(Integer) && request["number"].between?(1, 2**31 - 1)
       when "pr-create"

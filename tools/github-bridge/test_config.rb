@@ -34,7 +34,7 @@ class GitHubConfigTest < Minitest::Test
       path = File.join(env.fetch("XDG_CONFIG_HOME"), "ai", "github-bridge.json")
       assert_equal 0o600, File.stat(path).mode & 0o777
       policy = GitHubBridge::Policy.load(path, "work")
-      assert_equal %w[pr-list pr-view pr-diff], policy.operations
+      assert_equal GitHubBridge::READ_OPERATIONS, policy.operations
       before = File.read(path)
       refute run.call("allow", "work", "api").last.success?
       assert_equal before, File.read(path)
@@ -61,7 +61,7 @@ class GitHubConfigTest < Minitest::Test
       assert_equal "op://Work/GitHub/token", work.token
       assert_equal ["pr-create"], work.operations
       assert_equal "op://Personal/GitHub/token", personal.token
-      assert_equal %w[pr-list pr-view pr-diff], personal.operations
+      assert_equal GitHubBridge::READ_OPERATIONS, personal.operations
       assert work.allows_repository?("company/new-repo")
       assert work.allows_repository?("SECOND/repo")
       refute work.allows_repository?("me/repo")

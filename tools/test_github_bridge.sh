@@ -26,13 +26,23 @@ cat > "$fake_bin/gh" <<'STUB'
 [ "$HOME" = "$GH_CONFIG_DIR" ] || exit 1
 [ -z "${GH_DEBUG:-}" ] || exit 1
 [ "$1" = api ] && [ "$2" = --hostname ] && [ "$3" = github.com ] || exit 1
-printf '%s\n' '{"number":12}'
+case " $* " in
+  *' --slurp '*) printf '%s\n' '[[{"number":12}]]' ;;
+  *) printf '%s\n' '{"number":12}' ;;
+esac
 STUB
 cat > "$fake_bin/podman" <<'STUB'
 #!/bin/sh
 [ "$1" != ps ] || exit 0
 printf '%s\n' "$@" > "$BRIDGE_TEST_ARGS"
 port=$(cat "$GH_BRIDGE_SESSION_DIR/bridge/port")
+for operation in pr-comments pr-reviews pr-review-comments issue-list issue-view issue-comments issue-timeline; do
+  set -- "$operation" owner/repo
+  [ "$operation" = issue-list ] || set -- "$@" 12
+  GH_BRIDGE_URL="https://127.0.0.1:$port" \
+  GH_BRIDGE_CA="$GH_BRIDGE_SESSION_DIR/bridge/ca.pem" \
+    "$BRIDGE_TEST_REPO/tools/gh-host.sh" "$@" >/dev/null || exit 1
+done
 GH_BRIDGE_URL="https://127.0.0.1:$port" \
 GH_BRIDGE_CA="$GH_BRIDGE_SESSION_DIR/bridge/ca.pem" \
   "$BRIDGE_TEST_REPO/tools/gh-host.sh" pr-view owner/repo 12

@@ -36,6 +36,43 @@ class GitHubBrokerTest < Minitest::Test
     assert_equal [request, create], calls
   end
 
+  def test_new_reads_require_policy_permission_and_strict_arguments_without_approval
+    operations = %w[pr-comments pr-reviews pr-review-comments issue-list issue-view issue-comments issue-timeline]
+    policy = GitHubBridge::Policy.new(
+      "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+      "repositories" => ["owner/repo"], "operations" => operations,
+    )
+    calls = []
+    broker = GitHubBridge::Broker.new(policy: policy, token: "session",
+      executor: ->(request) { calls << request; "[]" },
+      approver: ->(*) { flunk "reads must not request approval" }, logger: ->(*) {})
+    operations.each do |operation|
+      request = { "operation" => operation, "repository" => "owner/repo" }
+      request["number"] = 12 unless operation == "issue-list"
+      assert_equal 401, broker.call(request, "wrong").status
+      assert_equal 403, broker.call(request.merge("repository" => "other/repo"), "session").status
+      assert_equal 400, broker.call(request.merge("url" => "https://example.com"), "session").status
+      if operation == "issue-list"
+        assert_equal 400, broker.call(request.merge("number" => 12), "session").status
+      else
+        [nil, 0, -1, 2**31, "12"].each do |number|
+          assert_equal 400, broker.call(request.merge("number" => number), "session").status
+        end
+      end
+      assert_equal 200, broker.call(request, "session").status
+    end
+    assert_equal operations.size, calls.size
+    restricted = GitHubBridge::Policy.new(
+      "account" => policy.account, "token" => policy.token,
+      "repositories" => policy.repositories, "operations" => ["pr-view"],
+    )
+    broker = GitHubBridge::Broker.new(policy: restricted, token: "session",
+      executor: ->(*) { flunk "unauthorized read" }, approver: ->(*) { flunk "unexpected approval" }, logger: ->(*) {})
+    operations.each do |operation|
+      assert_equal 403, broker.call({ "operation" => operation, "repository" => "owner/repo", "number" => 12 }, "session").status
+    end
+  end
+
   def test_owner_scopes_only_allow_concrete_repositories_within_that_owner
     policy = GitHubBridge::Policy.new(
       "account" => "my.1password.com", "token" => "op://Work/GitHub/token",

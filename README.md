@@ -681,7 +681,7 @@ image or VM base to install it.
 The image and both VM bases also ship the shared
 [`gh-host` skill](skills/gh-host/SKILL.md). On bridge-enabled launches, `c`
 links it into the session's `~/.claude/skills/` and `cx` links it into
-`~/.agents/skills/`. Both agents can select it automatically for PR tasks;
+`~/.agents/skills/`. Both agents can select it automatically for PR and issue tasks;
 you can also invoke `/gh-host` in Claude Code or `$gh-host` in Codex.
 It explains repository selection, supported commands, approval, and safe
 handling of denied or uncertain requests. Launching without the bridge removes
@@ -689,8 +689,9 @@ only the link managed by the wrapper; an existing user-authored skill is
 preserved. The host broker remains responsible for enforcing permissions.
 
 Store a fine-grained GitHub token in 1Password, restricted to the repositories
-needed and with an expiration. Pull requests read permission supports the read
-operations; write permission is needed to create PRs. The bridge resolves the
+needed and with an expiration. Grant Pull requests read permission for PR reads
+and Issues read permission for issue reads; Pull requests write permission is
+needed to create PRs. The bridge resolves the
 configured reference through host `op` for each request and passes the token
 only to host `gh`. It does not use your normal `gh` login or expose a token-read
 operation to the container.
@@ -705,7 +706,8 @@ bin/github-bridge show work
 
 # Optional: replace the allowed operations, including draft PR creation.
 bin/github-bridge allow work \
-  pr-list pr-view pr-diff pr-create
+  pr-list pr-view pr-diff pr-comments pr-reviews pr-review-comments \
+  issue-list issue-view issue-comments issue-timeline pr-create
 bin/github-bridge check work
 bin/github-bridge list
 bin/ai cx --github=work
@@ -738,7 +740,11 @@ the standard location. Restart enabled sessions after policy changes.
       "account": "my.1password.com",
       "token": "op://Agent/GitHub/token",
       "repositories": ["company/*", "another-org/*", "owner/example"],
-      "operations": ["pr-list", "pr-view", "pr-diff"]
+      "operations": [
+        "pr-list", "pr-view", "pr-diff", "pr-comments", "pr-reviews",
+        "pr-review-comments", "issue-list", "issue-view",
+        "issue-comments", "issue-timeline"
+      ]
     }
   }
 }
@@ -750,9 +756,28 @@ Inside an enabled container or VM:
 gh-host pr-list owner/example
 gh-host pr-view owner/example 123
 gh-host pr-diff owner/example 123
+gh-host pr-comments owner/example 123
+gh-host pr-reviews owner/example 123
+gh-host pr-review-comments owner/example 123
+gh-host issue-list owner/example
+gh-host issue-view owner/example 456
+gh-host issue-comments owner/example 456
+gh-host issue-timeline owner/example 456
 printf '%s\n' 'Describe the change here.' | \
   gh-host pr-create owner/example feature-branch main 'PR title'
 ```
+
+`pr-comments` reads discussion comments, `pr-reviews` reads review summaries and
+verdicts, and `pr-review-comments` reads inline comments and replies with their
+file/line context. `issue-list` reads open and closed issues, excluding PRs;
+`issue-view` reads the issue body and metadata (including labels, assignees,
+milestone, and reaction counts). `issue-comments` reads the conversation and
+`issue-timeline` reads activity such as label changes and cross-references.
+These collection commands follow all pages and return one JSON array. Existing
+output and time limits still apply: oversized reads fail rather than return
+partial results. Attachment links remain links; their contents are not fetched.
+Existing profiles must enable the new operations with `allow` and restart their
+sessions; `allow` replaces the complete operation list.
 
 `pr-list` returns up to 30 open PRs. Read operations return GitHub JSON or a
 plain diff. Creation uses an already-pushed branch in the selected repository,
@@ -763,7 +788,7 @@ write. Reads rely on the host allowlist without an extra approval dialog;
 automation. A failed or timed-out create can have succeeded remotely; inspect
 the PR list before retrying.
 
-The broker supports github.com and these four operations only. It constructs
+The broker supports github.com and the operations listed above only. It constructs
 fixed `gh api` requests, validates all arguments on the host, and rejects extra
 fields. Each `gh` process uses an empty configuration directory and a restricted
 environment, outside the project checkout. Neither arbitrary commands, API

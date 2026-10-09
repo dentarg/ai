@@ -6,6 +6,13 @@ usage() {
 Usage: gh-host pr-list OWNER/REPO
        gh-host pr-view OWNER/REPO NUMBER
        gh-host pr-diff OWNER/REPO NUMBER
+       gh-host pr-comments OWNER/REPO NUMBER
+       gh-host pr-reviews OWNER/REPO NUMBER
+       gh-host pr-review-comments OWNER/REPO NUMBER
+       gh-host issue-list OWNER/REPO
+       gh-host issue-view OWNER/REPO NUMBER
+       gh-host issue-comments OWNER/REPO NUMBER
+       gh-host issue-timeline OWNER/REPO NUMBER
        gh-host pr-create OWNER/REPO HEAD BASE TITLE < body.txt
 
 PR creation requires host approval and creates a draft. HEAD must already
@@ -19,11 +26,11 @@ operation=$1
 repository=$2
 shift 2
 case "$operation" in
-  pr-list)
+  pr-list|issue-list)
     [ "$#" -eq 0 ] || usage
     payload=$(jq -cn --arg operation "$operation" --arg repository "$repository" '{operation:$operation,repository:$repository}')
     ;;
-  pr-view|pr-diff)
+  pr-view|pr-diff|pr-comments|pr-reviews|pr-review-comments|issue-view|issue-comments|issue-timeline)
     [ "$#" -eq 1 ] || usage
     case "$1" in ''|*[!0-9]*) usage ;; esac
     payload=$(jq -cn --arg operation "$operation" --arg repository "$repository" --arg number "$1" '{operation:$operation,repository:$repository,number:($number|tonumber)}')

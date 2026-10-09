@@ -47,7 +47,7 @@ module GitHubBridge
       case command
       when "init"
         profiles[name] = { "account" => args.shift, "token" => args.shift,
-                           "repositories" => args, "operations" => %w[pr-list pr-view pr-diff] }
+                           "repositories" => args, "operations" => READ_OPERATIONS }
       when "allow"
         profile = profiles.fetch(name) { raise "unknown GitHub profile: #{name}" }
         profile["operations"] = args

@@ -55,12 +55,24 @@ module GitHubBridge
       raise "invalid token" unless token.match?(/\A[A-Za-z0-9_]+\z/)
 
       operation = request.fetch("operation")
-      endpoint = "repos/#{request.fetch('repository')}/pulls"
-      endpoint += "/#{request.fetch('number')}" if %w[pr-view pr-diff].include?(operation)
-      endpoint += "?state=open&per_page=30" if operation == "pr-list"
+      repository = "repos/#{request.fetch('repository')}"
+      number = request["number"]
+      endpoint, paginated = case operation
+      when "pr-list" then ["#{repository}/pulls?state=open&per_page=30", false]
+      when "pr-view", "pr-diff" then ["#{repository}/pulls/#{number}", false]
+      when "pr-create" then ["#{repository}/pulls", false]
+      when "pr-comments", "issue-comments" then ["#{repository}/issues/#{number}/comments?per_page=100", true]
+      when "pr-reviews" then ["#{repository}/pulls/#{number}/reviews?per_page=100", true]
+      when "pr-review-comments" then ["#{repository}/pulls/#{number}/comments?per_page=100", true]
+      when "issue-list" then ["#{repository}/issues?state=all&per_page=100", true]
+      when "issue-view" then ["#{repository}/issues/#{number}", false]
+      when "issue-timeline" then ["#{repository}/issues/#{number}/timeline?per_page=100", true]
+      else raise "unsupported operation"
+      end
       accept = operation == "pr-diff" ? "application/vnd.github.diff" : "application/vnd.github+json"
       method = operation == "pr-create" ? "POST" : "GET"
       argv = [@gh, "api", "--hostname", "github.com", "--method", method, "-H", "Accept: #{accept}", endpoint]
+      argv += ["--paginate", "--slurp"] if paginated
       input = ""
       if operation == "pr-create"
         argv += ["--input", "-"]
@@ -71,7 +83,14 @@ module GitHubBridge
         "PATH" => "/usr/bin:/bin:/usr/sbin:/sbin", "GH_PROMPT_DISABLED" => "1",
         "GH_PAGER" => "cat", "NO_COLOR" => "1", "GH_NO_UPDATE_NOTIFIER" => "1",
       }
-      @runner.call(argv, env: env, directory: @directory, input: input).gsub(token, "[REDACTED]")
+      output = @runner.call(argv, env: env, directory: @directory, input: input)
+      if paginated
+        records = JSON.parse(output).flatten(1)
+        # GitHub's issues endpoint includes pull requests.
+        records.reject! { |record| record.key?("pull_request") } if operation == "issue-list"
+        output = JSON.generate(records) + "\n"
+      end
+      output.gsub(token, "[REDACTED]")
     end
   end
 
