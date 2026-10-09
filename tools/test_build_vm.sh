@@ -75,6 +75,10 @@ grep -F 'Pin-Priority: 100' "$archive_dir/install-chromium.sh" >/dev/null
 grep -F 'Package: chromium chromium-common' \
   "$archive_dir/install-chromium.sh" >/dev/null
 grep -F 'Pin-Priority: 990' "$archive_dir/install-chromium.sh" >/dev/null
+for package in erlang-dev erlang-nox rabbitmq-server; do
+  grep -Fx "$package" "$archive_dir/ubuntu-packages.txt" >/dev/null
+done
+grep -F 'systemctl disable rabbitmq-server' "$archive_dir/install-system-tools.sh" >/dev/null
 grep -Fx 'poppler-utils' "$archive_dir/ubuntu-packages.txt" >/dev/null
 grep -Fx 'tesseract-ocr' "$archive_dir/ubuntu-packages.txt" >/dev/null
 grep -Fx 'hashicorp/tap/terraform' "$archive_dir/brew-packages.txt" >/dev/null

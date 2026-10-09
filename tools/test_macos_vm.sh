@@ -55,6 +55,8 @@ export PATH="$tmpdir/bin:$PATH"
 "$REPO_DIR/build_vm" --macos >/dev/null
 grep -F '<create><--tty=false><--name><ai-base-macos>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '<protect><ai-base-macos>' "$MACOS_TEST_LOG" >/dev/null
+grep -F 'erl -version' "$MACOS_TEST_LOG" >/dev/null
+grep -F 'rabbitmqctl version' "$MACOS_TEST_LOG" >/dev/null
 grep -F 'terraform version' "$MACOS_TEST_LOG" >/dev/null
 grep -F 'toxiproxy-server --version' "$MACOS_TEST_LOG" >/dev/null
 grep -F 'toxiproxy-cli --version' "$MACOS_TEST_LOG" >/dev/null

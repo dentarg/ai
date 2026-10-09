@@ -34,12 +34,19 @@ download() {
 printf 'at=info event=install_packages\n'
 apt-get update -qq
 apt-get -o Dpkg::Options::=--force-confold install -y --no-install-recommends \
-  bat build-essential ca-certificates cmake curl file git git-lfs gnupg \
+  bat build-essential ca-certificates cmake curl erlang-dev erlang-nox file git git-lfs gnupg \
   htop jq less libcurl4-openssl-dev libffi-dev libgmp-dev liblz4-dev \
   libpq-dev libreadline-dev libssl-dev libyaml-dev libzstd-dev lsof \
-  netcat-openbsd pkg-config postgresql-client ragel ripgrep rsync \
+  netcat-openbsd pkg-config postgresql-client rabbitmq-server ragel ripgrep rsync \
   shellcheck silversearcher-ag socat sqlite3 strace tmux tree unzip \
   vim wget zip zlib1g-dev zsh
+
+# Keep RabbitMQ opt-in: LavinMQ uses the same default AMQP port.
+service rabbitmq-server stop
+systemctl disable rabbitmq-server
+
+erl -noshell -eval 'io:format("Erlang/OTP ~s~n", [erlang:system_info(otp_release)]), halt().'
+rabbitmqctl version
 
 # Use the same Crystal and LavinMQ repositories as the image build.
 # Both publish Ubuntu noble packages; use scoped signing keys.

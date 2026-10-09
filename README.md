@@ -19,6 +19,7 @@ A disposable Podman container or Lima virtual machine for running coding agents 
 - [Persistent terminals inside a Linux VM](#persistent-terminals-inside-a-linux-vm)
 - [Remote control](#remote-control)
 - [Fast mode](#fast-mode)
+- [RabbitMQ](#rabbitmq)
 - [Tricks](#tricks)
 - [Stuff](#stuff)
 
@@ -29,7 +30,7 @@ Agents work best when they can freely run shell commands, edit files, install pa
 - A Claude Code `PermissionRequest` hook that approves Bash requests, including
   the critical-path `rm` safeguard that bypass-permissions mode leaves enabled.
 - The project you're working on mounted at `/app`.
-- Language runtimes, databases (PostgreSQL, LavinMQ, Redis), and common tools preinstalled, so agents don't spend turns bootstrapping.
+- Language runtimes, databases (PostgreSQL, LavinMQ, RabbitMQ, Redis), and common tools preinstalled, so agents don't spend turns bootstrapping.
 - OAuth credentials and API keys mounted from `~/ai/settings`, with multi-profile support and automatic token refresh.
 - Shell history, agent session history, cloned repos, and installed gems persisted on the host across container restarts.
 - A shared directory mounted at `/share` (from `~/ai/share`) for passing files between the host and containers.
@@ -793,7 +794,7 @@ Paste this into the cloud environment's **Setup script** field:
 
 ```bash
 #!/bin/bash
-# provisioning-revision: 2026-10-08-3 (change to refresh the cache)
+# provisioning-revision: 2026-10-08-4 (change to refresh the cache)
 set -euo pipefail
 
 script=$(mktemp)
@@ -1277,6 +1278,27 @@ async fast-mode availability check is still pending, so in a fresh container it
 resolves to off and never re-applies; skipping that check lets the setting
 engage immediately.
 
+## RabbitMQ
+
+RabbitMQ and Erlang are installed in the container, both VM backends, and
+Claude cloud setup. Linux uses Ubuntu packages; macOS uses Homebrew.
+LavinMQ remains the default broker. Both use port 5672,
+so stop LavinMQ before starting RabbitMQ:
+
+```shell
+# Linux container or VM
+sudo systemctl stop lavinmq
+sudo systemctl start rabbitmq-server
+
+# Claude cloud sandbox (root)
+service lavinmq stop
+service rabbitmq-server start
+
+# macOS VM
+sudo brew services stop lavinmq
+brew services start rabbitmq
+```
+
 ## Tricks
 
 `zsh` things:
@@ -1367,6 +1389,7 @@ bin/setup-vm
 - [x] SQLite
 - [x] PostgreSQL
 - [x] LavinMQ
+- [x] RabbitMQ and Erlang
 - [x] Redis
 - [x] [Toxiproxy](https://github.com/Shopify/toxiproxy) — network failure simulation
 - [x] [amqpcat](https://github.com/cloudamqp/amqpcat)

@@ -4,6 +4,8 @@ build-essential
 ca-certificates
 cmake
 curl
+erlang-dev
+erlang-nox
 ffmpeg
 file
 gcc
@@ -32,6 +34,7 @@ pandoc
 poppler-utils
 postgresql
 ragel
+rabbitmq-server
 rdap
 redis-server
 ripgrep

@@ -10,11 +10,12 @@ fi
 eval "$(/opt/homebrew/bin/brew shellenv)"
 brew install bash coreutils findutils gnu-sed gnu-tar grep jq git git-lfs \
   ripgrep ast-grep bat ncurses node@22 ruby python go rust mise fnox \
-  postgresql@17 redis lavinmq toxiproxy hashicorp/tap/terraform
+  postgresql@17 redis lavinmq erlang@28 rabbitmq toxiproxy hashicorp/tap/terraform
 cat > "$HOME/.bash_profile" <<'PROFILE'
 export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$HOME/.local/bin:$PATH
 export PATH=/opt/homebrew/opt/node@22/bin:/opt/homebrew/opt/ruby/bin:$PATH
 export PATH=/opt/homebrew/opt/postgresql@17/bin:$PATH
+export PATH=/opt/homebrew/opt/erlang@28/bin:/opt/homebrew/opt/rabbitmq/sbin:$PATH
 for tool in coreutils findutils gnu-sed gnu-tar grep; do
   export PATH="/opt/homebrew/opt/$tool/libexec/gnubin:$PATH"
 done

@@ -6,6 +6,15 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=inside_deps/install-utils.sh
 source "$SCRIPT_DIR/install-utils.sh"
 
+# RabbitMQ shares its default AMQP port with LavinMQ. Keep it opt-in.
+if [[ -d /run/systemd/system ]]; then
+  systemctl stop rabbitmq-server
+fi
+systemctl disable rabbitmq-server
+
+erl -noshell -eval 'io:format("Erlang/OTP ~s~n", [erlang:system_info(otp_release)]), halt().'
+rabbitmqctl version
+
 # Ubuntu ships bat's binary as "batcat".
 ln -sf /usr/bin/batcat /usr/local/bin/bat
 
