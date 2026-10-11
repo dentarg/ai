@@ -1,6 +1,8 @@
 #!/bin/bash
 
 set -euo pipefail
+# Tests fake HOME; a BASH_ENV startup file could reset it to the real one.
+unset BASH_ENV
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=tools/codex.sh
@@ -166,8 +168,6 @@ for hostname, arguments in (("ai-c-00-my-project", ["alpha"]),
                SETTINGS_ROOT=f"{root}/settings", HOST_DIR="my project\x1b\x07\n",
                TERM="xterm-256color", PATH=f"{root}/bin:{os.environ['PATH']}",
                CODEX_PLUGIN_ROOT=f"{root}/no-plugins")
-    # A BASH_ENV startup file could reset HOME to the real home directory.
-    env.pop("BASH_ENV", None)
     master, slave = pty.openpty()
     try:
         result = subprocess.run(["bash", wrapper, *arguments], env=env,

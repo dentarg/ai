@@ -1,6 +1,8 @@
 #!/bin/bash
 
 set -euo pipefail
+# Tests fake HOME; a BASH_ENV startup file could reset it to the real one.
+unset BASH_ENV
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_DIR=$(dirname "$SCRIPT_DIR")

@@ -1,6 +1,8 @@
 #!/bin/bash
 
 set -euo pipefail
+# Tests fake HOME; a BASH_ENV startup file could reset it to the real one.
+unset BASH_ENV
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=tools/claude.sh
@@ -95,8 +97,6 @@ printf '%s\n' "$@" > "$CLAUDE_TEST_ARGS"
 EOF
 chmod +x "${fake_bin}/start.sh" "${fake_bin}/claude"
 
-# An empty BASH_ENV keeps a startup file from resetting HOME.
-BASH_ENV='' \
 HOME="$home_dir" \
 HISTORY_ROOT="${tmpdir}/launch-history" \
 SETTINGS_ROOT="$settings_root" \

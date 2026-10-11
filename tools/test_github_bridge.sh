@@ -1,5 +1,7 @@
 #!/bin/bash
 set -euo pipefail
+# Tests fake HOME; a BASH_ENV startup file could reset it to the real one.
+unset BASH_ENV
 REPO_DIR=$(cd "$(dirname "$0")/.." && pwd)
 task_dir=$(mktemp -d)
 trap 'rm -rf "$task_dir"' EXIT

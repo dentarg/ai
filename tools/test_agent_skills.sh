@@ -1,5 +1,7 @@
 #!/bin/bash
 set -euo pipefail
+# Tests fake HOME; a BASH_ENV startup file could reset it to the real one.
+unset BASH_ENV
 REPO_DIR=$(cd "$(dirname "$0")/.." && pwd)
 # shellcheck source=tools/agent-skills.sh
 source "$REPO_DIR/tools/agent-skills.sh"
