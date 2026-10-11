@@ -104,9 +104,6 @@ EOT
 
 RUN systemctl enable shell.service
 
-COPY inside_deps/refresh-tokens.service /etc/systemd/system/refresh-tokens.service
-RUN systemctl enable refresh-tokens.service
-
 #
 # Coding agents (Claude Code, Codex)
 #

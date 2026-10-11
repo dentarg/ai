@@ -877,20 +877,16 @@ finish sign-in in your browser. Credentials are saved to
 `$HOME/ai/settings/codex/auth.json` from the host.
 For a named profile, `codex_<profile>` replaces the `codex` directory name.
 
-## Token Refresh Service
+## Token Refresh
 
-OAuth tokens expire periodically. A systemd service (`refresh-tokens.service`) runs in every container, keeping `~/.claude/.credentials*.json` files fresh automatically.
+OAuth tokens expire periodically. `bin/ai` refreshes the profile's
+credentials in `~/ai/settings` before each launch, and inside a session
+Claude Code refreshes its own copy when it nears expiry. Sessions do not run
+a refresh daemon: each refresh rotates the token, and extra rotations from
+idle sessions sharing a profile can invalidate each other's copies. Use `l`
+in Claude Code to recover the freshest credentials from session history.
 
 ```shell
-# check service status
-systemctl status refresh-tokens
-
-# view logs
-journalctl -u refresh-tokens
-
-# follow logs
-journalctl -u refresh-tokens -f
-
 # one-shot refresh (e.g. before launching a session)
 refresh-tokens --once
 

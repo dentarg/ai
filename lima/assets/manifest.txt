@@ -53,5 +53,4 @@ claude-login.sh tools/claude-login.sh project
 codex-hook.sh tools/codex-hook.sh project
 codex-login bin/codex-login project
 refresh-tokens bin/refresh-tokens project
-refresh-tokens.service inside_deps/refresh-tokens.service project
 provision.sh lima/provision.sh project

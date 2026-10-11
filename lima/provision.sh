@@ -129,8 +129,6 @@ install -m 644 /tmp/ai-build/gitconfig /etc/gitconfig
 install -m 644 /tmp/ai-build/gitignore /etc/gitignore
 git lfs install --system
 
-install -m 644 /tmp/ai-build/refresh-tokens.service /etc/systemd/system/refresh-tokens.service
-systemctl enable refresh-tokens.service
 usermod -aG docker "$AI_VM_USER"
 sudo -u postgres psql --command="CREATE ROLE \"${AI_VM_USER}\" WITH LOGIN SUPERUSER;" || true
 chown -R "$AI_VM_USER:$AI_VM_GROUP" /workspace /home/linuxbrew/.linuxbrew
