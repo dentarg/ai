@@ -95,6 +95,8 @@ printf '%s\n' "$@" > "$CLAUDE_TEST_ARGS"
 EOF
 chmod +x "${fake_bin}/start.sh" "${fake_bin}/claude"
 
+# An empty BASH_ENV keeps a startup file from resetting HOME.
+BASH_ENV='' \
 HOME="$home_dir" \
 HISTORY_ROOT="${tmpdir}/launch-history" \
 SETTINGS_ROOT="$settings_root" \
