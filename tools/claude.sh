@@ -131,6 +131,25 @@ block_image_plugins () {
   fi
 }
 
+# macOS guests reach /app through symlinks into Lima's shared folder, and
+# Claude Code checks folder trust against the resolved path. Give that path
+# the same trust as the app directory.
+trust_resolved_app () {
+  local claude_json=$1
+  local app=${2:-/app}
+  local resolved
+  local tmp
+
+  resolved=$(cd "$app" 2>/dev/null && pwd -P) || return 0
+  [[ "$resolved" != "$app" ]] || return 0
+
+  tmp=$(mktemp "${claude_json}.XXXXXX")
+  jq --arg app "$app" --arg resolved "$resolved" \
+    'if .projects[$app] then .projects[$resolved] = .projects[$app] else . end' \
+    "$claude_json" > "$tmp"
+  mv "$tmp" "$claude_json"
+}
+
 find_resume_jsonl () {
   local history_root=$1
   local session_id=$2
@@ -292,6 +311,7 @@ main () {
     if [[ -z "$resume_id" || ! -f "$settings_claude_home/claude.json" ]]; then
       cp -f /claude/claude.json "$settings_claude_home/claude.json"
     fi
+    trust_resolved_app "$settings_claude_home/claude.json"
     ln -sf "$settings_claude_home/claude.json" "$HOME/.claude.json"
   fi
 
