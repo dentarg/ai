@@ -107,6 +107,22 @@ codex_settings_home () {
   fi
 }
 
+# Print config tables trusting a directory and, when it differs, its
+# resolved path. macOS guests reach /app through symlinks into Lima's
+# shared folder, and Codex checks trust against the resolved path.
+trusted_projects_toml () {
+  local dir=$1
+  local resolved
+  local path
+
+  resolved=$(cd "$dir" && pwd -P)
+  for path in "$dir" "$resolved"; do
+    printf '\n[projects.%s]\ntrust_level = "trusted"\n' \
+      "$(printf '%s' "$path" | jq -Rs .)"
+    [[ "$resolved" != "$dir" ]] || break
+  done
+}
+
 valid_profile () {
   case "$1" in
     ""|*[!A-Za-z0-9._-]*) return 1 ;;
@@ -135,7 +151,6 @@ main () {
   local shared_auth
   local config_profile_path
   local codex_cwd
-  local codex_cwd_toml
   local terminal_title
   local codex_backup
   local sqlite_home
@@ -265,7 +280,6 @@ main () {
   [[ -f "$SETTINGS_ROOT/AGENTS.md" ]] && cp "$SETTINGS_ROOT/AGENTS.md" "$HOME/.codex"
 
   codex_cwd="$PWD"
-  codex_cwd_toml=$(printf '%s' "$codex_cwd" | jq -Rs .)
 
   # Pre-trust the working directory so codex skips the "Do you trust this
   # directory?" prompt. The .codex home is recreated on each launch, so the
@@ -286,10 +300,8 @@ terminal_title = []
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
 command = "codex-hook"
-
-[projects.$codex_cwd_toml]
-trust_level = "trusted"
 EOF
+  trusted_projects_toml "$codex_cwd" >> "$HOME/.codex/config.toml"
 
   install_image_plugins
   configure_host_skills "$HOME/.agents/skills"
