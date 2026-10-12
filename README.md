@@ -804,7 +804,8 @@ fields. Each `gh` process uses an empty configuration directory and a restricted
 environment, outside the project checkout. Neither arbitrary commands, API
 paths, host file paths, nor caller-supplied environment variables are accepted.
 
-Each enabled session gets a bearer token and ephemeral TLS certificate. Only
+Each enabled session gets a bearer token and ephemeral TLS certificate valid
+for 45 days. The 1Password bridge shares this certificate lifetime. Only
 the public bridge directory is mounted into the guest; the policy and command
 configuration stay on the host. Requests are limited to 16 KiB, PR bodies to
 8 KiB, command output to 2 MiB, and each `op`/`gh` process to 60 seconds. TLS and

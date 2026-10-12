@@ -4,6 +4,17 @@ require "open3"
 require_relative "server"
 
 class GitHubServerTest < Minitest::Test
+  def test_certificate_supports_a_45_day_session
+    started_at = Time.now
+    certificate, = OnePasswordBridge.certificate
+    store = OpenSSL::X509::Store.new
+    store.add_cert(certificate)
+    store.purpose = OpenSSL::X509::PURPOSE_SSL_SERVER
+    store.time = started_at + 45 * 24 * 60 * 60 - 1
+
+    assert store.verify(certificate), store.error_string
+  end
+
   def test_description_client_preserves_stdin_and_waits_for_approval
     Dir.mktmpdir do |directory|
       calls, approvals = [], []

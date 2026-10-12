@@ -258,7 +258,7 @@ module OnePasswordBridge
     certificate.issuer = certificate.subject
     certificate.public_key = key.public_key
     certificate.not_before = Time.now - 60
-    certificate.not_after = Time.now + 86_400
+    certificate.not_after = Time.now + 45 * 24 * 60 * 60
 
     extensions = OpenSSL::X509::ExtensionFactory.new
     extensions.subject_certificate = certificate
