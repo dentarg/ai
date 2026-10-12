@@ -18,11 +18,26 @@ rabbitmqctl version
 # Ubuntu ships bat's binary as "batcat".
 ln -sf /usr/bin/batcat /usr/local/bin/bat
 
-# Crystal (there are no Ubuntu 26.04 packages yet).
-download https://packagecloud.io/84codes/crystal/gpgkey | \
-  gpg --dearmor > /etc/apt/trusted.gpg.d/84codes_crystal.gpg
-echo 'deb https://packagecloud.io/84codes/crystal/ubuntu noble main' \
-  > /etc/apt/sources.list.d/84codes_crystal.list
+# Official bundled Crystal release; 84codes packages still stop at 1.21.0.
+# Checksums come from the GitHub release asset digests.
+arch=$(dpkg --print-architecture)
+case "$arch" in
+  amd64)
+    crystal_arch=x86_64
+    crystal_sha=391dff4244d8d11c4422def9a2f930c9ba9fc9b7c85a20cbcc494472ab77bc0e
+    ;;
+  arm64)
+    crystal_arch=aarch64
+    crystal_sha=06e1408c6d759b6132a318ae65c6aecd070a9c3e6c8cc5d916cf25fd07cea8ef
+    ;;
+  *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
+esac
+download \
+  --output /tmp/crystal.tar.gz \
+  "https://github.com/crystal-lang/crystal/releases/download/1.21.1/crystal-1.21.1-1-linux-${crystal_arch}-bundled.tar.gz"
+echo "${crystal_sha}  /tmp/crystal.tar.gz" | sha256sum -c -
+tar -xzf /tmp/crystal.tar.gz --strip-components=2 -C /usr/local
+rm /tmp/crystal.tar.gz
 
 # LavinMQ (there are no Ubuntu 26.04 packages yet).
 download https://packagecloud.io/cloudamqp/lavinmq/gpgkey | \
@@ -46,7 +61,7 @@ echo 'deb [signed-by=/usr/share/keyrings/charm.gpg] https://repo.charm.sh/apt/ *
   > /etc/apt/sources.list.d/charm.list
 
 apt-get update
-apt-get install -y --no-install-recommends crystal gh glow lavinmq
+apt-get install -y --no-install-recommends gh glow lavinmq
 rm -rf /var/lib/apt/lists/*
 crystal --version
 glow --version
@@ -57,7 +72,6 @@ service postgresql start
 sudo -u postgres psql --command='CREATE ROLE root WITH LOGIN SUPERUSER;'
 
 # Loki logcli. Checksums come from the SHA256SUMS file for the pinned release.
-arch=$(dpkg --print-architecture)
 case "$arch" in
   amd64) logcli_sha=7850d566d2af10d7adf255ed9452de632ab20c0f269dc61fac7f70bed4d99e48 ;;
   arm64) logcli_sha=2fec7cbf4c0929f2fbd1e339753b14bc6432aadb41abf4b4155b00d3f6509e4e ;;

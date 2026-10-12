@@ -829,7 +829,7 @@ Paste this into the cloud environment's **Setup script** field:
 
 ```bash
 #!/bin/bash
-# provisioning-revision: 2026-10-08-4 (change to refresh the cache)
+# provisioning-revision: 2026-10-12-1 (change to refresh the cache)
 set -euo pipefail
 
 script=$(mktemp)
@@ -1408,7 +1408,7 @@ bin/setup-vm
 - [x] Node.js
 - [x] Bun ~~TypeScript~~
 - [x] Ruby
-- [x] Crystal
+- [x] Crystal 1.21.1 (official bundled release, checksum verified)
 - [x] Python
 - [x] Rust
 - [x] Go
