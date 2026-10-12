@@ -1,11 +1,12 @@
 require "json"
 require "openssl"
+require_relative "asset"
 
 module GitHubBridge
   Response = Struct.new(:status, :body)
-  READ_OPERATIONS = %w[pr-list pr-view pr-diff pr-comments pr-reviews pr-review-comments
+  READ_OPERATIONS = %w[pr-list pr-view pr-diff pr-comments pr-reviews pr-review-comments pr-review-threads
                        issue-list issue-view issue-comments issue-timeline].freeze
-  WRITE_OPERATIONS = %w[pr-create pr-edit-body].freeze
+  WRITE_OPERATIONS = %w[pr-create pr-edit-body issue-create pr-comment pr-review-reply pr-review-resolve asset-upload].freeze
   OPERATIONS = (READ_OPERATIONS + WRITE_OPERATIONS).freeze
   REPOSITORY = /\A[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_][A-Za-z0-9_.-]*\z/
 
@@ -115,18 +116,30 @@ module GitHubBridge
     def valid?(request)
       keys = %w[operation repository]
       case request.fetch("operation")
-      when *(READ_OPERATIONS - %w[pr-list issue-list]), "pr-edit-body"
+      when "asset-upload"
+        keys += %w[asset]
+        return false unless request["asset"].is_a?(Asset)
+      when *(READ_OPERATIONS - %w[pr-list issue-list]), "pr-edit-body", "pr-comment", "pr-review-reply", "pr-review-resolve"
         keys += %w[number]
         return false unless request["number"].is_a?(Integer) && request["number"].between?(1, 2**31 - 1)
-        if request["operation"] == "pr-edit-body"
+        if %w[pr-review-reply pr-review-resolve].include?(request["operation"])
+          keys += %w[thread_id]
+          id = request["thread_id"]
+          return false unless id.is_a?(String) && id.bytesize.between?(1, 256) && id.match?(/\A[A-Za-z0-9_=-]+\z/)
+        end
+        if %w[pr-edit-body pr-comment pr-review-reply].include?(request["operation"])
           keys += %w[body]
           return false unless text?(request["body"], 8192)
+          return false if request["operation"] != "pr-edit-body" && request["body"].strip.empty?
         end
-      when "pr-create"
-        keys += %w[head base title body]
-        %w[head base].each do |key|
-          value = request[key]
-          return false unless value.is_a?(String) && value.bytesize.between?(1, 255) && value.match?(/\A[A-Za-z0-9_][A-Za-z0-9_.\/-]*\z/)
+      when "pr-create", "issue-create"
+        keys += %w[title body]
+        if request["operation"] == "pr-create"
+          keys += %w[head base]
+          %w[head base].each do |key|
+            value = request[key]
+            return false unless value.is_a?(String) && value.bytesize.between?(1, 255) && value.match?(/\A[A-Za-z0-9_][A-Za-z0-9_.\/-]*\z/)
+          end
         end
         return false unless text?(request["title"], 256) && !request["title"].strip.empty?
         return false unless text?(request["body"], 8192)

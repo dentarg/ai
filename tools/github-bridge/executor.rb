@@ -1,6 +1,8 @@
 require "open3"
 require "timeout"
+require "uri"
 require_relative "broker"
+require_relative "review_threads"
 
 module GitHubBridge
   class Runner
@@ -8,7 +10,11 @@ module GitHubBridge
       Open3.popen3(env, *argv, chdir: directory, unsetenv_others: true, pgroup: true) do |stdin, stdout, stderr, process|
         begin
           Timeout.timeout(timeout) do
-            stdin.write(input)
+            if input.respond_to?(:read)
+              IO.copy_stream(input, stdin)
+            else
+              stdin.write(input)
+            end
             stdin.close
             streams = [stdout, stderr]
             output = +"".b
@@ -54,7 +60,19 @@ module GitHubBridge
       ).strip
       raise "invalid token" unless token.match?(/\A[A-Za-z0-9_]+\z/)
 
+      env = {
+        "HOME" => @directory, "GH_CONFIG_DIR" => @directory, "GH_TOKEN" => token,
+        "PATH" => "/usr/bin:/bin:/usr/sbin:/sbin", "GH_PROMPT_DISABLED" => "1",
+        "GH_PAGER" => "cat", "NO_COLOR" => "1", "GH_NO_UPDATE_NOTIFIER" => "1",
+      }
       operation = request.fetch("operation")
+      if operation == "asset-upload"
+        return upload_asset(request, env).gsub(token, "[REDACTED]")
+      end
+      if %w[pr-review-threads pr-review-reply pr-review-resolve].include?(operation)
+        result = ReviewThreads.new(gh: @gh, runner: @runner, env: env, directory: @directory).call(request)
+        return (JSON.generate(result) + "\n").gsub(token, "[REDACTED]")
+      end
       repository = "repos/#{request.fetch('repository')}"
       number = request["number"]
       endpoint, paginated = case operation
@@ -62,15 +80,17 @@ module GitHubBridge
       when "pr-view", "pr-diff", "pr-edit-body" then ["#{repository}/pulls/#{number}", false]
       when "pr-create" then ["#{repository}/pulls", false]
       when "pr-comments", "issue-comments" then ["#{repository}/issues/#{number}/comments?per_page=100", true]
+      when "pr-comment" then ["#{repository}/issues/#{number}/comments", false]
       when "pr-reviews" then ["#{repository}/pulls/#{number}/reviews?per_page=100", true]
       when "pr-review-comments" then ["#{repository}/pulls/#{number}/comments?per_page=100", true]
       when "issue-list" then ["#{repository}/issues?state=all&per_page=100", true]
+      when "issue-create" then ["#{repository}/issues", false]
       when "issue-view" then ["#{repository}/issues/#{number}", false]
       when "issue-timeline" then ["#{repository}/issues/#{number}/timeline?per_page=100", true]
       else raise "unsupported operation"
       end
       accept = operation == "pr-diff" ? "application/vnd.github.diff" : "application/vnd.github+json"
-      method = { "pr-create" => "POST", "pr-edit-body" => "PATCH" }.fetch(operation, "GET")
+      method = { "pr-create" => "POST", "pr-edit-body" => "PATCH", "issue-create" => "POST", "pr-comment" => "POST" }.fetch(operation, "GET")
       argv = [@gh, "api", "--hostname", "github.com", "--method", method, "-H", "Accept: #{accept}", endpoint]
       argv += ["--paginate", "--slurp"] if paginated
       input = ""
@@ -78,15 +98,19 @@ module GitHubBridge
         argv += ["--input", "-"]
         input = JSON.generate(request.slice("head", "base", "title", "body").merge("draft" => true, "maintainer_can_modify" => false))
       end
-      if operation == "pr-edit-body"
+      if %w[pr-edit-body pr-comment].include?(operation)
         argv += ["--input", "-"]
         input = JSON.generate(request.slice("body"))
       end
-      env = {
-        "HOME" => @directory, "GH_CONFIG_DIR" => @directory, "GH_TOKEN" => token,
-        "PATH" => "/usr/bin:/bin:/usr/sbin:/sbin", "GH_PROMPT_DISABLED" => "1",
-        "GH_PAGER" => "cat", "NO_COLOR" => "1", "GH_NO_UPDATE_NOTIFIER" => "1",
-      }
+      if operation == "issue-create"
+        argv += ["--input", "-"]
+        input = JSON.generate(request.slice("title", "body"))
+      end
+      if operation == "pr-comment"
+        # GitHub shares this write endpoint with issues; require a real PR first.
+        @runner.call([@gh, "api", "--hostname", "github.com", "--method", "GET", "#{repository}/pulls/#{number}"],
+                     env: env, directory: @directory)
+      end
       output = @runner.call(argv, env: env, directory: @directory, input: input)
       if paginated
         records = JSON.parse(output).flatten(1)
@@ -96,6 +120,31 @@ module GitHubBridge
       end
       output.gsub(token, "[REDACTED]")
     end
+
+    private
+
+    def upload_asset(request, env)
+      asset = request.fetch("asset")
+      details = @runner.call([@gh, "api", "--hostname", "github.com", "--method", "GET", "repos/#{request.fetch('repository')}"],
+                             env: env, directory: @directory)
+      repository = JSON.parse(details)
+      unless repository.fetch("id").is_a?(Integer) && repository.fetch("id").positive? && repository.dig("permissions", "push") == true
+        raise "asset uploads require repository write access"
+      end
+      query = URI.encode_www_form("name" => asset.name, "content_type" => asset.content_type, "repository_id" => repository.fetch("id"))
+      # This is the same endpoint used by gh's --attach implementation.
+      endpoint = "https://uploads.github.com/user-attachments/assets?#{query}"
+      asset.file.rewind
+      output = @runner.call([@gh, "api", "--hostname", "github.com", "--method", "POST",
+                             "-H", "Content-Type: application/octet-stream", "-H", "Accept: application/vnd.github+json",
+                             "-H", "Content-Length: #{asset.size}",
+                             endpoint, "--input", "-"], env: env, directory: @directory, input: asset.file)
+      url = JSON.parse(output).fetch("url")
+      unless url.is_a?(String) && url.match?(%r{\Ahttps://github\.com/user-attachments/assets/[A-Za-z0-9-]+\z})
+        raise "invalid asset URL"
+      end
+      JSON.generate("url" => url, "markdown" => asset.markdown(url)) + "\n"
+    end
   end
 
   class Approver
@@ -104,8 +153,18 @@ module GitHubBridge
     end
 
     def call(request)
-      action = request.fetch("operation") == "pr-edit-body" ? "Replace this PR description?" : "Create this draft PR?"
-      message = "Project: #{@project}\n\n#{action}\n#{JSON.pretty_generate(request)}"
+      action = case request.fetch("operation")
+      when "pr-create" then "Create this draft PR?"
+      when "pr-edit-body" then "Replace this PR description?"
+      when "issue-create" then "Create this issue?"
+      when "pr-comment" then "Post this PR discussion comment?"
+      when "pr-review-reply" then "Reply to this PR review thread?"
+      when "pr-review-resolve" then "Resolve this PR review thread?"
+      when "asset-upload" then "Upload this asset to GitHub?"
+      else raise "unsupported approval operation"
+      end
+      details = request.transform_values { |value| value.is_a?(Asset) ? value.summary : value }
+      message = "Project: #{@project}\n\n#{action}\n#{JSON.pretty_generate(details)}"
       script = <<~APPLESCRIPT
         on run arguments
           set decision to display dialog (item 1 of arguments) buttons {"Deny", "Allow"} default button "Deny" cancel button "Deny" with title "AI GitHub request" giving up after 60

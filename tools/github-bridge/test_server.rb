@@ -4,6 +4,144 @@ require "open3"
 require_relative "server"
 
 class GitHubServerTest < Minitest::Test
+  def test_asset_client_sends_bytes_and_requires_host_approval_without_host_paths
+    Dir.mktmpdir do |directory|
+      calls, approvals, paths = [], [], []
+      allowed = false
+      policy = GitHubBridge::Policy.new(
+        "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+        "repositories" => ["owner/repo"], "operations" => ["asset-upload"],
+      )
+      broker = GitHubBridge::Broker.new(policy: policy, token: "session-token",
+        executor: ->(request) { calls << request.fetch("asset").file.read; '{"url":"https://github.com/user-attachments/assets/test"}' },
+        approver: ->(request) {
+          approvals << request.fetch("asset").summary
+          paths << request.fetch("asset").file.path
+          allowed
+        }, logger: ->(*) {})
+      certificate, key = OnePasswordBridge.certificate
+      server = GitHubBridge::Server.new(broker: broker, certificate: certificate, private_key: key, bind: "127.0.0.1")
+      thread = Thread.new { server.run }
+      ca = File.join(directory, "ca.pem")
+      File.write(ca, certificate.to_pem)
+      env = { "GH_BRIDGE_URL" => "https://127.0.0.1:#{server.port}", "GH_BRIDGE_TOKEN" => "session-token", "GH_BRIDGE_CA" => ca }
+      client = File.expand_path("../gh-host.sh", __dir__)
+      bytes = "\x89PNG\r\n\x00\xff".b * 4096
+      file = File.join(directory, "a screenshot #1.png")
+      File.binwrite(file, bytes)
+      _, _, status = Open3.capture3(env, client, "asset-upload", "owner/repo", file)
+      refute status.success?
+      assert_empty calls
+      assert_equal "a screenshot #1.png", approvals.last.fetch("name")
+      assert_equal Digest::SHA256.hexdigest(bytes), approvals.last.fetch("sha256")
+      allowed = true
+      output, error, status = Open3.capture3(env, client, "asset-upload", "owner/repo", file)
+      assert status.success?, error
+      assert_equal "https://github.com/user-attachments/assets/test", JSON.parse(output).fetch("url")
+      assert_equal [bytes], calls
+      _, _, status = Open3.capture3(env, client, "asset-upload", "other/repo", file)
+      refute status.success?
+      _, _, status = Open3.capture3(env.merge("GH_BRIDGE_TOKEN" => "wrong"), client, "asset-upload", "owner/repo", file)
+      refute status.success?
+      assert_equal 2, approvals.size
+      assert_equal 1, calls.size
+      # JSON requests cannot turn a guest-supplied path into a host file read.
+      response = broker.call({ "operation" => "asset-upload", "repository" => "owner/repo", "asset" => { "path" => "/etc/passwd" } }, "session-token")
+      assert_equal 400, response.status
+    ensure
+      server&.close
+      thread&.join
+      paths.each { |path| refute File.exist?(path) }
+    end
+  end
+
+  def test_review_client_lists_threads_and_requires_approval_for_writes
+    Dir.mktmpdir do |directory|
+      calls, approvals = [], []
+      allowed = false
+      policy = GitHubBridge::Policy.new(
+        "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+        "repositories" => ["owner/repo"], "operations" => %w[pr-review-threads pr-comment pr-review-reply pr-review-resolve],
+      )
+      broker = GitHubBridge::Broker.new(policy: policy, token: "session-token",
+        executor: ->(request) { calls << request; JSON.generate(request) },
+        approver: ->(request) { approvals << request; allowed }, logger: ->(*) {})
+      certificate, key = OnePasswordBridge.certificate
+      server = GitHubBridge::Server.new(broker: broker, certificate: certificate, private_key: key, bind: "127.0.0.1")
+      thread = Thread.new { server.run }
+      ca = File.join(directory, "ca.pem")
+      File.write(ca, certificate.to_pem)
+      env = { "GH_BRIDGE_URL" => "https://127.0.0.1:#{server.port}", "GH_BRIDGE_TOKEN" => "session-token", "GH_BRIDGE_CA" => ca }
+      client = File.expand_path("../gh-host.sh", __dir__)
+      output, error, status = Open3.capture3(env, client, "pr-review-threads", "owner/repo", "12")
+      assert status.success?, error
+      assert_equal({ "operation" => "pr-review-threads", "repository" => "owner/repo", "number" => 12 }, JSON.parse(output))
+      assert_empty approvals
+      body = "Fixed $(command), `code`, and @/etc/passwd\n"
+      %w[pr-comment pr-review-reply pr-review-resolve].each do |operation|
+        allowed = false
+        before = calls.size
+        args = [operation, "owner/repo", "12"]
+        args << "PRRT_example" unless operation == "pr-comment"
+        _, _, status = Open3.capture3(env, client, *args, stdin_data: body)
+        refute status.success?
+        assert_equal before, calls.size
+        allowed = true
+        output, error, status = Open3.capture3(env, client, *args, stdin_data: body)
+        assert status.success?, error
+        expected = { "operation" => operation, "repository" => "owner/repo", "number" => 12, "thread_id" => "PRRT_example" }
+        expected.delete("thread_id") if operation == "pr-comment"
+        expected["body"] = body unless operation == "pr-review-resolve"
+        assert_equal expected, JSON.parse(output)
+        assert_equal expected, approvals.last
+      end
+    ensure
+      server&.close
+      thread&.join
+    end
+  end
+
+  def test_issue_client_preserves_title_and_stdin_and_waits_for_approval
+    Dir.mktmpdir do |directory|
+      calls, approvals = [], []
+      allowed = false
+      policy = GitHubBridge::Policy.new(
+        "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+        "repositories" => ["owner/repo"], "operations" => ["issue-create"],
+      )
+      broker = GitHubBridge::Broker.new(policy: policy, token: "session-token",
+        executor: ->(request) { calls << request; JSON.generate(request.slice("title", "body")) },
+        approver: ->(request) { approvals << request; allowed }, logger: ->(*) {})
+      certificate, key = OnePasswordBridge.certificate
+      server = GitHubBridge::Server.new(broker: broker, certificate: certificate, private_key: key, bind: "127.0.0.1")
+      thread = Thread.new { server.run }
+      ca = File.join(directory, "ca.pem")
+      File.write(ca, certificate.to_pem)
+      env = { "GH_BRIDGE_URL" => "https://127.0.0.1:#{server.port}", "GH_BRIDGE_TOKEN" => "session-token", "GH_BRIDGE_CA" => ca }
+      client = File.expand_path("../gh-host.sh", __dir__)
+      title = "Literal $(command) and `code`"
+      body = "## Bug\n\nLiteral $(command), `code`, and @/etc/passwd\n"
+      _, _, status = Open3.capture3(env, client, "issue-create", "owner/repo", title, stdin_data: body)
+      refute status.success?
+      assert_empty calls
+      assert_equal body, approvals.last.fetch("body")
+      allowed = true
+      [body, ""].each do |description|
+        output, error, status = Open3.capture3(env, client, "issue-create", "owner/repo", title, stdin_data: description)
+        assert status.success?, error
+        assert_equal({ "title" => title, "body" => description }, JSON.parse(output))
+        assert_equal({ "operation" => "issue-create", "repository" => "owner/repo", "title" => title, "body" => description }, calls.last)
+      end
+      _, _, status = Open3.capture3(env, client, "issue-create", "owner/repo", title, "extra", stdin_data: body)
+      refute status.success?
+      assert_equal 2, calls.size
+      assert_equal 3, approvals.size
+    ensure
+      server&.close
+      thread&.join
+    end
+  end
+
   def test_certificate_supports_a_45_day_session
     started_at = Time.now
     certificate, = OnePasswordBridge.certificate

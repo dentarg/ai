@@ -1,0 +1,114 @@
+require "json"
+require "timeout"
+
+module GitHubBridge
+  class ReviewThreads
+    LIST = <<~GRAPHQL.freeze
+      query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+        repository(owner: $owner, name: $name) {
+          pullRequest(number: $number) {
+            reviewThreads(first: 100, after: $cursor) {
+              nodes {
+                id isResolved isOutdated path line
+                comments(first: 1) { nodes { databaseId body url author { login } } }
+              }
+              pageInfo { hasNextPage endCursor }
+            }
+          }
+        }
+      }
+    GRAPHQL
+    LOOKUP = <<~GRAPHQL.freeze
+      query($id: ID!) {
+        node(id: $id) {
+          ... on PullRequestReviewThread {
+            id
+            pullRequest { number repository { nameWithOwner } }
+          }
+        }
+      }
+    GRAPHQL
+    REPLY = <<~GRAPHQL.freeze
+      mutation($id: ID!, $body: String!) {
+        addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $id, body: $body}) {
+          comment { id url body }
+        }
+      }
+    GRAPHQL
+    RESOLVE = <<~GRAPHQL.freeze
+      mutation($id: ID!) {
+        resolveReviewThread(input: {threadId: $id}) { thread { id isResolved } }
+      }
+    GRAPHQL
+
+    def initialize(gh:, runner:, env:, directory:)
+      @gh, @runner, @env, @directory = gh, runner, env, directory
+    end
+
+    def call(request)
+      @bytes = 0
+      Timeout.timeout(60) do
+        if request.fetch("operation") == "pr-review-threads"
+          list(request)
+        else
+          mutate(request)
+        end
+      end
+    end
+
+    private
+
+    def query(document, variables)
+      output = @runner.call(
+        [@gh, "api", "--hostname", "github.com", "graphql", "--input", "-"],
+        env: @env, directory: @directory,
+        input: JSON.generate("query" => document, "variables" => variables),
+      )
+      @bytes += output.bytesize
+      raise "review thread output limit exceeded" if @bytes > 2 * 1024 * 1024
+
+      response = JSON.parse(output)
+      raise "GitHub GraphQL request failed" if response["errors"] && !response["errors"].empty?
+
+      response.fetch("data")
+    end
+
+    def list(request)
+      owner, name = request.fetch("repository").split("/", 2)
+      variables = { "owner" => owner, "name" => name, "number" => request.fetch("number"), "cursor" => nil }
+      records, cursors = [], []
+      loop do
+        connection = query(LIST, variables).fetch("repository").fetch("pullRequest").fetch("reviewThreads")
+        records.concat(connection.fetch("nodes"))
+        page = connection.fetch("pageInfo")
+        break unless page.fetch("hasNextPage")
+
+        cursor = page.fetch("endCursor")
+        raise "invalid review thread pagination" unless cursor.is_a?(String) && !cursor.empty? && !cursors.include?(cursor)
+
+        cursors << cursor
+        variables["cursor"] = cursor
+      end
+      records
+    end
+
+    def mutate(request)
+      variables = { "id" => request.fetch("thread_id") }
+      thread = query(LOOKUP, variables).fetch("node")
+      pr = thread && thread["pullRequest"]
+      unless pr && pr.fetch("number") == request.fetch("number") &&
+          pr.fetch("repository").fetch("nameWithOwner").casecmp?(request.fetch("repository"))
+        raise "thread does not belong to the requested pull request"
+      end
+
+      case request.fetch("operation")
+      when "pr-review-reply"
+        query(REPLY, variables.merge("body" => request.fetch("body"))).fetch("addPullRequestReviewThreadReply").fetch("comment")
+      when "pr-review-resolve"
+        query(RESOLVE, variables).fetch("resolveReviewThread").fetch("thread")
+      else
+        raise "unsupported review thread operation"
+      end
+    end
+  end
+end

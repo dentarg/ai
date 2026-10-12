@@ -691,7 +691,9 @@ preserved. The host broker remains responsible for enforcing permissions.
 Store a fine-grained GitHub token in 1Password, restricted to the repositories
 needed and with an expiration. Grant Pull requests read permission for PR reads
 and Issues read permission for issue reads; Pull requests write permission is
-needed to create PRs or edit descriptions. The bridge resolves the
+needed to create PRs, edit descriptions, reply to comments, or resolve review
+threads, and Issues write permission is needed to create issues. Media uploads
+also require repository write access. The bridge resolves the
 configured reference through host `op` for each request and passes the token
 only to host `gh`. It does not use your normal `gh` login or expose a token-read
 operation to the container.
@@ -704,10 +706,11 @@ bin/github-bridge init \
   'company/*' 'another-org/*' owner/example
 bin/github-bridge show work
 
-# Optional: replace the allowed operations, including PR writes.
+# Optional: replace the allowed operations, including PR and issue writes.
 bin/github-bridge allow work \
-  pr-list pr-view pr-diff pr-comments pr-reviews pr-review-comments \
-  issue-list issue-view issue-comments issue-timeline pr-create pr-edit-body
+  pr-list pr-view pr-diff pr-comments pr-reviews pr-review-comments pr-review-threads \
+  issue-list issue-view issue-comments issue-timeline issue-create \
+  pr-create pr-edit-body pr-comment pr-review-reply pr-review-resolve asset-upload
 bin/github-bridge check work
 bin/github-bridge list
 bin/ai cx --github=work
@@ -759,10 +762,15 @@ gh-host pr-diff owner/example 123
 gh-host pr-comments owner/example 123
 gh-host pr-reviews owner/example 123
 gh-host pr-review-comments owner/example 123
+gh-host pr-review-threads owner/example 123
+gh-host pr-comment owner/example 123 < reply.txt
+gh-host pr-review-reply owner/example 123 THREAD_ID < reply.txt
+gh-host pr-review-resolve owner/example 123 THREAD_ID
 gh-host issue-list owner/example
 gh-host issue-view owner/example 456
 gh-host issue-comments owner/example 456
 gh-host issue-timeline owner/example 456
+gh-host issue-create owner/example 'Issue title' < issue-body.txt
 printf '%s\n' 'Describe the change here.' | \
   gh-host pr-create owner/example feature-branch main 'PR title'
 gh-host pr-edit-body owner/example 123 < pr-body.txt
@@ -781,13 +789,67 @@ Existing profiles must enable the new operations with `allow` and restart their
 sessions; `allow` replaces the complete operation list.
 
 `pr-list` returns up to 30 open PRs. Read operations return GitHub JSON or a
-plain diff. Creation uses an already-pushed branch in the selected repository,
+plain diff. PR creation uses an already-pushed branch in the selected repository,
 creates a draft with maintainer edits disabled, and requires a macOS dialog
 showing the exact request. Denial or a 60-second approval timeout prevents the
 write. Reads rely on the host allowlist without an extra approval dialog;
 1Password may still require authorization. Creating a PR may trigger repository
 automation. A failed or timed-out create can have succeeded remotely; inspect
 the PR list before retrying.
+
+`issue-create` creates an issue using a title argument and the exact body from
+stdin, returning the created issue as JSON. Titles must be nonblank and at most
+256 bytes; bodies may be empty and are limited to 8 KiB. Enable `issue-create`
+in the host operation allowlist and grant the token Issues write permission.
+The host dialog shows the repository, title, and body; denial or a 60-second
+approval timeout prevents the write. Labels, assignees, and milestones are not
+supported. Creation may trigger repository automation. If the result is
+uncertain, inspect `issue-list` and `issue-view` before retrying to avoid duplicates.
+New profiles remain read-only.
+
+`pr-comment` posts a general PR discussion comment. `pr-review-reply` replies
+to an existing review thread; `pr-review-resolve` marks that thread resolved.
+Each write requires its own allowlist entry, Pull requests write permission,
+and host approval. Reply bodies come from stdin, must be nonblank, and are
+limited to 8 KiB. Replies do not automatically resolve threads. General PR
+discussion comments cannot be resolved.
+
+Use `pr-review-threads` to obtain thread IDs and resolution state. It follows
+all pages and returns a JSON array with `id`, `isResolved`, `isOutdated`,
+file/line context, and the first comment of each thread. The first comment's
+`databaseId` maps to `id` in `pr-review-comments`, which returns the full
+conversation. Supply the thread's GraphQL `id`, not a comment ID, for replies
+and resolution. The host verifies its repository and PR before either write.
+After an uncertain reply, reread comments before retrying; after uncertain
+resolution, reread threads. Thread operations use fixed GraphQL queries and
+mutations, with a 60-second total deadline and 2 MiB combined response limit.
+
+Upload an image or video from the guest with `asset-upload`, then insert its
+returned Markdown into a comment or description:
+
+```shell
+gh-host asset-upload owner/example screenshot.png > asset.json
+jq -r .markdown asset.json > comment.md
+gh-host pr-comment owner/example 123 < comment.md
+```
+
+The response contains `url` and `markdown`. Images use Markdown image syntax;
+videos use a bare URL, which should occupy its own paragraph. The same Markdown
+works in `issue-create`, `pr-create`, `pr-edit-body`, and `pr-review-reply` bodies.
+Existing body text is preserved by composing the full body file before posting.
+Uploading requires the separate `asset-upload` allowlist entry and host approval
+showing the repository, filename, media type, size, and SHA-256 digest. The client
+sends file bytes; the host never opens a guest-supplied file path. Received files
+are stored temporarily with mode `0600` and removed after the request.
+
+This uses the upload endpoint behind GitHub CLI's
+[`--attach` support](https://github.blog/changelog/2026-09-01-github-cli-media-in-issues-pull-requests-and-comments/).
+Use host `gh` 2.99.0 or newer. Supported formats are PNG, JPEG, GIF, WebP, SVG,
+MP4, MOV, and WebM. Images are limited to 10 MiB and videos to 100 MiB; GitHub
+may enforce a lower video limit for the account's plan. Uploads are separate
+from posting text, so retain the returned URL if posting fails and reuse it
+instead of uploading again. An uncertain upload may have left an unattached
+asset; the bridge cannot list or delete uploaded assets.
 
 `pr-edit-body` replaces an existing PR's description with the exact text from
 stdin (up to 8 KiB); empty input clears it. It sends only the body field and
@@ -807,13 +869,14 @@ paths, host file paths, nor caller-supplied environment variables are accepted.
 Each enabled session gets a bearer token and ephemeral TLS certificate valid
 for 45 days. The 1Password bridge shares this certificate lifetime. Only
 the public bridge directory is mounted into the guest; the policy and command
-configuration stay on the host. Requests are limited to 16 KiB, PR bodies to
+configuration stay on the host. JSON requests are limited to 16 KiB, text bodies to
 8 KiB, command output to 2 MiB, and each `op`/`gh` process to 60 seconds. TLS and
-request reads have a 10-second deadline. The broker handles one request at a
-time. It exits with the session and removes its runtime directory.
+request reads have a 10-second deadline, except binary asset transfers, which
+have a 60-second deadline and the media size limits above. The broker handles
+one request at a time. It exits with the session and removes its runtime directory.
 
 Audit events go to `$AI_DIR/logs/github-bridge.log` (default
-`~/ai/logs/github-bridge.log`) without tokens, token references, PR bodies, or
+`~/ai/logs/github-bridge.log`) without tokens, token references, text bodies, or
 subprocess error output. Returned repository content is visible to the agent.
 
 Run the bridge tests with:

@@ -1,5 +1,6 @@
 require "socket"
 require "tmpdir"
+require "uri"
 require_relative "executor"
 require_relative "../onepassword-bridge/server"
 
@@ -9,8 +10,8 @@ module GitHubBridge
     MAX_BODY = 16 * 1024
     attr_reader :port
 
-    def initialize(broker:, certificate:, private_key:, bind: "0.0.0.0", timeout: 10)
-      @broker, @timeout = broker, timeout
+    def initialize(broker:, certificate:, private_key:, bind: "0.0.0.0", timeout: 10, upload_timeout: 60)
+      @broker, @timeout, @upload_timeout = broker, timeout, upload_timeout
       tcp = TCPServer.new(bind, 0)
       @port = tcp.local_address.ip_port
       context = OpenSSL::SSL::SSLContext.new
@@ -23,12 +24,11 @@ module GitHubBridge
     def run
       until @closed
         connection = nil
+        request = nil
         begin
           connection = @server.accept
-          request, token = Timeout.timeout(@timeout) do
-            connection.accept
-            read_request(connection)
-          end
+          Timeout.timeout(@timeout) { connection.accept }
+          request, token = read_request(connection)
           response = @broker.call(request, token)
           Timeout.timeout(@timeout) { write_response(connection, response) }
         rescue ArgumentError, JSON::ParserError
@@ -41,6 +41,7 @@ module GitHubBridge
           # A malformed or stalled client must not stop the broker.
           next
         ensure
+          request["asset"].close if request.is_a?(Hash) && request["asset"].is_a?(Asset)
           connection&.close
         end
       end
@@ -64,9 +65,10 @@ module GitHubBridge
       raise ArgumentError
     end
 
-    def read_request(connection)
+    def read_headers(connection)
       line = read_line(connection)
-      raise ArgumentError unless line == "POST /v1/github HTTP/1.1\r\n"
+      upload = line == "POST /v1/github/assets HTTP/1.1\r\n"
+      raise ArgumentError unless upload || line == "POST /v1/github HTTP/1.1\r\n"
       headers = {}
       bytes = line.bytesize
       loop do
@@ -81,15 +83,28 @@ module GitHubBridge
         raise ArgumentError if headers.key?(name)
         headers[name] = value.strip
       end
+      [upload, headers]
+    end
+
+    def read_request(connection)
+      upload, headers = Timeout.timeout(@timeout) { read_headers(connection) }
       raise ArgumentError if headers.key?("transfer-encoding")
       length = headers.fetch("content-length", "")
-      raise ArgumentError unless length.match?(/\A[0-9]{1,5}\z/) && length.to_i.between?(1, MAX_BODY)
-      raise ArgumentError unless headers["content-type"] == "application/json"
+      maximum = upload ? Asset::MAX_VIDEO_BYTES : MAX_BODY
+      raise ArgumentError unless length.match?(/\A[0-9]{1,9}\z/) && length.to_i.between?(1, maximum)
       authorization = headers["authorization"].to_s
       token = authorization.delete_prefix("Bearer ") if authorization.start_with?("Bearer ")
       # Authenticate before reading or parsing the body.
       return [nil, token] unless @broker.authenticated?(token)
-      body = connection.read(length.to_i)
+      if upload
+        name = URI.decode_www_form_component(headers.fetch("x-github-asset-name", ""))
+        asset = Timeout.timeout(@upload_timeout) do
+          Asset.new(connection, name: name, content_type: headers["content-type"], size: length.to_i)
+        end
+        return [{ "operation" => "asset-upload", "repository" => headers["x-github-repository"], "asset" => asset }, token]
+      end
+      raise ArgumentError unless headers["content-type"] == "application/json"
+      body = Timeout.timeout(@timeout) { connection.read(length.to_i) }
       raise ArgumentError unless body && body.bytesize == length.to_i
       [JSON.parse(body), token]
     end

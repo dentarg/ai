@@ -2,6 +2,86 @@ require "minitest/autorun"
 require_relative "broker"
 
 class GitHubBrokerTest < Minitest::Test
+  def test_review_writes_require_valid_thread_ids_bodies_and_host_approval
+    operations = %w[pr-comment pr-review-reply pr-review-resolve]
+    policy = GitHubBridge::Policy.new(
+      "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+      "repositories" => ["owner/repo"], "operations" => operations,
+    )
+    calls, approvals = [], []
+    allowed = false
+    broker = GitHubBridge::Broker.new(policy: policy, token: "session",
+      executor: ->(request) { calls << request; "ok" },
+      approver: ->(request) { approvals << request; allowed }, logger: ->(*) {})
+    operations.each do |operation|
+      request = { "operation" => operation, "repository" => "owner/repo", "number" => 12, "thread_id" => "PRRT_example" }
+      request.delete("thread_id") if operation == "pr-comment"
+      request["body"] = "Fixed\n" unless operation == "pr-review-resolve"
+      assert_equal 401, broker.call(request, "wrong").status
+      assert_equal 403, broker.call(request.merge("repository" => "other/repo"), "session").status
+      [nil, "", 1, "x" * 257, "bad\n"].each do |id|
+        assert_equal 400, broker.call(request.merge("thread_id" => id), "session").status
+      end
+      [nil, "12", 0, 2**31].each do |number|
+        assert_equal 400, broker.call(request.merge("number" => number), "session").status
+      end
+      assert_equal 400, broker.call(request.merge("query" => "mutation {}"), "session").status
+      if operation != "pr-review-resolve"
+        [nil, "", " \n", 42, "x" * 8193, "bad\u0000"].each do |body|
+          assert_equal 400, broker.call(request.merge("body" => body), "session").status
+        end
+      else
+        assert_equal 400, broker.call(request.merge("body" => "extra"), "session").status
+      end
+      allowed = false
+      count = calls.size
+      assert_equal 403, broker.call(request, "session").status
+      assert_equal count, calls.size
+      allowed = true
+      assert_equal 200, broker.call(request, "session").status
+      assert_equal request, calls.last
+    end
+    assert_equal 6, approvals.size
+  end
+
+  def test_issue_creation_requires_valid_fields_policy_permission_and_host_approval
+    document = {
+      "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+      "repositories" => ["owner/repo"], "operations" => ["issue-create"],
+    }
+    calls, approvals = [], []
+    allowed = false
+    broker = GitHubBridge::Broker.new(policy: GitHubBridge::Policy.new(document), token: "session",
+      executor: ->(request) { calls << request; "ok" },
+      approver: ->(request) { approvals << request; allowed }, logger: ->(*) {})
+    request = { "operation" => "issue-create", "repository" => "owner/repo", "title" => "Bug", "body" => "Details\n" }
+    assert_equal 401, broker.call(request, "wrong").status
+    assert_equal 403, broker.call(request.merge("repository" => "other/repo"), "session").status
+    [nil, 42, "", " \n", "x" * 257, "bad\u0000"].each do |title|
+      assert_equal 400, broker.call(request.merge("title" => title), "session").status
+    end
+    [nil, 42, "x" * 8193, "bad\u0000"].each do |body|
+      assert_equal 400, broker.call(request.merge("body" => body), "session").status
+    end
+    %w[labels assignees milestone number head].each do |key|
+      assert_equal 400, broker.call(request.merge(key => "extra"), "session").status
+    end
+    assert_empty approvals
+    assert_equal 403, broker.call(request, "session").status
+    assert_equal [request], approvals
+    assert_empty calls
+    allowed = true
+    [request, request.merge("body" => ""), request.merge("title" => "x" * 256, "body" => "x" * 8192)].each do |create|
+      assert_equal 200, broker.call(create, "session").status
+      assert_equal create, calls.last
+      assert_equal create, approvals.last
+    end
+    restricted = GitHubBridge::Broker.new(
+      policy: GitHubBridge::Policy.new(document.merge("operations" => GitHubBridge::READ_OPERATIONS)), token: "session",
+      executor: ->(*) { flunk "unauthorized creation" }, approver: ->(*) { flunk "unexpected approval" }, logger: ->(*) {})
+    assert_equal 403, restricted.call(request, "session").status
+  end
+
   def test_only_authorized_validated_requests_reach_the_executor
     policy = GitHubBridge::Policy.new(
       "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
@@ -71,7 +151,7 @@ class GitHubBrokerTest < Minitest::Test
   end
 
   def test_new_reads_require_policy_permission_and_strict_arguments_without_approval
-    operations = %w[pr-comments pr-reviews pr-review-comments issue-list issue-view issue-comments issue-timeline]
+    operations = %w[pr-comments pr-reviews pr-review-comments pr-review-threads issue-list issue-view issue-comments issue-timeline]
     policy = GitHubBridge::Policy.new(
       "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
       "repositories" => ["owner/repo"], "operations" => operations,
