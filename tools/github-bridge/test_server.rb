@@ -4,6 +4,63 @@ require "open3"
 require_relative "server"
 
 class GitHubServerTest < Minitest::Test
+  def test_ci_downloads_preserve_bytes_and_never_publish_failed_or_overwritten_files
+    Dir.mktmpdir do |directory|
+      calls, paths = [], []
+      bytes = "PK\x03\x04\x00\xffsecret_token".b
+      policy = GitHubBridge::Policy.new(
+        "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+        "repositories" => ["owner/repo"], "operations" => %w[job-log artifact-download run-logs],
+      )
+      executor = lambda do |request|
+        calls << request
+        if request["operation"] == "job-log"
+          "Build failed\n"
+        else
+          GitHubBridge::Download.new do |file|
+            paths << file.path
+            file.write(bytes)
+          end
+        end
+      end
+      broker = GitHubBridge::Broker.new(policy: policy, token: "session-token", executor: executor,
+        approver: ->(*) { flunk "unexpected approval" }, logger: ->(*) {})
+      certificate, key = OnePasswordBridge.certificate
+      server = GitHubBridge::Server.new(broker: broker, certificate: certificate, private_key: key, bind: "127.0.0.1")
+      thread = Thread.new { server.run }
+      ca = File.join(directory, "ca.pem")
+      File.write(ca, certificate.to_pem)
+      env = { "GH_BRIDGE_URL" => "https://127.0.0.1:#{server.port}", "GH_BRIDGE_TOKEN" => "session-token", "GH_BRIDGE_CA" => ca }
+      client = File.expand_path("../gh-host.sh", __dir__)
+      output, error, status = Open3.capture3(env, client, "job-log", "owner/repo", "50000000000")
+      assert status.success?, error
+      assert_equal "Build failed\n", output
+      assert_equal 50_000_000_000, calls.last.fetch("job_id")
+      %w[artifact-download run-logs].each do |operation|
+        destination = File.join(directory, "#{operation} archive.zip")
+        _, error, status = Open3.capture3(env, client, operation, "owner/repo", "37604537230", destination)
+        assert status.success?, error
+        assert_equal bytes, File.binread(destination)
+        key = operation == "run-logs" ? "run_id" : "artifact_id"
+        assert_equal({ "operation" => operation, "repository" => "owner/repo", key => 37_604_537_230 }, calls.last)
+        count = calls.size
+        _, _, status = Open3.capture3(env, client, operation, "owner/repo", "37604537230", destination)
+        refute status.success?
+        assert_equal count, calls.size
+        assert_equal bytes, File.binread(destination)
+      end
+      rejected = File.join(directory, "rejected.zip")
+      _, _, status = Open3.capture3(env, client, "artifact-download", "other/repo", "123", rejected)
+      refute status.success?
+      refute File.exist?(rejected)
+      assert_empty Dir.glob(File.join(directory, ".gh-host-download.*"))
+    ensure
+      server&.close
+      thread&.join
+      paths.each { |path| refute File.exist?(path) }
+    end
+  end
+
   def test_asset_client_sends_bytes_and_requires_host_approval_without_host_paths
     Dir.mktmpdir do |directory|
       calls, approvals, paths = [], [], []

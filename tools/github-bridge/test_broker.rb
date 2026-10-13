@@ -2,6 +2,46 @@ require "minitest/autorun"
 require_relative "broker"
 
 class GitHubBrokerTest < Minitest::Test
+  def test_ci_reads_validate_ids_and_filters_without_requesting_approval
+    operations = %w[run-list run-view run-jobs job-log run-artifacts run-logs artifact-download]
+    document = { "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+                 "repositories" => ["owner/repo"], "operations" => operations }
+    calls = []
+    broker = GitHubBridge::Broker.new(policy: GitHubBridge::Policy.new(document), token: "session",
+      executor: ->(request) { calls << request; "ok" }, approver: ->(*) { flunk "CI reads must not request approval" }, logger: ->(*) {})
+    operations.each do |operation|
+      request = { "operation" => operation, "repository" => "owner/repo" }
+      key = case operation
+      when "run-list" then nil
+      when "job-log" then "job_id"
+      when "artifact-download" then "artifact_id"
+      else "run_id"
+      end
+      request[key] = 37_604_537_230 if key
+      assert_equal 401, broker.call(request, "wrong").status
+      assert_equal 403, broker.call(request.merge("repository" => "other/repo"), "session").status
+      assert_equal 400, broker.call(request.merge("url" => "https://example.com"), "session").status
+      assert_equal 400, broker.call(request.merge("path" => "/tmp/archive.zip"), "session").status
+      if key
+        [nil, 0, -1, "12", 2**53].each do |id|
+          assert_equal 400, broker.call(request.merge(key => id), "session").status
+        end
+      else
+        [nil, "main", "a" * 39, "a" * 41, "a" * 40 + "&per_page=100"].each do |sha|
+          assert_equal 400, broker.call(request.merge("head_sha" => sha), "session").status
+        end
+        assert_equal 200, broker.call(request.merge("head_sha" => "a" * 40), "session").status
+      end
+      assert_equal 200, broker.call(request, "session").status
+    end
+    assert_equal operations.size + 1, calls.size
+    restricted = GitHubBridge::Broker.new(policy: GitHubBridge::Policy.new(document.merge("operations" => ["pr-view"])),
+      token: "session", executor: ->(*) { flunk "CI operation was not allowed" }, approver: ->(*) { flunk }, logger: ->(*) {})
+    operations.each do |operation|
+      assert_equal 403, restricted.call({ "operation" => operation, "repository" => "owner/repo" }, "session").status
+    end
+  end
+
   def test_review_writes_require_valid_thread_ids_bodies_and_host_approval
     operations = %w[pr-comment pr-review-reply pr-review-resolve]
     policy = GitHubBridge::Policy.new(

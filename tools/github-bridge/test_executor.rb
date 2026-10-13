@@ -4,6 +4,20 @@ require "stringio"
 require_relative "executor"
 
 class GitHubExecutorTest < Minitest::Test
+  def test_runner_streams_downloads_and_enforces_output_limits
+    runner = GitHubBridge::Runner.new
+    Tempfile.create("runner-download-") do |file|
+      runner.call([RbConfig.ruby, "-e", 'STDOUT.binmode; STDOUT.write("PK\x03\x04\x00\xff".b)'],
+                  env: {}, directory: Dir.tmpdir, destination: file)
+      file.rewind
+      assert_equal "PK\x03\x04\x00\xff".b, file.binmode.read
+      assert_raises(RuntimeError) do
+        runner.call([RbConfig.ruby, "-e", 'STDOUT.write("x" * 1000)'],
+                    env: {}, directory: Dir.tmpdir, destination: file, limit: 100)
+      end
+    end
+  end
+
   def test_asset_upload_uses_repository_id_and_streams_only_received_bytes
     bytes = "\x89PNG\x00\xff".b
     asset = GitHubBridge::Asset.new(StringIO.new(bytes), name: "screen #1.png", content_type: "image/png", size: bytes.bytesize)

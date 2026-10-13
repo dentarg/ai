@@ -4,8 +4,9 @@ require_relative "asset"
 
 module GitHubBridge
   Response = Struct.new(:status, :body)
-  READ_OPERATIONS = %w[pr-list pr-view pr-diff pr-comments pr-reviews pr-review-comments pr-review-threads
-                       issue-list issue-view issue-comments issue-timeline].freeze
+  CI_OPERATIONS = %w[run-list run-view run-jobs job-log run-artifacts run-logs artifact-download].freeze
+  READ_OPERATIONS = (%w[pr-list pr-view pr-diff pr-comments pr-reviews pr-review-comments pr-review-threads
+                        issue-list issue-view issue-comments issue-timeline] + CI_OPERATIONS).freeze
   WRITE_OPERATIONS = %w[pr-create pr-edit-body issue-create pr-comment pr-review-reply pr-review-resolve asset-upload].freeze
   OPERATIONS = (READ_OPERATIONS + WRITE_OPERATIONS).freeze
   REPOSITORY = /\A[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_][A-Za-z0-9_.-]*\z/
@@ -116,6 +117,15 @@ module GitHubBridge
     def valid?(request)
       keys = %w[operation repository]
       case request.fetch("operation")
+      when "run-list"
+        if request.key?("head_sha")
+          keys += %w[head_sha]
+          return false unless request["head_sha"].is_a?(String) && request["head_sha"].match?(/\A[0-9a-fA-F]{40}\z/)
+        end
+      when *(CI_OPERATIONS - %w[run-list])
+        key = { "job-log" => "job_id", "artifact-download" => "artifact_id" }.fetch(request["operation"], "run_id")
+        keys << key
+        return false unless request[key].is_a?(Integer) && request[key].between?(1, 2**53 - 1)
       when "asset-upload"
         keys += %w[asset]
         return false unless request["asset"].is_a?(Asset)

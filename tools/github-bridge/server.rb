@@ -25,12 +25,14 @@ module GitHubBridge
       until @closed
         connection = nil
         request = nil
+        response = nil
         begin
           connection = @server.accept
           Timeout.timeout(@timeout) { connection.accept }
           request, token = read_request(connection)
           response = @broker.call(request, token)
-          Timeout.timeout(@timeout) { write_response(connection, response) }
+          response_timeout = response.body.is_a?(Download) ? 60 : @timeout
+          Timeout.timeout(response_timeout) { write_response(connection, response) }
         rescue ArgumentError, JSON::ParserError
           begin
             Timeout.timeout(@timeout) { write_response(connection, Response.new(400, "invalid request\n")) }
@@ -41,6 +43,7 @@ module GitHubBridge
           # A malformed or stalled client must not stop the broker.
           next
         ensure
+          response.body.close if response&.body.is_a?(Download)
           request["asset"].close if request.is_a?(Hash) && request["asset"].is_a?(Asset)
           connection&.close
         end
@@ -110,9 +113,18 @@ module GitHubBridge
     end
 
     def write_response(connection, response)
-      body = response.body.b
-      connection.write("HTTP/1.1 #{response.status} Response\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: #{body.bytesize}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n")
-      connection.write(body)
+      download = response.body.is_a?(Download)
+      body = download ? response.body.file : response.body.b
+      type = download ? response.body.content_type : "text/plain; charset=utf-8"
+      length = download ? body.size : body.bytesize
+      connection.write("HTTP/1.1 #{response.status} Response\r\nContent-Type: #{type}\r\nContent-Length: #{length}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n")
+      if download
+        while (chunk = body.read(64 * 1024))
+          connection.write(chunk)
+        end
+      else
+        connection.write(body)
+      end
     end
   end
 

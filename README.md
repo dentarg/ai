@@ -690,7 +690,8 @@ preserved. The host broker remains responsible for enforcing permissions.
 
 Store a fine-grained GitHub token in 1Password, restricted to the repositories
 needed and with an expiration. Grant Pull requests read permission for PR reads
-and Issues read permission for issue reads; Pull requests write permission is
+and Issues read permission for issue reads. CI runs, logs, and artifacts need
+Actions read permission. Pull requests write permission is
 needed to create PRs, edit descriptions, reply to comments, or resolve review
 threads, and Issues write permission is needed to create issues. Media uploads
 also require repository write access. The bridge resolves the
@@ -710,7 +711,8 @@ bin/github-bridge show work
 bin/github-bridge allow work \
   pr-list pr-view pr-diff pr-comments pr-reviews pr-review-comments pr-review-threads \
   issue-list issue-view issue-comments issue-timeline issue-create \
-  pr-create pr-edit-body pr-comment pr-review-reply pr-review-resolve asset-upload
+  pr-create pr-edit-body pr-comment pr-review-reply pr-review-resolve asset-upload \
+  run-list run-view run-jobs job-log run-artifacts run-logs artifact-download
 bin/github-bridge check work
 bin/github-bridge list
 bin/ai cx --github=work
@@ -860,6 +862,43 @@ body. Read the current description with `pr-view` before editing. Replacement
 can overwrite concurrent edits; after a failed or timed-out update, read the
 PR again before deciding whether to retry. New profiles remain read-only.
 
+Read GitHub Actions runs, logs, and artifacts with:
+
+```shell
+gh-host run-list owner/example
+gh-host run-list owner/example HEAD_SHA
+gh-host run-view owner/example RUN_ID
+gh-host run-jobs owner/example RUN_ID
+gh-host job-log owner/example JOB_ID
+gh-host run-artifacts owner/example RUN_ID
+gh-host run-logs owner/example RUN_ID logs.zip
+gh-host artifact-download owner/example ARTIFACT_ID artifact.zip
+```
+
+`run-list` returns up to 30 recent runs, optionally filtered by a full 40-character
+commit SHA. For a PR, get its `head.sha` from `pr-view`. Use the returned run's
+`id`, not its display `run_number`, with the other run commands. `run-view`
+returns status and conclusion as JSON. `run-jobs` follows all pages for the
+latest attempt, including job IDs and step status. `job-log` returns plain text
+with terminal control sequences removed, limited to 10 MiB.
+
+`run-artifacts` follows all pages and returns artifact IDs, names, sizes, expiry,
+and any available digests. `run-logs` downloads the run's log archive, and
+`artifact-download` downloads one artifact by ID. Artifacts may be ZIP archives
+or individual files uploaded with `archive: false`; choose a matching filename.
+Both downloads require a new local destination file and preserve the original
+bytes without extracting them on the host. Downloads are limited to 100 MiB
+and are published to the requested path only after a successful transfer.
+Existing files are never overwritten;
+failed downloads remove their temporary files. Expired or unavailable logs and
+artifacts fail rather than returning partial files.
+
+Use host `gh` 2.102.0 or newer for CI reads. New profiles include these read
+operations; existing profiles must add them to their complete `allow` list.
+They use repository allowlists and Actions read permission without a host
+write-approval dialog. The bridge does not rerun, cancel, or dispatch workflows.
+Third-party CI logs are not supported.
+
 The broker supports github.com and the operations listed above only. It constructs
 fixed `gh api` requests, validates all arguments on the host, and rejects extra
 fields. Each `gh` process uses an empty configuration directory and a restricted
@@ -870,9 +909,12 @@ Each enabled session gets a bearer token and ephemeral TLS certificate valid
 for 45 days. The 1Password bridge shares this certificate lifetime. Only
 the public bridge directory is mounted into the guest; the policy and command
 configuration stay on the host. JSON requests are limited to 16 KiB, text bodies to
-8 KiB, command output to 2 MiB, and each `op`/`gh` process to 60 seconds. TLS and
+8 KiB, metadata output to 2 MiB, and each `op`/`gh` process to 60 seconds. Job
+logs and binary downloads use the limits above; downloads stay in private temporary
+files until transferred and are not modified by text redaction. TLS and
 request reads have a 10-second deadline, except binary asset transfers, which
-have a 60-second deadline and the media size limits above. The broker handles
+have a 60-second deadline and the media size limits above. Binary downloads also
+have a 60-second transfer deadline. The broker handles
 one request at a time. It exits with the session and removes its runtime directory.
 
 Audit events go to `$AI_DIR/logs/github-bridge.log` (default

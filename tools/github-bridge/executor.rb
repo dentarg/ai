@@ -3,10 +3,11 @@ require "timeout"
 require "uri"
 require_relative "broker"
 require_relative "review_threads"
+require_relative "actions"
 
 module GitHubBridge
   class Runner
-    def call(argv, env:, directory:, input: "", timeout: 60, limit: 2 * 1024 * 1024)
+    def call(argv, env:, directory:, input: "", timeout: 60, limit: 2 * 1024 * 1024, destination: nil)
       Open3.popen3(env, *argv, chdir: directory, unsetenv_others: true, pgroup: true) do |stdin, stdout, stderr, process|
         begin
           Timeout.timeout(timeout) do
@@ -17,7 +18,7 @@ module GitHubBridge
             end
             stdin.close
             streams = [stdout, stderr]
-            output = +"".b
+            output = destination || +"".b
             bytes = 0
             until streams.empty?
               IO.select(streams).first.each do |stream|
@@ -66,6 +67,11 @@ module GitHubBridge
         "GH_PAGER" => "cat", "NO_COLOR" => "1", "GH_NO_UPDATE_NOTIFIER" => "1",
       }
       operation = request.fetch("operation")
+      if CI_OPERATIONS.include?(operation)
+        result = Actions.new(gh: @gh, runner: @runner, env: env, directory: @directory).call(request)
+        # Downloads must remain byte-for-byte intact, including compressed data.
+        return result.is_a?(Download) ? result : result.gsub(token, "[REDACTED]")
+      end
       if operation == "asset-upload"
         return upload_asset(request, env).gsub(token, "[REDACTED]")
       end
