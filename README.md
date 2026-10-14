@@ -1520,6 +1520,7 @@ bin/setup-vm
 - [x] Go
 - [x] [Terraform](https://developer.hashicorp.com/terraform)
 - [x] ast-grep
+- [x] [jactionlint](https://github.com/jdx/jactionlint) for GitHub Actions workflow checks (Linux and macOS)
 - [x] [fnox](https://fnox.jdx.dev/) — encrypted and remote secret manager
 - [x] tmux
 - [x] SSH (`ssh-keygen`, ...)
@@ -1533,3 +1534,6 @@ bin/setup-vm
 - [x] [tailcat](https://github.com/tailscale/tailcat) — netcat over Tailscale's data plane
 - [x] [rusage](https://justine.lol/rusage/) — better `time(1)`, prints full `getrusage(2)` stats
 - [x] [logcli](https://grafana.com/docs/loki/latest/query/logcli/) — Grafana Loki CLI
+
+Claude Code and Codex receive a shared [jactionlint skill](skills/jactionlint/SKILL.md)
+on launch to validate workflow and composite action changes.

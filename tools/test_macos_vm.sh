@@ -66,7 +66,7 @@ tar -tzf "$MACOS_TEST_ARCHIVE" | grep -Fx 'lima/macos/provision.sh' >/dev/null
 mkdir "$tmpdir/extracted"
 tar -xzf "$MACOS_TEST_ARCHIVE" -C "$tmpdir/extracted"
 for asset in lima/assets/claude.sh lima/assets/gitconfig \
-  tools/agent-skills.sh skills/gh-host/SKILL.md; do
+  tools/agent-skills.sh skills/gh-host/SKILL.md skills/jactionlint/SKILL.md; do
   test -f "$tmpdir/extracted/$asset"
   test ! -L "$tmpdir/extracted/$asset"
   cmp "$REPO_DIR/$asset" "$tmpdir/extracted/$asset"

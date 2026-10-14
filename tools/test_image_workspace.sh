@@ -14,6 +14,7 @@ docker run --rm --entrypoint bash "$image" -c '
   [[ $(stat -c %U /workspace) == ai-build ]]
   [[ $(stat -c %U /home/linuxbrew/.linuxbrew) == ai-build ]]
   node --version
+  jactionlint --version
   rv run ruby --version
   sudo -u ai-build env BASH_ENV=/workspace/.bash_profile bash -c '\''
     set -euo pipefail
@@ -22,6 +23,7 @@ docker run --rm --entrypoint bash "$image" -c '
     test -w /home/linuxbrew/.linuxbrew
     brew list --versions ast-grep terraform toxiproxy
     node --version
+    jactionlint --version
     rv run ruby --version
   '\''
 '

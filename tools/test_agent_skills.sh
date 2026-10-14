@@ -12,6 +12,7 @@ AI_SKILL_ROOT="$REPO_DIR/skills"
 for agent in claude agents; do
   skill_home="$task_dir/$agent/skills"
   GH_BRIDGE_URL='' configure_host_skills "$skill_home"
+  cmp "$AI_SKILL_ROOT/jactionlint/SKILL.md" "$skill_home/jactionlint/SKILL.md"
   test ! -e "$skill_home/gh-host"
   GH_BRIDGE_URL=https://host.example configure_host_skills "$skill_home"
   test -L "$skill_home/gh-host"
@@ -26,6 +27,11 @@ for agent in claude agents; do
   GH_BRIDGE_URL=https://host.example configure_host_skills "$skill_home" 2>/dev/null
   GH_BRIDGE_URL='' configure_host_skills "$skill_home"
   test "$(cat "$skill_home/gh-host/SKILL.md")" = 'User skill'
+  rm "$skill_home/jactionlint"
+  mkdir -p "$skill_home/jactionlint"
+  printf '%s\n' 'User skill' > "$skill_home/jactionlint/SKILL.md"
+  GH_BRIDGE_URL='' configure_host_skills "$skill_home" 2>/dev/null
+  test "$(cat "$skill_home/jactionlint/SKILL.md")" = 'User skill'
 done
 
 echo 'at=info msg="agent host skill lifecycle tests passed"'
@@ -41,10 +47,12 @@ STUB
 for agent in claude codex; do
   cat > "$task_dir/bin/$agent" <<'STUB'
 #!/bin/sh
+set -e
 case "${0##*/}" in
   claude) skill_home="$HOME/.claude/skills" ;;
   codex) skill_home="$HOME/.agents/skills" ;;
 esac
+cmp "$AI_SKILL_ROOT/jactionlint/SKILL.md" "$skill_home/jactionlint/SKILL.md"
 if [ -n "${GH_BRIDGE_URL:-}" ]; then
   cmp "$AI_SKILL_ROOT/gh-host/SKILL.md" "$skill_home/gh-host/SKILL.md"
 else

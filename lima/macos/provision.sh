@@ -11,6 +11,9 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 brew install bash coreutils findutils gnu-sed gnu-tar grep jq git git-lfs \
   ripgrep ast-grep bat ncurses node@22 ruby python go rust mise fnox \
   postgresql@17 redis lavinmq erlang@28 rabbitmq toxiproxy hashicorp/tap/terraform
+brew tap jdx/jactionlint https://github.com/jdx/jactionlint
+brew install --cask jdx/jactionlint/jactionlint
+jactionlint --version
 cat > "$HOME/.bash_profile" <<'PROFILE'
 export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$HOME/.local/bin:$PATH
 export PATH=/opt/homebrew/opt/node@22/bin:/opt/homebrew/opt/ruby/bin:$PATH
@@ -37,6 +40,8 @@ sudo chown -R root:wheel /opt/codex-plugins
 sudo install -m 644 "$assets/tools/agent-skills.sh" /usr/local/bin/agent-skills.sh
 sudo install -d /opt/ai-skills/gh-host
 sudo install -m 644 "$assets/skills/gh-host/SKILL.md" /opt/ai-skills/gh-host/SKILL.md
+sudo install -d /opt/ai-skills/jactionlint
+sudo install -m 644 "$assets/skills/jactionlint/SKILL.md" /opt/ai-skills/jactionlint/SKILL.md
 for mapping in claude.sh:c codex.sh:cx gemini.sh:g claude-hook.sh:claude-hook \
   claude-permission-hook.sh:claude-permission-hook claude-login.sh:claude-login \
   codex-hook.sh:codex-hook gh-host.sh:gh-host op-read.sh:op-read exit.sh:x; do
