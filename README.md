@@ -935,7 +935,7 @@ Paste this into the cloud environment's **Setup script** field:
 
 ```bash
 #!/bin/bash
-# provisioning-revision: 2026-10-12-1 (change to refresh the cache)
+# provisioning-revision: 2026-10-14-1 (change to refresh the cache)
 set -euo pipefail
 
 script=$(mktemp)
