@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
-# Tests fake HOME; a BASH_ENV startup file could reset it to the real one.
-unset BASH_ENV
+# BASH_ENV startup files reset HOME and install a DEBUG trap that
+# rewrites PATH, defeating fake homes and stubbed commands.
+[[ -z "${BASH_ENV:-}" ]] || exec env -u BASH_ENV bash "$0" "$@"
 REPO_DIR=$(cd "$(dirname "$0")/.." && pwd)
 # shellcheck source=tools/agent-skills.sh
 source "$REPO_DIR/tools/agent-skills.sh"

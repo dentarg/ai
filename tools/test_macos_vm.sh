@@ -1,5 +1,8 @@
 #!/bin/bash
 set -euo pipefail
+# BASH_ENV startup files reset HOME and install a DEBUG trap that
+# rewrites PATH, defeating fake homes and stubbed commands.
+[[ -z "${BASH_ENV:-}" ]] || exec env -u BASH_ENV bash "$0" "$@"
 REPO_DIR=$(cd "$(dirname "$0")/.." && pwd)
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
