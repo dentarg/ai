@@ -67,7 +67,7 @@ trap 'exit 1' HUP INT TERM
 # Dereference installer/config symlinks whose targets are outside the archive.
 COPYFILE_DISABLE=1 /usr/bin/tar -chzf "$build_dir/assets.tar.gz" -C "$REPO_DIR" \
   lima/macos lima/assets/claude.sh lima/assets/gitconfig \
-  dot.bashrc gitignore-global versions inside_deps/_codex_plugins.sh \
+  dot.bashrc dot.gemrc gitignore-global versions inside_deps/_codex_plugins.sh \
   inside_deps/npm-packages.txt tools/claude.sh tools/codex.sh tools/gemini.sh \
   tools/claude-hook.sh tools/claude-permission-hook.sh tools/claude-login.sh \
   tools/codex-hook.sh tools/gh-host.sh tools/agent-skills.sh skills \

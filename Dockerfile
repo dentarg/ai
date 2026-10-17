@@ -167,6 +167,7 @@ COPY ./tools/claude-permission-hook.sh /usr/local/bin/claude-permission-hook
 COPY ./tools/claude-login.sh /usr/local/bin/claude-login
 COPY ./tools/codex-hook.sh /usr/local/bin/codex-hook
 COPY dot.bashrc $HOME/.bashrc
+COPY dot.gemrc $HOME/.gemrc
 COPY .gitconfig /etc/gitconfig
 RUN git lfs install --system \
     && test "$(git config --system --get filter.lfs.process)" = "git-lfs filter-process"

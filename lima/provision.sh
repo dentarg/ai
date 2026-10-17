@@ -127,6 +127,7 @@ install -m 755 /tmp/ai-build/codex-hook.sh /usr/local/bin/codex-hook
 install -m 755 /tmp/ai-build/codex-login /usr/local/bin/codex-login
 install -m 755 /tmp/ai-build/refresh-tokens /usr/local/bin/refresh-tokens
 install -m 644 /tmp/ai-build/bashrc /workspace/.bashrc
+install -m 644 /tmp/ai-build/gemrc /workspace/.gemrc
 install -m 644 /tmp/ai-build/gitconfig /etc/gitconfig
 install -m 644 /tmp/ai-build/gitignore /etc/gitignore
 git lfs install --system

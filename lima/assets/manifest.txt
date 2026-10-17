@@ -34,6 +34,7 @@ claude-version versions/claude-code project
 codex-version versions/codex project
 codex-plugins versions/codex-plugins project
 bashrc dot.bashrc project
+gemrc dot.gemrc project
 gitconfig lima/assets/gitconfig project
 gitignore gitignore-global project
 start.sh tools/start.sh project

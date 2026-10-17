@@ -1,0 +1,5 @@
+# /bundle is shared by every Ruby build with the same ABI version. RubyGems
+# keeps compiled extensions apart per build (e.g. 4.0.0 vs 4.0.0-static), but
+# by default also copies them into the gem's shared lib/, which is searched
+# first. A build linked against libruby.so then breaks a static Ruby.
+install_extension_in_lib: false

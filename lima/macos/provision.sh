@@ -52,6 +52,7 @@ for tool in codex-login refresh-tokens; do
 done
 sudo install -m 755 "$assets/lima/macos/start.sh" /usr/local/bin/start.sh
 install -m 644 "$assets/dot.bashrc" "$HOME/.bashrc"
+install -m 644 "$assets/dot.gemrc" "$HOME/.gemrc"
 sudo install -m 644 "$assets/lima/assets/gitconfig" /etc/gitconfig
 sudo install -m 644 "$assets/gitignore-global" /etc/gitignore
 git lfs install
