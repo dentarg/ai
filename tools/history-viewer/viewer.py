@@ -7,6 +7,7 @@ archived agent snapshots (default: /history).
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -17,6 +18,8 @@ import time
 import urllib.error
 import urllib.request
 import webbrowser
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -837,6 +840,31 @@ def codex_to_transcript(raw_events: list[dict]) -> list[dict]:
     return out
 
 
+def _summarize_job(job: tuple) -> dict | None:
+    """Run one summarizer; module-level so a process pool can pickle it."""
+    summarizer, path = job
+    try:
+        return summarizer(path)
+    except OSError as e:
+        log("warn", op="summarize", path=str(path), err=repr(e))
+        return None
+
+
+def summarize_all(jobs: list[tuple]) -> list[dict | None]:
+    """Summarize uncached transcripts, in parallel when there are several.
+
+    Parsing is CPU-bound JSON decoding, so threads would serialize on the GIL.
+    """
+    if len(jobs) < 2:
+        return [_summarize_job(job) for job in jobs]
+    try:
+        with ProcessPoolExecutor() as pool:
+            return list(pool.map(_summarize_job, jobs, chunksize=4))
+    except (OSError, BrokenProcessPool) as e:
+        log("warn", op="summarize_pool", err=repr(e))
+        return [_summarize_job(job) for job in jobs]
+
+
 def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
     """Walk each run dir and summarize its session transcripts.
 
@@ -844,15 +872,15 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
     `<run>/sessions/YYYY/MM/DD/rollout-*.jsonl`; Pi stores sessions below
     `<history>/pi/`. All are summarized into the same entry shape.
 
-    `cache` maps relative path → {"sig": (size, mtime_ns), "entry": dict}.
+    `cache` maps relative path → {"sig": [size, mtime_ns], "entry": dict}.
     Files whose signature is unchanged reuse the cached summary; new and
-    modified files are re-summarized.
+    modified files are re-summarized. Entries for vanished files are dropped.
     """
-    sessions: list[dict] = []
     if not history_root.is_dir():
-        return sessions
+        return []
     if cache is None:
         cache = {}
+    found: list[tuple] = []  # (rel, sig, profile, summarizer, path, base)
 
     def add_session(jsonl: Path, summarizer, project: str, run_dir: Path,
                     meta: dict, fallback_name: str | None) -> None:
@@ -862,31 +890,16 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
         except OSError as e:
             log("warn", op="stat", path=str(jsonl), err=repr(e))
             return
-        sig = (st.st_size, st.st_mtime_ns)
-        cached = cache.get(rel)
-        if cached and cached["sig"] == sig:
-            sessions.append({**cached["entry"], "profile": meta.get("profile", "")})
-            return
-        try:
-            summary = summarizer(jsonl)
-        except OSError as e:
-            log("warn", op="summarize", path=str(jsonl), err=repr(e))
-            return
-        entry = {
+        base = {
             "path": rel,
             "runDir": run_dir.name,
             "tool": meta["tool"],
             "runStartedAt": meta["timestamp"],
             "project": project,
-            **summary,
-            "profile": meta.get("profile", ""),
+            "fallbackName": fallback_name,
         }
-        if not entry["project"]:
-            entry["project"] = entry.get("repo") or jsonl.parent.name
-        if not entry.get("name") and fallback_name:
-            entry["name"] = fallback_name
-        cache[rel] = {"sig": sig, "entry": entry}
-        sessions.append(entry)
+        found.append((rel, [st.st_size, st.st_mtime_ns],
+                      meta.get("profile", ""), summarizer, jsonl, base))
 
     for year_dir in sorted(p for p in history_root.iterdir() if p.is_dir() and re.fullmatch(r"\d{4}", p.name)):
         for month_dir in sorted(p for p in year_dir.iterdir() if p.is_dir()):
@@ -926,6 +939,28 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
         for jsonl in sorted(pi_sessions.rglob("*.jsonl")):
             add_session(jsonl, summarize_pi_session, "", pi_sessions,
                         meta, None)
+
+    stale = [item for item in found
+             if (cache.get(item[0]) or {}).get("sig") != item[1]]
+    summaries = summarize_all([(item[3], item[4]) for item in stale])
+    for (rel, sig, _profile, _summarizer, jsonl, base), summary in zip(stale, summaries):
+        if summary is None:
+            cache.pop(rel, None)
+            continue
+        fallback_name = base.pop("fallbackName")
+        entry = {**base, **summary}
+        if not entry["project"]:
+            entry["project"] = entry.get("repo") or jsonl.parent.name
+        if not entry.get("name") and fallback_name:
+            entry["name"] = fallback_name
+        cache[rel] = {"sig": sig, "entry": entry}
+
+    live = {item[0] for item in found}
+    for rel in [rel for rel in cache if rel not in live]:
+        del cache[rel]
+    # Profiles live outside the transcript, so apply them on every scan.
+    sessions = [{**cache[rel]["entry"], "profile": profile}
+                for rel, _sig, profile, *_rest in found if rel in cache]
     # Sort by last-updated time (last event), falling back to start time so
     # the most recently active sessions surface first.
     sessions.sort(
@@ -934,10 +969,57 @@ def build_manifest(history_root: Path, cache: dict | None = None) -> list[dict]:
     return sessions
 
 
+# Bump when the summary shape changes so stale on-disk caches are ignored.
+MANIFEST_CACHE_VERSION = 1
+
+
+def manifest_cache_key() -> str:
+    """Identify cached summaries: costs depend on the pricing catalog."""
+    pricing = json.dumps([PRICING_BY_MODEL, PRICING_BY_MODEL_OPENAI],
+                         sort_keys=True)
+    digest = hashlib.sha256(pricing.encode("utf-8")).hexdigest()[:16]
+    return f"{MANIFEST_CACHE_VERSION}-{digest}"
+
+
+def default_cache_path() -> Path:
+    base = os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache"
+    return Path(base) / "history-viewer" / "manifest.json"
+
+
+def load_manifest_cache(path: Path | None) -> dict:
+    if path is None:
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, json.JSONDecodeError) as e:
+        log("warn", op="load_cache", path=str(path), err=repr(e))
+        return {}
+    if not isinstance(data, dict) or data.get("key") != manifest_cache_key():
+        return {}
+    return data.get("entries") or {}
+
+
+def save_manifest_cache(path: Path | None, entries: dict) -> None:
+    """Write atomically so a crash never leaves a truncated cache behind."""
+    if path is None:
+        return
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(json.dumps({"key": manifest_cache_key(),
+                                   "entries": entries}), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError as e:
+        log("warn", op="save_cache", path=str(path), err=repr(e))
+
+
 class ViewerState:
-    def __init__(self, history_root: Path) -> None:
+    def __init__(self, history_root: Path, cache_path: Path | None = None) -> None:
         self.history_root = history_root
-        self._cache: dict = {}
+        self.cache_path = cache_path
+        self._cache: dict = load_manifest_cache(cache_path)
         self._manifest: list[dict] | None = None
         self._lock = threading.Lock()
 
@@ -947,13 +1029,17 @@ class ViewerState:
             if refresh:
                 self._cache = {}
             t0 = time.monotonic()
-            before = len(self._cache)
+            before = {rel: c["sig"] for rel, c in self._cache.items()}
             self._manifest = build_manifest(self.history_root, self._cache)
+            rebuilt = sum(1 for rel, c in self._cache.items()
+                          if before.get(rel) != c["sig"])
+            if rebuilt or len(before) != len(self._cache):
+                save_manifest_cache(self.cache_path, self._cache)
             elapsed_ms = int((time.monotonic() - t0) * 1000)
             log("info", op="manifest_ready",
                 sessions=len(self._manifest),
-                cached=before,
-                rebuilt=len(self._cache) - before,
+                cached=len(self._cache) - rebuilt,
+                rebuilt=rebuilt,
                 ms=elapsed_ms)
             return self._manifest
 
@@ -1173,6 +1259,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--open", action="store_true", help="open the viewer in a browser on startup")
+    p.add_argument("--cache", default=str(default_cache_path()),
+                   help="session summary cache file; empty string disables it "
+                        "(default: %(default)s)")
     return p.parse_args()
 
 
@@ -1184,7 +1273,7 @@ def main() -> int:
         return 2
 
     html_path = SCRIPT_DIR / "viewer.html"
-    state = ViewerState(history_root)
+    state = ViewerState(history_root, Path(args.cache) if args.cache else None)
     handler = make_handler(state, html_path)
     server = ThreadingHTTPServer((args.host, args.port), handler)
     url = f"http://{args.host}:{args.port}/"

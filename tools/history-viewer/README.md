@@ -15,7 +15,9 @@ Or run the Python directly against any history dir:
 
     python3 tools/history-viewer/viewer.py --open
 
-Flags: `--history PATH` (default `/history`), `--port N` (default 8765), `--host` (default `127.0.0.1`), `--open` to auto-launch the browser.
+Flags: `--history PATH` (default `/history`), `--port N` (default 8765), `--host` (default `127.0.0.1`), `--open` to auto-launch the browser, `--cache PATH` for the session summary cache (default `~/.cache/history-viewer/manifest.json`; `--cache ''` disables it).
+
+Session summaries are kept in the cache file, keyed by each transcript's size and mtime, so restarts only re-read new or changed transcripts. Uncached transcripts are summarized in parallel. `bin/history-viewer` keeps the cache in `${AI_DIR}/cache/history-viewer`.
 
 ## Features
 
@@ -52,4 +54,4 @@ Pure Python stdlib + a single HTML file — no dependencies, no build step. The 
 
 The Node tests check profile-scoped stats, default transcript filtering, and both detail toggles.
 The browser test verifies the rendered profile selector, including switching back to all profiles.
-The Python tests cover Codex and Pi parsing and transcript normalisation, plus the pastehtml.dev create/update/fallback logic (stdlib only, no fixtures on disk).
+The Python tests cover Codex and Pi parsing and transcript normalisation, the persistent summary cache, plus the pastehtml.dev create/update/fallback logic (stdlib only, no fixtures on disk).

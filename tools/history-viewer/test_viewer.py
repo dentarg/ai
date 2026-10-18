@@ -51,6 +51,32 @@ class ManifestProfiles(unittest.TestCase):
                              {"work", ""})
 
 
+class ManifestCache(unittest.TestCase):
+    def test_restart_reuses_summaries_and_rescans_changed_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "history"
+            session = root / "2026/09_Sep/08_Tue_10-00_claude/projects/app/s.jsonl"
+            session.parent.mkdir(parents=True)
+            session.write_text(json.dumps({
+                "type": "user", "sessionId": "s1",
+                "message": {"content": "first prompt"}}) + "\n", encoding="utf-8")
+            cache = Path(tmp) / "cache" / "manifest.json"
+            viewer.ViewerState(root, cache).manifest()
+
+            original = viewer.summarize_session
+            viewer.summarize_session = lambda path: self.fail("summarized again")
+            try:
+                sessions = viewer.ViewerState(root, cache).manifest()
+            finally:
+                viewer.summarize_session = original
+            self.assertEqual(sessions[0]["firstPrompt"], "first prompt")
+
+            with session.open("a", encoding="utf-8") as f:
+                f.write(json.dumps({"type": "summary", "summary": "Renamed"}) + "\n")
+            self.assertEqual(viewer.ViewerState(root, cache).manifest()[0]["name"],
+                             "Renamed")
+
+
 class ModelPricing(unittest.TestCase):
     def test_refreshed_catalog_overrides_bundled_pricing(self):
         with tempfile.TemporaryDirectory() as tmp:
