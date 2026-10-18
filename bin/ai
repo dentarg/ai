@@ -1033,7 +1033,11 @@ run_lima_vm() {
     # macOS guests have no Lima port forwarder; establish SSH tunnels below.
     lima_forwards='[]'
   else
-    lima_forwards=$forwards_json
+    # First matching rule wins; ignore discovery after the requested forwards.
+    lima_forwards=$(printf '%s' "$forwards_json" | jq -c '
+      . + [{guestIP:"0.0.0.0", guestIPMustBeZero:false,
+            guestPortRange:[1,65535], proto:"any", ignore:true}]
+    ')
   fi
   config_expression=".mounts = ${mounts_json} | .portForwards = ${lima_forwards} | .timezone = \"UTC\""
   set -- clone --tty=false

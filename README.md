@@ -373,7 +373,10 @@ user-mode TCP forwarding limits. The launcher configures this when cloning,
 so existing base VMs do not need rebuilding. Other VM drivers keep their
 existing network configuration.
 
-Lima runtime clones expose only loopback TCP ports by default. Use
+Lima runtime clones forward the primary application port and ports explicitly
+requested with `--ports` or `--udp-ports`; other guest ports are not automatically
+forwarded. This applies to new clones without rebuilding the base. TCP forwards
+bind to host loopback by default. Use
 `--udp-ports HOST:CONTAINER` when a guest service needs an externally reachable
 UDP port, such as Tailscale's default `41641`. The host-side port must also be
 reachable through any outer firewall or NAT device. For Tailscale, use the same

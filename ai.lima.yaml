@@ -22,7 +22,7 @@ containerd:
   user: false
 
 # The base VM needs no host-facing ports while it is being provisioned. Runtime
-# clones replace this list with the explicit static forwards assembled by bin/ai.
+# clones prepend explicit forwards to an equivalent ignore rule in bin/ai.
 portForwards:
   - guestIP: "0.0.0.0"
     guestIPMustBeZero: false

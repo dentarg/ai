@@ -137,6 +137,18 @@ grep -F '"guestPort":1337,"hostPort":45555' "$log" >/dev/null
 grep -F '"guestPort":9999,"hostPort":9999' "$log" >/dev/null
 grep -F '"guestPort":7777,"hostPort":8888' "$log" >/dev/null
 grep -F '"guestPort":41641,"hostPort":41642,"guestIP":"0.0.0.0","hostIP":"0.0.0.0","proto":"udp"' "$log" >/dev/null
+# Explicit forwards must precede the catch-all that disables discovery.
+sed -n 's/.*\.portForwards = \(.*\) | \.timezone = .*/\1/p' "$log" | jq -e '
+  length == 5 and
+  .[0].guestPort == 1337 and
+  .[1].guestPort == 9999 and
+  .[2].guestPort == 7777 and
+  .[3].proto == "udp" and
+  .[-1] == {
+    guestIP: "0.0.0.0", guestIPMustBeZero: false,
+    guestPortRange: [1, 65535], proto: "any", ignore: true
+  }
+' >/dev/null
 grep -F '<AI_AUTO_LAUNCH=1>' "$log" >/dev/null
 grep -F '<CODEX_AUTO_START=1>' "$log" >/dev/null
 grep -F '<HOST_BROWSER_URL=https://host.lima.internal:' "$log" >/dev/null
