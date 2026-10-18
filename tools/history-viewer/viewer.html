@@ -101,6 +101,7 @@
     color: var(--muted); width: 30px; height: 30px; padding: 0; border-radius: 7px;
     font-size: 15px; line-height: 1; display: inline-flex; align-items: center;
     justify-content: center; }
+  #topbar .theme-toggle + .theme-toggle { margin-left: -12px; }
   #topbar .theme-toggle:hover { color: var(--accent); border-color: var(--accent-line);
     background: var(--surface); }
 
@@ -154,6 +155,8 @@
   }
   .session-card:hover { border-color: var(--accent-line); text-decoration: none; }
   .session-card:active { transform: translateY(1px); }
+  .session-card { scroll-margin: 80px 0 24px; }
+  .session-card.selected { box-shadow: 0 0 0 2px var(--accent-line); }
   .session-card .row1 { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; }
   .session-card .name { font-weight: 600; }
   .session-card .branch { color: var(--muted); font-size: 13px; margin-left: 8px; font-weight: normal; }
@@ -269,6 +272,22 @@
   .evt .who .copy-md:hover { color: var(--accent); background: none; }
   .evt:target .body, .evt:target .who { background: var(--accent-soft); border-radius: 6px; }
   .evt .who { width: 100%; }
+  .evt.selected { box-shadow: -14px 0 0 -11px var(--accent); }
+
+  #kbd-help { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,0.35);
+    display: flex; align-items: flex-start; justify-content: center; padding: 10vh 16px; }
+  #kbd-help[hidden] { display: none; }
+  .kbd-help-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 10px 30px var(--shadow); padding: 18px 24px; width: min(460px, 100%);
+    max-height: 80vh; overflow-y: auto; font-size: 14px; }
+  .kbd-help-panel h2 { font-size: 15px; margin: 0 0 6px; }
+  .kbd-help-panel h3 { font-size: 11.5px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.06em; font-weight: 500; margin: 14px 0 6px; }
+  .kbd-help-panel dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+  .kbd-help-panel dd { margin: 0; color: var(--muted); }
+  .kbd-help-panel p { margin: 0; color: var(--muted); line-height: 1.6; }
+  kbd { background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px;
+    border-radius: 4px; padding: 0 6px; font-size: 12px; }
 
   .internal-block { background: var(--surface); border: 1px solid var(--border-soft);
     border-radius: 8px; padding: 8px 12px; margin: 16px 0; font-size: 12.5px; color: var(--muted); }
@@ -366,8 +385,11 @@
     <a id="nav-index" href="?">Sessions</a>
     <a id="nav-stats" href="?view=stats">Stats</a>
   </nav>
+  <button id="help-toggle" class="theme-toggle" type="button" title="Keyboard shortcuts (?)"
+    aria-label="Keyboard shortcuts">?</button>
   <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode"></button>
 </header>
+<div id="kbd-help" hidden></div>
 <main id="content"><div class="empty">Loading…</div></main>
 <script>
 // ---------- utilities ----------
@@ -522,6 +544,8 @@ function renderMarkdown(src) {
 const state = {
   sessions: [],
   searchResults: null,   // null = no active search
+  visibleSessions: [],   // filtered index, in display order
+  selectedPath: null,    // keyboard selection; kept when returning to the index
   filters: { search: "", scope: "title", branch: "", agent: "" },
   showInternals: false,
   showIntermediateSteps: false,
@@ -696,7 +720,21 @@ function renderIndexPage() {
     renderIndexPage();
   });
 
-  drawSessions();
+  search.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (search.value) clearBtn.click();
+      else search.blur();
+    } else if (e.key === "Enter" || e.key === "ArrowDown") {
+      // Hand over to the list: Enter again opens the selected session.
+      e.preventDefault();
+      search.blur();
+      const visible = state.visibleSessions.some(s => s.path === state.selectedPath);
+      selectSession(visible ? state.selectedPath : state.visibleSessions[0]?.path, "nearest");
+    }
+  });
+
+  drawSessions({ restoreSelection: true });
 }
 
 let searchSeq = 0;
@@ -724,13 +762,14 @@ async function runSearchAndRedraw() {
 const SESSION_PAGE_SIZE = 100;
 let indexView = null;
 
-function drawSessions() {
+function drawSessions({ restoreSelection = false } = {}) {
   const area = document.getElementById("sessions-area");
   const jump = document.getElementById("month-jump-list");
   if (!area) return;
   indexView?.observer.disconnect();
   indexView = null;
   const sessions = applyFilters(state.sessions);
+  state.visibleSessions = [];
   if (!sessions.length) {
     area.innerHTML = `<div class="empty">No sessions match.</div>`;
     jump.innerHTML = "";
@@ -744,6 +783,7 @@ function drawSessions() {
   }
   const groups = [...dayGroups.keys()].sort().reverse()
     .map(day => ({ day, sessions: dayGroups.get(day) }));
+  state.visibleSessions = groups.flatMap(g => g.sessions);
   area.innerHTML = `<div class="sessions-more"></div>`;
   const matches = state.searchResults ? new Map(state.searchResults.map(r => [r.path, r])) : null;
   const sentinel = area.firstElementChild;
@@ -752,6 +792,7 @@ function drawSessions() {
   }, { rootMargin: "0px 0px 1500px 0px" });
   indexView = { groups, matches, sentinel, observer, next: 0, shown: 0 };
   renderMoreSessions(SESSION_PAGE_SIZE);
+  if (restoreSelection) selectSession(state.selectedPath, "center");
 
   const monthsToDays = new Map();
   for (const { day } of groups) {
@@ -820,7 +861,8 @@ function daySectionHtml({ day, sessions }, matches) {
       ? `${esc(startLabel)} <span class="arrow">→</span> ${esc(updTod)}`
       : esc(startTod);
     const timeTitle = `started ${fmtTime(started)} · last updated ${fmtTime(updated)}`;
-    return `<a class="session-card ${esc(s.tool)}" href="${href}">
+    const selected = s.path === state.selectedPath ? " selected" : "";
+    return `<a class="session-card ${esc(s.tool)}${selected}" href="${href}" data-path="${encodeURIComponent(s.path)}">
       <div class="row1">
         <div>${badge}<span class="name">${esc(title)}</span><span class="branch">${esc(s.gitBranch || "")}</span><span class="repo">${esc(s.repo || "")}</span></div>
         <div class="time" title="${esc(timeTitle)}">${timeHtml}</div>
@@ -855,6 +897,7 @@ function dayLabel(key) {
 // ---------- session page ----------
 async function renderSessionPage(path) {
   const session = state.sessions.find(x => x.path === path);
+  state.selectedPath = path;
   contentEl.innerHTML = `
     <a class="back" href="?">← All sessions</a>
     <div id="session-header"></div>
@@ -1829,6 +1872,142 @@ function renderStatsPage() {
   hookRangeTabs(contentEl);
   hookChartHover(contentEl, chartBlock.data);
 }
+
+// ---------- keyboard shortcuts ----------
+function selectSession(path, block) {
+  if (!state.visibleSessions.some(s => s.path === path)) return;
+  state.selectedPath = path;
+  renderMoreSessions(state.visibleSessions.findIndex(s => s.path === path) + 1);
+  document.querySelectorAll(".session-card.selected").forEach(el => el.classList.remove("selected"));
+  const card = document.querySelector(`.session-card[data-path="${encodeURIComponent(path)}"]`);
+  card?.classList.add("selected");
+  if (block) card?.scrollIntoView({ block });
+}
+
+function stepSession(step) {
+  const list = state.visibleSessions;
+  const i = list.findIndex(s => s.path === state.selectedPath);
+  const next = i < 0 ? 0 : Math.max(0, Math.min(list.length - 1, i + step));
+  if (list[next]) selectSession(list[next].path, "nearest");
+}
+
+function openSelectedSession() {
+  if (state.visibleSessions.some(s => s.path === state.selectedPath)) {
+    navigate("?s=" + encodeURIComponent(state.selectedPath));
+  }
+}
+
+function openNeighborSession(step) {
+  const path = new URLSearchParams(location.search).get("s");
+  const list = applyFilters(state.sessions);
+  const next = list[list.findIndex(s => s.path === path) + step];
+  if (next) navigate("?s=" + encodeURIComponent(next.path));
+}
+
+// Moves relative to the selected message while it is on screen, otherwise
+// relative to the top of the viewport, so mouse scrolling is respected.
+function stepMessage(selector, step) {
+  const items = [...document.querySelectorAll(`#transcript ${selector}`)];
+  const current = document.querySelector("#transcript .evt.selected");
+  const top = (el) => el.getBoundingClientRect().top;
+  const onScreen = current && current.getBoundingClientRect().bottom > 0 && top(current) < innerHeight;
+  const ref = onScreen ? top(current) : document.getElementById("topbar").getBoundingClientRect().bottom;
+  const next = step > 0 ? items.find(el => top(el) > ref + 1) : items.findLast(el => top(el) < ref - 1);
+  if (!next) return;
+  current?.classList.remove("selected");
+  next.classList.add("selected");
+  next.scrollIntoView({ block: "start" });
+}
+
+function toggleCheckbox(id) {
+  const box = document.getElementById(id);
+  if (!box) return;
+  box.checked = !box.checked;
+  box.dispatchEvent(new Event("change"));
+}
+
+function focusSearch() {
+  if (currentPage() !== "index") navigate("?");
+  const search = document.getElementById("f-search");
+  search?.focus();
+  search?.select();
+}
+
+function currentPage() {
+  const p = new URLSearchParams(location.search);
+  return p.get("s") ? "session" : p.get("view") === "stats" ? "stats" : "index";
+}
+
+const SHORTCUTS = {
+  any: [
+    ["/", "Search sessions", focusSearch],
+    ["?", "Show keyboard shortcuts", () => toggleHelp()],
+  ],
+  index: [
+    ["j", "Next session", () => stepSession(1)],
+    ["k", "Previous session", () => stepSession(-1)],
+    ["Enter", "Open selected session", openSelectedSession],
+    ["o", "Open selected session", openSelectedSession],
+  ],
+  session: [
+    ["j", "Next message", () => stepMessage(".evt[id]", 1)],
+    ["k", "Previous message", () => stepMessage(".evt[id]", -1)],
+    ["n", "Next prompt", () => stepMessage(".evt.user", 1)],
+    ["p", "Previous prompt", () => stepMessage(".evt.user", -1)],
+    ["]", "Next (older) session", () => openNeighborSession(1)],
+    ["[", "Previous (newer) session", () => openNeighborSession(-1)],
+    ["s", "Toggle intermediate steps", () => toggleCheckbox("toggle-steps")],
+    ["i", "Toggle internals", () => toggleCheckbox("toggle-internals")],
+    ["u", "Back to sessions", () => navigate("?")],
+    ["Escape", "Back to sessions", () => navigate("?")],
+  ],
+  stats: [],
+};
+const SHORTCUT_GROUPS = [["any", "Everywhere"], ["index", "Session list"], ["session", "Session"]];
+
+function toggleHelp(show) {
+  const help = document.getElementById("kbd-help");
+  help.hidden = !(show ?? help.hidden);
+  if (help.hidden || help.childElementCount) return;
+  const keyLabel = { Escape: "Esc" };
+  help.innerHTML = `<div class="kbd-help-panel" role="dialog" aria-label="Keyboard shortcuts">
+    <h2>Keyboard shortcuts</h2>
+    ${SHORTCUT_GROUPS.map(([page, label]) => {
+      const keysByAction = Map.groupBy(SHORTCUTS[page], ([, what]) => what);
+      return `<h3>${label}</h3><dl>${[...keysByAction].map(([what, keys]) =>
+        `<dt>${keys.map(([key]) => `<kbd>${esc(keyLabel[key] || key)}</kbd>`).join(" ")}</dt><dd>${esc(what)}</dd>`
+      ).join("")}</dl>`;
+    }).join("")}
+    <h3>Search syntax</h3>
+    <p>Searches titles by default; pick <b>Transcripts</b> to search full sessions.
+      <code>"exact phrase"</code>, <code>-exclude</code>, <code>repo:</code>, <code>branch:</code>,
+      <code>agent:</code> (negate with <code>-repo:</code>).</p>
+  </div>`;
+}
+
+function setupShortcuts() {
+  const help = document.getElementById("kbd-help");
+  if (!help) return;
+  document.addEventListener("keydown", (e) => {
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    if (!help.hidden) {
+      if (e.key === "Escape" || e.key === "?") { e.preventDefault(); toggleHelp(false); }
+      return;
+    }
+    // Text fields keep their keys; checkboxes and buttons do not.
+    if (e.target.closest("input:not([type=checkbox]), textarea, select, [contenteditable]")) return;
+    const shortcut = [...SHORTCUTS.any, ...SHORTCUTS[currentPage()]].find(([key]) => key === e.key);
+    // Enter on a focused link or button keeps its native behaviour.
+    if (!shortcut || (e.key === "Enter" && e.target.closest("a, button"))) return;
+    e.preventDefault();
+    shortcut[2]();
+  });
+  help.addEventListener("click", (e) => {
+    if (e.target === help) toggleHelp(false);
+  });
+  document.getElementById("help-toggle").addEventListener("click", () => toggleHelp());
+}
+setupShortcuts();
 
 // ---------- theme toggle ----------
 function setupThemeToggle() {

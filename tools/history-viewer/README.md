@@ -25,6 +25,7 @@ Session summaries are kept in the cache file, keyed by each transcript's size an
 - Light / dark theme: follows the OS preference by default, with a topbar toggle (☾/☀) that pins your choice in `localStorage`
 - Clear agent distinction: each session is tagged with a coloured badge and a matching card stripe; filter by agent or branch
 - Search matches session titles by default. Switch the scope to **Transcripts** to search full sessions on the server. Both scopes match all words, `"exact phrases"` and `-excluded` words; `repo:`, `branch:` and `agent:` (or `-repo:` etc.) narrow by session metadata
+- Keyboard shortcuts (press `?` for the list): `/` search; `j`/`k` move through sessions and `Enter` opens one; in a session `j`/`k` step through messages, `n`/`p` through prompts, `]`/`[` move to the next/previous session, `s`/`i` toggle steps/internals, and `Esc` returns to the list with the session still selected
 - The session list renders lazily as you scroll, so large histories stay responsive
 - Transcript rendering: prompts, final answers, and Codex progress updates by default; "show intermediate steps" reveals other progress messages, thinking, tool calls, and results. A separate "show internals" toggle reveals metadata. Older transcripts without final-answer markers use the last prose response between prompts. Codex rollouts and Pi's branching session format are normalised into the same view
 - Export to markdown — **clean** (just the user/assistant prose) or **full** (thinking, tool calls, results, meta wrappers)
@@ -55,5 +56,5 @@ Pure Python stdlib + a single HTML file — no dependencies, no build step. The 
     node --test test_profiles.cjs test_index.cjs  # require chromium on PATH
 
 The Node tests check profile-scoped stats, default transcript filtering, both detail toggles, and the title search syntax.
-The browser tests verify the rendered profile selector, including switching back to all profiles, and the lazily rendered session list with day jumps.
+The browser tests verify the rendered profile selector, including switching back to all profiles, and the lazily rendered session list with keyboard selection, day jumps and the shortcut overlay.
 The Python tests cover Codex and Pi parsing and transcript normalisation, the persistent summary cache, transcript search, plus the pastehtml.dev create/update/fallback logic (stdlib only, no fixtures on disk).
