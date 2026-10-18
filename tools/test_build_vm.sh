@@ -24,6 +24,19 @@ printf '\n' >> "$LIMACTL_LOG"
 if [[ "${1:-}" == list && "${BASE_EXISTS:-0}" == 1 ]]; then
   printf '%s\n' ai-base
 fi
+if [[ "${FAIL_PERSISTENCE_CHECK:-0}" == 1 && "${1:-}" == shell &&
+      "${*: -1}" == *'test -s /workspace/.bashrc'* &&
+      "${*: -1}" != *'/var/lib/ai-base-provisioned'* ]]; then
+  # Run the actual guest verifier with a failed file check and successful sync.
+  exec env -u BASH_ENV bash -c '
+    test() { return 1; }
+    sync() { return 0; }
+    systemctl() { return 0; }
+    swapon() { echo /dev/zram0; }
+    grep() { return 0; }
+    AI_VM_GPU=0
+  '"${*: -1}"
+fi
 if [[ "${1:-}" == info ]]; then
   printf '%s\n' '{"vmTypesEx":{"krunkit":{"location":"/fake/krunkit"}}}'
 fi
@@ -153,7 +166,7 @@ grep -F 'test -x /usr/local/bin/model-download' "$log" >/dev/null
 grep -F 'alias x=exit' "$log" >/dev/null
 grep -F 'swapon --show=NAME --noheadings' "$log" >/dev/null
 grep -F 'systemctl is-enabled --quiet docker.socket' "$log" >/dev/null
-grep -F '! systemctl is-enabled --quiet docker.service' "$log" >/dev/null
+grep -F 'if systemctl is-enabled --quiet docker.service; then' "$log" >/dev/null
 grep -F 'sync' "$log" >/dev/null
 if [[ $(grep -Fc '<start><--timeout><60m><ai-base-gpu>' "$log") -ne 2 ]]; then
   echo 'at=fatal msg="build_vm did not restart the GPU base for persistence verification"' >&2
@@ -170,5 +183,17 @@ AI_VM_CPUS=20 AI_VM_MEMORY=72 \
   LIMACTL_LOG="$log" PATH="${fake_bin}:${PATH}" \
   "$REPO_DIR/build_vm" --gpu >/dev/null
 grep -F '<--cpus><20><--memory><72><--disk><100>' "$log" >/dev/null
+
+: > "$log"
+if FAIL_PERSISTENCE_CHECK=1 CAPTURED_TEMPLATE="$captured_template" \
+  CAPTURED_ARCHIVES="$captured_archives" LIMACTL_LOG="$log" \
+  PATH="${fake_bin}:${PATH}" "$REPO_DIR/build_vm" >/dev/null 2>&1; then
+  echo 'at=fatal msg="build accepted a failed persistence check"' >&2
+  exit 1
+fi
+if grep -F '<protect>' "$log" >/dev/null; then
+  echo 'at=fatal msg="build protected an invalid base"' >&2
+  exit 1
+fi
 
 echo 'at=info msg="build_vm tests passed"'

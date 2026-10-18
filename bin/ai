@@ -961,6 +961,21 @@ run_lima_vm() {
     exit 1
   fi
 
+  # Validate the source disk before cloning; failed builds leave a named base.
+  base_status=$(limactl list "$base_name" --format '{{.Status}}')
+  limactl start "$base_name"
+  provision_marker=/var/lib/ai-base-provisioned
+  [ "$MACOS" -eq 1 ] && provision_marker=/workspace/.ai-macos-provisioned
+  base_ready=0
+  limactl shell --workdir / "$base_name" test -f "$provision_marker" && base_ready=1
+  if [ "$base_status" != Running ]; then
+    limactl stop "$base_name"
+  fi
+  if [ "$base_ready" -ne 1 ]; then
+    echo "at=fatal msg=\"Lima base provisioning is incomplete; rebuild with ./build_vm --force (add --gpu or --macos when applicable)\" vm=$base_name" >&2
+    exit 1
+  fi
+
   VM_NAME=$(next_instance_name)
   primary_host_port=$(free_host_port)
 

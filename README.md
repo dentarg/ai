@@ -357,7 +357,9 @@ The initial build may take a while; `AI_VM_BUILD_TIMEOUT` controls its Lima
 startup and provisioning timeout and defaults to `60m`. Long-running
 provisioning runs separately from Lima's boot scripts, and `build_vm` streams
 its output. This avoids Lima's fixed ten-minute boot-script and cloud-init
-progress-monitor limits.
+progress-monitor limits. The launcher checks the base's provisioning completion
+marker before cloning and rejects incomplete builds. After a failed Linux build,
+fix the reported error and run `./build_vm --force` (add `--gpu` for a GPU base).
 
 Runtime instances and guest hostnames use `ai-l-XX-<project>` for standard Linux
 VMs, `ai-g-XX-<project>` for GPU VMs, and `ai-m-XX-<project>` for macOS VMs.

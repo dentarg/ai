@@ -44,7 +44,9 @@ cat > "${fake_bin}/limactl" <<'EOF'
 
 case "${1:-}" in
   list)
-    if [[ "$*" == *'{{.VMType}}'* ]]; then
+    if [[ "$*" == *'{{.Status}}'* ]]; then
+      printf '%s\n' Running
+    elif [[ "$*" == *'{{.VMType}}'* ]]; then
       case "$2" in
         ai-base-gpu) printf '%s\n' krunkit ;;
         *) printf '%s\n' "${BASE_VM_TYPE:-vz}" ;;
@@ -54,6 +56,9 @@ case "${1:-}" in
     fi
     ;;
   shell)
+    if [[ "$*" == *'test -f /var/lib/ai-base-provisioned'* ]]; then
+      exit "${BASE_CHECK_STATUS:-0}"
+    fi
     case "$*" in
       *'/workspace/.ai-op-token'*) cat >/dev/null ;;
       *'tic -x'*)
@@ -265,6 +270,22 @@ fi
 if HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:${PATH}" \
   "$REPO_DIR/bin/ai" c --gpu >/dev/null 2>&1; then
   echo 'at=fatal msg="--gpu worked without --vm"' >&2
+  exit 1
+fi
+
+: > "$log"
+if (
+  cd "$project"
+  HOME="${tmpdir}/home" AI_DIR="$ai_dir" AI_VM_HOST_PORT=45555 \
+    BASE_CHECK_STATUS=1 LIMACTL_LOG="$log" PATH="${fake_bin}:${PATH}" \
+    "$REPO_DIR/bin/ai" --vm cx >"${tmpdir}/incomplete-base" 2>&1
+); then
+  echo 'at=fatal msg="launcher accepted an incomplete base"' >&2
+  exit 1
+fi
+grep -F 'Lima base provisioning is incomplete' "${tmpdir}/incomplete-base" >/dev/null
+if grep -F '<clone>' "$log" >/dev/null; then
+  echo 'at=fatal msg="launcher cloned an incomplete base"' >&2
   exit 1
 fi
 

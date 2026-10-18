@@ -11,7 +11,18 @@ packages_file=${1:?chromium package list is required}
 # Ubuntu's Chromium package is a snap wrapper, which is unsuitable for both
 # the container and VM sandboxes. Install Debian's regular build instead.
 apt-get update
-xargs apt-get install -y --no-install-recommends < "$packages_file"
+# Keep installed prerequisites: explicitly requesting them again can select a
+# downgrade when an earlier Chromium install pulled a newer Debian library.
+packages=()
+while IFS= read -r package; do
+  [[ -n "$package" ]] || continue
+  if [[ $(dpkg-query -W -f='${Status}' "$package" 2>/dev/null || true) != 'install ok installed' ]]; then
+    packages+=("$package")
+  fi
+done < "$packages_file"
+if (( ${#packages[@]} )); then
+  apt-get install -y --no-install-recommends "${packages[@]}"
+fi
 download \
   --output /tmp/debian.asc \
   https://ftp-master.debian.org/keys/archive-key-12.asc

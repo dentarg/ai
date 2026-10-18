@@ -175,6 +175,7 @@ fi
 limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" \
   HOME=/workspace BASH_ENV=/workspace/.bash_profile \
   bash -lc '
+    set -euo pipefail
     if ! test -f /var/lib/ai-base-provisioned; then
       echo "at=fatal msg=\"VM provisioning did not complete; inspect the provisioning output above\"" >&2
       exit 1
@@ -209,6 +210,7 @@ limactl stop "$BASE_NAME"
 # that retained file metadata but lost recently written file contents.
 limactl start --timeout "$VM_BUILD_TIMEOUT" "$BASE_NAME"
 limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" bash -lc '
+  set -euo pipefail
   test -s /workspace/.bashrc
   test -s /usr/local/bin/cx
   test -s /usr/local/bin/x
@@ -216,7 +218,10 @@ limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" bash -lc '
   grep -F "alias x=exit" /workspace/.bashrc >/dev/null
   swapon --show=NAME --noheadings | grep -Fx /dev/zram0 >/dev/null
   systemctl is-enabled --quiet docker.socket
-  ! systemctl is-enabled --quiet docker.service
+  if systemctl is-enabled --quiet docker.service; then
+    echo "at=fatal msg=\"docker.service must be disabled\"" >&2
+    exit 1
+  fi
   if [ "$AI_VM_GPU" -eq 1 ]; then
     docker image inspect ai-llama.cpp >/dev/null
     test -L /usr/local/bin/llama-cli
