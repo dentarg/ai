@@ -27,6 +27,10 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$(basename "$output" .part)" in
+  Qwen3-Coder-Next-Q4_K_M-00001-of-00004.gguf) size=15524827040 ;;
+  Qwen3-Coder-Next-Q4_K_M-00002-of-00004.gguf) size=14872168352 ;;
+  Qwen3-Coder-Next-Q4_K_M-00003-of-00004.gguf) size=14503294496 ;;
+  Qwen3-Coder-Next-Q4_K_M-00004-of-00004.gguf) size=3510702144 ;;
   Qwen3-Coder-Next-Q5_K_M-00001-of-00004.gguf) size=17813589920 ;;
   Qwen3-Coder-Next-Q5_K_M-00002-of-00004.gguf) size=17479501728 ;;
   Qwen3-Coder-Next-Q5_K_M-00003-of-00004.gguf) size=17226413600 ;;
@@ -43,10 +47,15 @@ EOF
 chmod +x "${fake_bin}/curl"
 
 list=$("$SCRIPT_DIR/model-download" --list)
-grep -F 'qwen3coder  Qwen3-Coder-Next 80B-A3B Q5_K_M' <<< "$list" >/dev/null
-grep -F 'gemma4      Gemma 4 26B-A4B Q4_0' <<< "$list" >/dev/null
-grep -F 'qwen36      Qwen3.6 27B Q5_K_M' <<< "$list" >/dev/null
-grep -F 'qwen25tiny  Qwen2.5 0.5B Instruct Q4_K_M' <<< "$list" >/dev/null
+grep -F 'qwen3coder     Qwen3-Coder-Next 80B-A3B Q4_K_M (default)' <<< "$list" >/dev/null
+grep -F 'qwen3coder-q4  Qwen3-Coder-Next 80B-A3B Q4_K_M' <<< "$list" >/dev/null
+grep -F 'qwen3coder-q5  Qwen3-Coder-Next 80B-A3B Q5_K_M' <<< "$list" >/dev/null
+grep -F 'gemma4         Gemma 4 26B-A4B Q4_0' <<< "$list" >/dev/null
+grep -F 'qwen36         Qwen3.6 27B Q5_K_M' <<< "$list" >/dev/null
+grep -F 'qwen25tiny     Qwen2.5 0.5B Instruct Q4_K_M' <<< "$list" >/dev/null
+
+path=$("$SCRIPT_DIR/model-download" --path qwen3coder-q5 /models)
+test "$path" = /models/Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00001-of-00004.gguf
 
 MODEL_DOWNLOAD_TEST_LOG="$curl_log" PATH="${fake_bin}:${PATH}" \
   "$SCRIPT_DIR/model-download" qwen25tiny "$download_dir" >/dev/null
@@ -64,6 +73,11 @@ test "$(wc -l < "$curl_log" | tr -d '[:space:]')" = 1
 MODEL_DOWNLOAD_TEST_LOG="$curl_log" PATH="${fake_bin}:${PATH}" \
   "$SCRIPT_DIR/model-download" qwen3coder "${tmpdir}/qwen" >/dev/null
 test "$(find "${tmpdir}/qwen" -name '*.gguf' | wc -l | tr -d '[:space:]')" = 4
+grep -F 'https://huggingface.co/Qwen/Qwen3-Coder-Next-GGUF/resolve/b82fb7382639d97b38fa7672e526c760c2fb358e/Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00004-of-00004.gguf' \
+  "$curl_log" >/dev/null
+
+MODEL_DOWNLOAD_TEST_LOG="$curl_log" PATH="${fake_bin}:${PATH}" \
+  "$SCRIPT_DIR/model-download" qwen3coder-q5 "${tmpdir}/qwen-q5" >/dev/null
 grep -F 'https://huggingface.co/Qwen/Qwen3-Coder-Next-GGUF/resolve/b82fb7382639d97b38fa7672e526c760c2fb358e/Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00004-of-00004.gguf' \
   "$curl_log" >/dev/null
 

@@ -5,18 +5,22 @@ set -eu
 usage() {
   cat <<'EOF'
 Usage: model-download --list
+       model-download --path ALIAS DIRECTORY
        model-download ALIAS DIRECTORY
 
 Download a known GGUF model into DIRECTORY. Partial downloads are resumed.
+Use --path to print the primary GGUF path without downloading it.
 EOF
 }
 
 list_models() {
   cat <<'EOF'
-qwen3coder  Qwen3-Coder-Next 80B-A3B Q5_K_M
-gemma4      Gemma 4 26B-A4B Q4_0
-qwen36      Qwen3.6 27B Q5_K_M
-qwen25tiny  Qwen2.5 0.5B Instruct Q4_K_M
+qwen3coder     Qwen3-Coder-Next 80B-A3B Q4_K_M (default)
+qwen3coder-q4  Qwen3-Coder-Next 80B-A3B Q4_K_M
+qwen3coder-q5  Qwen3-Coder-Next 80B-A3B Q5_K_M
+gemma4         Gemma 4 26B-A4B Q4_0
+qwen36         Qwen3.6 27B Q5_K_M
+qwen25tiny     Qwen2.5 0.5B Instruct Q4_K_M
 EOF
 }
 
@@ -70,6 +74,7 @@ download_file() {
   printf 'Downloaded: %s\n' "$destination"
 }
 
+print_path=0
 case "${1:-}" in
   --list)
     [ "$#" -eq 1 ] || {
@@ -78,6 +83,10 @@ case "${1:-}" in
     }
     list_models
     exit
+    ;;
+  --path)
+    print_path=1
+    shift
     ;;
   -h|--help)
     usage
@@ -95,7 +104,18 @@ download_directory=${2%/}
 [ -n "$download_directory" ] || download_directory=/
 
 case "$model_alias" in
-  qwen3coder)
+  qwen3coder|qwen3coder-q4)
+    model_repository=Qwen/Qwen3-Coder-Next-GGUF
+    model_revision=b82fb7382639d97b38fa7672e526c760c2fb358e
+    model_files=$(cat <<'EOF'
+Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00001-of-00004.gguf|Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00001-of-00004.gguf|15524827040
+Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00002-of-00004.gguf|Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00002-of-00004.gguf|14872168352
+Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00003-of-00004.gguf|Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00003-of-00004.gguf|14503294496
+Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00004-of-00004.gguf|Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00004-of-00004.gguf|3510702144
+EOF
+    )
+    ;;
+  qwen3coder-q5)
     model_repository=Qwen/Qwen3-Coder-Next-GGUF
     model_revision=b82fb7382639d97b38fa7672e526c760c2fb358e
     model_files=$(cat <<'EOF'
@@ -127,6 +147,16 @@ EOF
     exit 2
     ;;
 esac
+
+if [ "$print_path" -eq 1 ]; then
+  relative_path=$(printf '%s\n' "$model_files" | sed -n '1s/^[^|]*|\([^|]*\)|.*$/\1/p')
+  if [ "$download_directory" = / ]; then
+    printf '/%s\n' "$relative_path"
+  else
+    printf '%s/%s\n' "$download_directory" "$relative_path"
+  fi
+  exit
+fi
 
 mkdir -p "$download_directory"
 printf '%s\n' "$model_files" |

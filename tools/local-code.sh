@@ -4,7 +4,7 @@ set -eu
 
 usage() {
   cat <<EOF
-Usage: local-code [--model qwen3coder|gemma4] [pi options] [prompt]
+Usage: local-code [--model ALIAS] [pi options] [prompt]
 
 Connect Pi to the shared local llama.cpp server. The --model option must come
 before Pi's options. qwen3coder is the default.
@@ -33,7 +33,7 @@ case "${1:-}" in
 esac
 
 case "$model" in
-  qwen3coder) keep_recent_tokens=2048 ;;
+  qwen3coder|qwen3coder-q4|qwen3coder-q5) keep_recent_tokens=2048 ;;
   gemma4) keep_recent_tokens=4096 ;;
   *)
     echo "at=fatal msg=\"unknown local model\" model=\"$model\"" >&2
@@ -99,6 +99,32 @@ cat >"${runtime_dir}/models.json" <<EOF
       "models": [
         {
           "id": "qwen3coder",
+          "name": "Qwen3-Coder-Next 80B-A3B Q4_K_M",
+          "reasoning": false,
+          "contextWindow": 40960,
+          "maxTokens": 4096,
+          "samplingParams": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "top_k": 40,
+            "min_p": 0
+          }
+        },
+        {
+          "id": "qwen3coder-q4",
+          "name": "Qwen3-Coder-Next 80B-A3B Q4_K_M",
+          "reasoning": false,
+          "contextWindow": 40960,
+          "maxTokens": 4096,
+          "samplingParams": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "top_k": 40,
+            "min_p": 0
+          }
+        },
+        {
+          "id": "qwen3coder-q5",
           "name": "Qwen3-Coder-Next 80B-A3B Q5_K_M",
           "reasoning": false,
           "contextWindow": 40960,

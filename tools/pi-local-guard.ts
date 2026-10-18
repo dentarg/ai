@@ -68,6 +68,10 @@ function isRecursiveListing(command: string): boolean {
 	return !words.includes("-maxdepth") && !words.includes("-prune");
 }
 
+function isCoderModel(modelId: string | undefined): boolean {
+	return modelId === "qwen3coder" || modelId?.startsWith("qwen3coder-") === true;
+}
+
 export default function (pi: ExtensionAPI) {
 	let consecutiveToolErrors = 0;
 	let toolCalls = 0;
@@ -96,7 +100,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_before_compact", (event, ctx) => {
-		if (ctx.model?.id !== "qwen3coder") return;
+		if (!isCoderModel(ctx.model?.id)) return;
 
 		const { preparation } = event;
 		const userMessages = event.branchEntries
@@ -160,7 +164,7 @@ Modified: ${truncate(formatPaths(modifiedFiles), 800)}`;
 			};
 		}
 
-		const toolLimit = ctx.model?.id === "qwen3coder"
+		const toolLimit = isCoderModel(ctx.model?.id)
 			? MAX_CODER_TOOL_CALLS
 			: ctx.model?.id === "gemma4" ? MAX_GEMMA_TOOL_CALLS : undefined;
 		if (toolLimit !== undefined && toolCalls >= toolLimit) {

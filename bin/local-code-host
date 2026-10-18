@@ -1,0 +1,200 @@
+#!/bin/sh
+
+set -eu
+
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+REPO_DIR=$(dirname "$SCRIPT_DIR")
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [--model ALIAS] [--download-only]
+       $(basename "$0") --list-models
+
+Build the pinned llama.cpp revision for Metal, download the selected model,
+and run an authenticated OpenAI-compatible server for local VMs.
+
+The default model is qwen3coder-q5. The server runs in the foreground.
+EOF
+}
+
+model=qwen3coder-q5
+download_only=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --model)
+      shift
+      [ "$#" -gt 0 ] || {
+        echo 'at=fatal msg="--model requires an alias"' >&2
+        exit 2
+      }
+      model=$1
+      ;;
+    --model=*)
+      model=${1#--model=}
+      [ -n "$model" ] || {
+        echo 'at=fatal msg="--model requires an alias"' >&2
+        exit 2
+      }
+      ;;
+    --download-only)
+      download_only=1
+      ;;
+    --list-models)
+      exec "${LOCAL_CODE_MODEL_DOWNLOAD:-${REPO_DIR}/tools/model-download}" --list
+      ;;
+    -h|--help)
+      usage
+      exit
+      ;;
+    *)
+      echo "at=fatal msg=\"unexpected argument\" arg=\"$1\"" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+if [ "$(uname -s)" != Darwin ] || [ "$(uname -m)" != arm64 ]; then
+  echo 'at=fatal msg="native Metal server requires Apple Silicon macOS"' >&2
+  exit 1
+fi
+
+for command in curl openssl; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "at=fatal msg=\"required command not found\" command=$command" >&2
+    exit 1
+  fi
+done
+
+ai_dir=${AI_DIR:-"${HOME}/ai"}
+models_dir=${LOCAL_CODE_MODELS_DIR:-"${ai_dir}/share/models"}
+state_dir=${LOCAL_CODE_HOST_STATE_DIR:-"${ai_dir}/share/local-code-host"}
+cache_dir=${LOCAL_CODE_HOST_CACHE_DIR:-"${ai_dir}/cache/local-code-host"}
+model_download=${LOCAL_CODE_MODEL_DOWNLOAD:-"${REPO_DIR}/tools/model-download"}
+
+"$model_download" "$model" "$models_dir"
+model_path=$("$model_download" --path "$model" "$models_dir")
+if [ "$download_only" -eq 1 ]; then
+  exit
+fi
+
+llama_server=${LOCAL_CODE_LLAMA_SERVER:-}
+if [ -z "$llama_server" ]; then
+  for command in cmake git xcrun; do
+    if ! command -v "$command" >/dev/null 2>&1; then
+      echo "at=fatal msg=\"required build command not found\" command=$command" >&2
+      exit 1
+    fi
+  done
+
+  llama_version=$(cat "${REPO_DIR}/versions/llama.cpp")
+  source_dir=${cache_dir}/llama.cpp-${llama_version}
+  build_dir=${source_dir}/build
+  llama_server=${build_dir}/bin/llama-server
+  if [ ! -x "$llama_server" ]; then
+    mkdir -p "$cache_dir"
+    if [ ! -d "${source_dir}/.git" ]; then
+      git clone --filter=blob:none --no-checkout \
+        https://github.com/ggml-org/llama.cpp.git "$source_dir"
+    fi
+    git -C "$source_dir" fetch --depth 1 origin "$llama_version"
+    git -C "$source_dir" checkout --detach FETCH_HEAD
+    cmake -S "$source_dir" -B "$build_dir" \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DGGML_CCACHE=OFF \
+      -DGGML_METAL=ON \
+      -DLLAMA_CURL=OFF
+    build_jobs=${LOCAL_CODE_BUILD_JOBS:-$(sysctl -n hw.logicalcpu)}
+    cmake --build "$build_dir" \
+      --parallel "$build_jobs" \
+      --target llama-server
+  fi
+fi
+
+if [ ! -x "$llama_server" ]; then
+  echo "at=fatal msg=\"llama-server is not executable\" path=\"$llama_server\"" >&2
+  exit 1
+fi
+
+mkdir -p "$state_dir"
+key_file=${LOCAL_CODE_API_KEY_FILE:-"${state_dir}/api-key"}
+if [ ! -s "$key_file" ]; then
+  umask 077
+  mkdir -p "$(dirname "$key_file")"
+  openssl rand -hex 32 > "${key_file}.tmp"
+  mv -f "${key_file}.tmp" "$key_file"
+fi
+
+case "$model" in
+  qwen3coder|qwen3coder-q4|qwen3coder-q5)
+    context_size=40960
+    template_path=${state_dir}/qwen-chat-template.jinja
+    template_version=$(cat "${REPO_DIR}/versions/qwen-chat-template")
+    template_url=https://huggingface.co/Qwen/Qwen3-Coder-Next/resolve/${template_version}/chat_template.jinja
+    ;;
+  gemma4)
+    context_size=65536
+    template_path=${state_dir}/gemma-chat-template.jinja
+    template_version=$(cat "${REPO_DIR}/versions/gemma-chat-template")
+    template_url=https://huggingface.co/google/gemma-4-26B-A4B-it/resolve/${template_version}/chat_template.jinja
+    ;;
+  qwen36)
+    context_size=32768
+    template_path=
+    ;;
+  qwen25tiny)
+    context_size=32768
+    template_path=
+    ;;
+  *)
+    echo "at=fatal msg=\"unsupported host model\" model=\"$model\"" >&2
+    exit 2
+    ;;
+esac
+
+if [ -n "$template_path" ]; then
+  if [ ! -s "$template_path" ]; then
+    curl --fail --location --silent --show-error \
+      "$template_url" --output "${template_path}.tmp"
+    mv -f "${template_path}.tmp" "$template_path"
+  fi
+fi
+
+host=${LOCAL_CODE_HOST:-0.0.0.0}
+port=${LOCAL_CODE_PORT:-8080}
+echo "at=info msg=\"starting native Metal server\" model=$model host=$host port=$port" >&2
+echo "at=info msg=\"VM API key path\" path=/share/local-code-host/api-key" >&2
+case "$model" in
+  qwen3coder|qwen3coder-q4|qwen3coder-q5|gemma4)
+    printf '%s\n' \
+      'Run in the VM:' \
+      "  export LOCAL_CODE_BASE_URL=http://host.lima.internal:${port}/v1" \
+      "  export LOCAL_CODE_API_KEY=\$(cat /share/local-code-host/api-key)" \
+      "  local-code --model $model" >&2
+    ;;
+  *)
+    echo "at=info msg=\"VM API endpoint\" url=http://host.lima.internal:${port}/v1" >&2
+    ;;
+esac
+
+set -- \
+  "$llama_server" \
+  --model "$model_path" \
+  --alias "$model" \
+  --host "$host" \
+  --port "$port" \
+  --api-key-file "$key_file" \
+  --n-gpu-layers 99 \
+  --ctx-size "$context_size" \
+  --parallel 1 \
+  --batch-size 32 \
+  --ubatch-size 16 \
+  --flash-attn on \
+  --jinja \
+  --no-mmproj
+if [ -n "$template_path" ]; then
+  set -- "$@" --chat-template-file "$template_path"
+fi
+
+exec "$@"

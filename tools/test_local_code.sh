@@ -61,12 +61,14 @@ grep -F 'args=<--offline --provider llama-cpp --model gemma4' "$log" >/dev/null
 grep -F -- '--session-dir /history/pi' "$log" >/dev/null
 grep -F -- "--extension $extension --extension $guard_extension --print create example.rb>" "$log" >/dev/null
 grep -F '"id": "qwen3coder"' "$models" >/dev/null
+grep -F '"id": "qwen3coder-q4"' "$models" >/dev/null
+grep -F '"id": "qwen3coder-q5"' "$models" >/dev/null
 grep -F '"id": "gemma4"' "$models" >/dev/null
 grep -F "\"apiKey\": \"\$LOCAL_CODE_API_KEY\"" "$models" >/dev/null
 jq -e \
   '.providers["llama-cpp"].models[] |
   select(.id == "qwen3coder") |
-  .name == "Qwen3-Coder-Next 80B-A3B Q5_K_M" and
+  .name == "Qwen3-Coder-Next 80B-A3B Q4_K_M" and
   .contextWindow == 40960 and
   .reasoning == false and
   .samplingParams == {
@@ -75,6 +77,13 @@ jq -e \
     "top_k": 40,
     "min_p": 0
   }' \
+  "$models" >/dev/null
+jq -e \
+  '.providers["llama-cpp"].models[] |
+  select(.id == "qwen3coder-q5") |
+  .name == "Qwen3-Coder-Next 80B-A3B Q5_K_M" and
+  .contextWindow == 40960 and
+  .reasoning == false' \
   "$models" >/dev/null
 jq -e \
   '.providers["llama-cpp"].models[] | select(.id == "gemma4") | .contextWindow == 65536' \
@@ -130,18 +139,29 @@ grep -F -- '--host 0.0.0.0 --port 18081 --api-key test-key' "$log" >/dev/null
 grep -F -- '--gpu-layers 18' "$log" >/dev/null
 
 grep -F '[qwen3coder]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
-qwen_preset=$(sed -n '/^\[qwen3coder\]/,/^\[gemma4\]/p' "$SCRIPT_DIR/../lima/local-code-models.ini")
-printf '%s\n' "$qwen_preset" | grep -Fx 'n-gpu-layers = 99' >/dev/null
+grep -F '[qwen3coder-q4]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
+grep -F '[qwen3coder-q5]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
+qwen_preset=$(sed -n '/^\[qwen3coder\]/,/^\[qwen3coder-q4\]/p' \
+  "$SCRIPT_DIR/../lima/local-code-models.ini")
+printf '%s\n' "$qwen_preset" | grep -Fx 'n-gpu-layers = 0' >/dev/null
 printf '%s\n' "$qwen_preset" | grep -Fx 'kv-unified-per-slot = 40960' >/dev/null
 printf '%s\n' "$qwen_preset" | grep -Fx 'flash-attn = on' >/dev/null
 printf '%s\n' "$qwen_preset" | \
-  grep -Fx 'model = /share/models/Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00001-of-00004.gguf' >/dev/null
+  grep -Fx 'model = /share/models/Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00001-of-00004.gguf' >/dev/null
 printf '%s\n' "$qwen_preset" | \
   grep -Fx 'chat-template-file = /usr/local/share/ai/qwen-chat-template.jinja' >/dev/null
 if printf '%s\n' "$qwen_preset" | grep -q '^reasoning-'; then
   echo 'at=fatal msg="Qwen3-Coder preset enables unsupported reasoning"' >&2
   exit 1
 fi
+qwen_q4_preset=$(sed -n '/^\[qwen3coder-q4\]/,/^\[qwen3coder-q5\]/p' \
+  "$SCRIPT_DIR/../lima/local-code-models.ini")
+printf '%s\n' "$qwen_q4_preset" | grep -Fx 'n-gpu-layers = 0' >/dev/null
+qwen_q5_preset=$(sed -n '/^\[qwen3coder-q5\]/,/^\[gemma4\]/p' \
+  "$SCRIPT_DIR/../lima/local-code-models.ini")
+printf '%s\n' "$qwen_q5_preset" | \
+  grep -Fx 'model = /share/models/Qwen3-Coder-Next-Q5_K_M/Qwen3-Coder-Next-Q5_K_M-00001-of-00004.gguf' >/dev/null
+printf '%s\n' "$qwen_q5_preset" | grep -Fx 'n-gpu-layers = 99' >/dev/null
 grep -F '[gemma4]' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
 grep -F 'n-gpu-layers = 20' "$SCRIPT_DIR/../lima/local-code-models.ini" >/dev/null
 gemma_preset=$(sed -n '/^\[gemma4\]/,$p' "$SCRIPT_DIR/../lima/local-code-models.ini")

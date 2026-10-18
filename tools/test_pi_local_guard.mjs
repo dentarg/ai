@@ -82,7 +82,7 @@ for (const command of ["ls -R", "ls -laR browser-extensions", "find . -name '*.j
 }
 
 {
-	const test = harness("qwen3coder");
+	const test = harness("qwen3coder-q5");
 	for (let index = 0; index < 24; index += 1) {
 		assert.equal(await test.emit("tool_call", {
 			toolName: "read",
