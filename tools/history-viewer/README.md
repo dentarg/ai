@@ -25,6 +25,7 @@ Session summaries are kept in the cache file, keyed by each transcript's size an
 - Light / dark theme: follows the OS preference by default, with a topbar toggle (☾/☀) that pins your choice in `localStorage`
 - Clear agent distinction: each session is tagged with a coloured badge and a matching card stripe; filter by agent or branch
 - Search matches session titles by default. Switch the scope to **Transcripts** to search full sessions on the server. Both scopes match all words, `"exact phrases"` and `-excluded` words; `repo:`, `branch:` and `agent:` (or `-repo:` etc.) narrow by session metadata
+- The session list renders lazily as you scroll, so large histories stay responsive
 - Transcript rendering: prompts, final answers, and Codex progress updates by default; "show intermediate steps" reveals other progress messages, thinking, tool calls, and results. A separate "show internals" toggle reveals metadata. Older transcripts without final-answer markers use the last prose response between prompts. Codex rollouts and Pi's branching session format are normalised into the same view
 - Export to markdown — **clean** (just the user/assistant prose) or **full** (thinking, tool calls, results, meta wrappers)
 - Publish to [pastehtml.dev](https://pastehtml.dev) — renders the transcript as currently shown (internals toggle included) into a self-contained HTML page and publishes it to a private shareable link (2 MB limit). The paste's `update_token` is kept in the browser's `localStorage`, so re-publishing the same session updates the existing paste and the shared link stays current. The server proxies the API (`POST /api/publish`, pastehtml.dev sends no CORS headers), so it needs outbound network access; point `PASTEHTML_API` at a self-hosted instance to override
@@ -51,8 +52,8 @@ Pure Python stdlib + a single HTML file — no dependencies, no build step. The 
     cd tools/history-viewer
     python3 -m unittest test_viewer -v
     node --test test_transcript.cjs
-    node --test test_profiles.cjs  # requires chromium on PATH
+    node --test test_profiles.cjs test_index.cjs  # require chromium on PATH
 
 The Node tests check profile-scoped stats, default transcript filtering, both detail toggles, and the title search syntax.
-The browser test verifies the rendered profile selector, including switching back to all profiles.
+The browser tests verify the rendered profile selector, including switching back to all profiles, and the lazily rendered session list with day jumps.
 The Python tests cover Codex and Pi parsing and transcript normalisation, the persistent summary cache, transcript search, plus the pastehtml.dev create/update/fallback logic (stdlib only, no fixtures on disk).

@@ -719,65 +719,42 @@ async function runSearchAndRedraw() {
   drawSessions();
 }
 
+// The list renders lazily, whole days at a time: a sentinel below the last
+// rendered day pulls in the next page as it nears the viewport.
+const SESSION_PAGE_SIZE = 100;
+let indexView = null;
+
 function drawSessions() {
   const area = document.getElementById("sessions-area");
   const jump = document.getElementById("month-jump-list");
   if (!area) return;
+  indexView?.observer.disconnect();
+  indexView = null;
   const sessions = applyFilters(state.sessions);
   if (!sessions.length) {
     area.innerHTML = `<div class="empty">No sessions match.</div>`;
     jump.innerHTML = "";
     return;
   }
-  const matches = state.searchResults ? new Map(state.searchResults.map(r => [r.path, r])) : null;
   const dayGroups = new Map();
   for (const s of sessions) {
     const key = localDayKey(sessionUpdated(s));
     if (!dayGroups.has(key)) dayGroups.set(key, []);
     dayGroups.get(key).push(s);
   }
-  const dayKeys = [...dayGroups.keys()].sort().reverse();
-  const seenMonths = new Set();
-  area.innerHTML = dayKeys.map(day => {
-    const monthKey = day.slice(0, 7);
-    const monthAttr = seenMonths.has(monthKey) ? "" : ` data-first-of-month="${monthKey}"`;
-    seenMonths.add(monthKey);
-    const rows = dayGroups.get(day).map(s => {
-      const match = matches && matches.get(s.path);
-      const href = "?s=" + encodeURIComponent(s.path);
-      const title = sessionTitle(s);
-      const badge = `<span class="agent-badge agent-${esc(s.tool)}">${esc(agentLabel(s.tool))}</span> `;
-      const started = sessionStarted(s), updated = sessionUpdated(s);
-      const startTod = fmtTimeOfDay(started), updTod = fmtTimeOfDay(updated);
-      // Grouped under the last-updated day, so spell out the start date when
-      // the session began on an earlier day.
-      const crossDay = localDayKey(started) !== localDayKey(updated);
-      const startLabel = crossDay ? `${fmtShortDate(started)} ${startTod}` : startTod;
-      const timeHtml = (updTod && (updTod !== startTod || crossDay))
-        ? `${esc(startLabel)} <span class="arrow">→</span> ${esc(updTod)}`
-        : esc(startTod);
-      const timeTitle = `started ${fmtTime(started)} · last updated ${fmtTime(updated)}`;
-      return `<a class="session-card ${esc(s.tool)}" href="${href}">
-        <div class="row1">
-          <div>${badge}<span class="name">${esc(title)}</span><span class="branch">${esc(s.gitBranch || "")}</span><span class="repo">${esc(s.repo || "")}</span></div>
-          <div class="time" title="${esc(timeTitle)}">${timeHtml}</div>
-        </div>
-        ${s.name && s.firstPrompt ? `<div class="prompt">${esc(s.firstPrompt)}</div>` : ""}
-        <div class="meta">
-          <span>${s.messages} msgs</span>
-          <span>${fmtTokens(totalTokens(s.tokens))} tok</span>
-          <span>${fmtCost(s.cost)}</span>
-        </div>
-        ${match ? `<div class="match">${match.matchCount} match${match.matchCount===1?"":"es"}</div>` : ""}
-      </a>`;
-    }).join("");
-    return `<section class="day-section" id="day-${day}"${monthAttr}>
-      <h2>${esc(dayLabel(day))} · ${dayGroups.get(day).length}</h2>
-      ${rows}
-    </section>`;
-  }).join("");
+  const groups = [...dayGroups.keys()].sort().reverse()
+    .map(day => ({ day, sessions: dayGroups.get(day) }));
+  area.innerHTML = `<div class="sessions-more"></div>`;
+  const matches = state.searchResults ? new Map(state.searchResults.map(r => [r.path, r])) : null;
+  const sentinel = area.firstElementChild;
+  const observer = new IntersectionObserver(entries => {
+    if (entries.some(e => e.isIntersecting)) renderMoreSessions(indexView.shown + SESSION_PAGE_SIZE);
+  }, { rootMargin: "0px 0px 1500px 0px" });
+  indexView = { groups, matches, sentinel, observer, next: 0, shown: 0 };
+  renderMoreSessions(SESSION_PAGE_SIZE);
+
   const monthsToDays = new Map();
-  for (const day of dayKeys) {
+  for (const { day } of groups) {
     const m = day.slice(0, 7);
     if (!monthsToDays.has(m)) monthsToDays.set(m, []);
     monthsToDays.get(m).push(day);
@@ -792,7 +769,7 @@ function drawSessions() {
         <span class="count" style="margin-left:auto;color:var(--muted-2);font-size:12px">${days.length}</span>
       </button>
       <div class="days">
-        ${days.map(d => `<a href="#day-${d}">${esc(dayJumpLabel(d))}</a>`).join("")}
+        ${days.map(d => `<a href="#day-${d}" data-day="${d}">${esc(dayJumpLabel(d))}</a>`).join("")}
       </div>
     </div>`).join("");
   jump.querySelectorAll(".month-toggle").forEach(btn => {
@@ -800,6 +777,67 @@ function drawSessions() {
       btn.parentElement.classList.toggle("open");
     });
   });
+  jump.querySelectorAll("a[data-day]").forEach(a => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      const i = groups.findIndex(g => g.day === a.dataset.day);
+      renderMoreSessions(groups.slice(0, i + 1).reduce((n, g) => n + g.sessions.length, 0));
+      document.getElementById("day-" + a.dataset.day)?.scrollIntoView({ block: "start" });
+    });
+  });
+}
+
+// Render whole days until at least `count` sessions are on the page.
+function renderMoreSessions(count) {
+  const v = indexView;
+  if (!v) return;
+  let html = "";
+  while (v.next < v.groups.length && v.shown < count) {
+    const group = v.groups[v.next++];
+    html += daySectionHtml(group, v.matches);
+    v.shown += group.sessions.length;
+  }
+  if (html) v.sentinel.insertAdjacentHTML("beforebegin", html);
+  // Re-observing fires a fresh callback, so pages keep loading while the
+  // sentinel stays within reach of the viewport.
+  v.observer.unobserve(v.sentinel);
+  if (v.next < v.groups.length) v.observer.observe(v.sentinel);
+}
+
+function daySectionHtml({ day, sessions }, matches) {
+  const rows = sessions.map(s => {
+    const match = matches && matches.get(s.path);
+    const href = "?s=" + encodeURIComponent(s.path);
+    const title = sessionTitle(s);
+    const badge = `<span class="agent-badge agent-${esc(s.tool)}">${esc(agentLabel(s.tool))}</span> `;
+    const started = sessionStarted(s), updated = sessionUpdated(s);
+    const startTod = fmtTimeOfDay(started), updTod = fmtTimeOfDay(updated);
+    // Grouped under the last-updated day, so spell out the start date when
+    // the session began on an earlier day.
+    const crossDay = localDayKey(started) !== localDayKey(updated);
+    const startLabel = crossDay ? `${fmtShortDate(started)} ${startTod}` : startTod;
+    const timeHtml = (updTod && (updTod !== startTod || crossDay))
+      ? `${esc(startLabel)} <span class="arrow">→</span> ${esc(updTod)}`
+      : esc(startTod);
+    const timeTitle = `started ${fmtTime(started)} · last updated ${fmtTime(updated)}`;
+    return `<a class="session-card ${esc(s.tool)}" href="${href}">
+      <div class="row1">
+        <div>${badge}<span class="name">${esc(title)}</span><span class="branch">${esc(s.gitBranch || "")}</span><span class="repo">${esc(s.repo || "")}</span></div>
+        <div class="time" title="${esc(timeTitle)}">${timeHtml}</div>
+      </div>
+      ${s.name && s.firstPrompt ? `<div class="prompt">${esc(s.firstPrompt)}</div>` : ""}
+      <div class="meta">
+        <span>${s.messages} msgs</span>
+        <span>${fmtTokens(totalTokens(s.tokens))} tok</span>
+        <span>${fmtCost(s.cost)}</span>
+      </div>
+      ${match ? `<div class="match">${match.matchCount} match${match.matchCount===1?"":"es"}</div>` : ""}
+    </a>`;
+  }).join("");
+  return `<section class="day-section" id="day-${day}">
+    <h2>${esc(dayLabel(day))} · ${sessions.length}</h2>
+    ${rows}
+  </section>`;
 }
 
 function dayJumpLabel(key) {
