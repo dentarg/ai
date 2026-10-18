@@ -334,7 +334,8 @@ class PiSession(unittest.TestCase):
 
     def test_manifest_discovers_pi_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            # main() resolves --history; macOS temp dirs sit behind a symlink.
+            root = Path(tmp).resolve()
             session_dir = root / "pi" / "--app-widgets--"
             session_dir.mkdir(parents=True)
             session = session_dir / "2026-09-02T20-00-00_pi-session.jsonl"
