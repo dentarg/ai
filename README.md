@@ -547,7 +547,7 @@ LOCAL_CODE_GPU_LAYERS=18 local-code-server
 The primary guest port still comes from `PORT` (1337 by default), but the VM
 launcher chooses a free loopback host port and prints it when the VM is ready.
 Set `AI_VM_HOST_PORT` to request a fixed primary host port. Explicit `--ports`
-mappings remain fixed. GPU builds default to 24 CPUs and 80 GiB of memory;
+mappings remain fixed. GPU builds default to 24 CPUs and 48 GiB of memory;
 other builds default to 4 CPUs and 8 GiB. These defaults can be changed with
 `AI_VM_CPUS`, `AI_VM_MEMORY` (GiB), and `AI_VM_DISK` (GiB); `AI_VM_BASE`
 changes the base instance name for both building and launching.

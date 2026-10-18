@@ -126,7 +126,7 @@ CAPTURED_TEMPLATE="$captured_template" CAPTURED_ARCHIVES="$captured_archives" \
   "$REPO_DIR/build_vm" --gpu >/dev/null
 grep -F '<info>' "$log" >/dev/null
 grep -F '<create><--tty=false><--vm-type><krunkit><--name><ai-base-gpu>' "$log" >/dev/null
-grep -F '<--cpus><24><--memory><80><--disk><100>' "$log" >/dev/null
+grep -F '<--cpus><24><--memory><48><--disk><100>' "$log" >/dev/null
 grep -F '<start><--timeout><60m><ai-base-gpu>' "$log" >/dev/null
 grep -F '<stop><ai-base-gpu>' "$log" >/dev/null
 grep -F '<protect><ai-base-gpu>' "$log" >/dev/null

@@ -52,7 +52,7 @@ done
 
 if [ "$GPU" -eq 1 ]; then
   VM_CPUS=${VM_CPUS:-24}
-  VM_MEMORY=${VM_MEMORY:-80}
+  VM_MEMORY=${VM_MEMORY:-48}
 else
   VM_CPUS=${VM_CPUS:-4}
   VM_MEMORY=${VM_MEMORY:-8}
