@@ -48,6 +48,9 @@ provision:
     path: /tmp/ai-build-installers.tar.gz.b64
     file: "@AI_BUILD_INSTALLERS_ARCHIVE@"
   - mode: data
+    path: /tmp/ai-build-local-code.tar.gz.b64
+    file: "@AI_BUILD_LOCAL_CODE_ARCHIVE@"
+  - mode: data
     path: /tmp/ai-build-project.tar.gz.b64
     file: "@AI_BUILD_PROJECT_ARCHIVE@"
   - mode: system
@@ -56,6 +59,7 @@ provision:
       set -euo pipefail
       mkdir -p /tmp/ai-build
       base64 --decode /tmp/ai-build-installers.tar.gz.b64 | tar -xzf - -C /tmp/ai-build
+      base64 --decode /tmp/ai-build-local-code.tar.gz.b64 | tar -xzf - -C /tmp/ai-build
       base64 --decode /tmp/ai-build-project.tar.gz.b64 | tar -xzf - -C /tmp/ai-build
       install -m 600 /dev/null /var/log/ai-base-provision.log
       systemd-run \

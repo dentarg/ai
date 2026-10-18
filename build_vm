@@ -90,11 +90,16 @@ fi
 
 ASSET_DIR=${BUILD_DIR}/assets
 INSTALLERS_TAR=${BUILD_DIR}/ai-build-installers.tar.gz
+LOCAL_CODE_TAR=${BUILD_DIR}/ai-build-local-code.tar.gz
 PROJECT_TAR=${BUILD_DIR}/ai-build-project.tar.gz
 INSTALLERS_ARCHIVE=${INSTALLERS_TAR}.b64
+LOCAL_CODE_ARCHIVE=${LOCAL_CODE_TAR}.b64
 PROJECT_ARCHIVE=${PROJECT_TAR}.b64
 VM_TEMPLATE=${BUILD_DIR}/ai.lima.yaml
-mkdir -p "${ASSET_DIR}/installers" "${ASSET_DIR}/project"
+mkdir -p \
+  "${ASSET_DIR}/installers" \
+  "${ASSET_DIR}/local-code" \
+  "${ASSET_DIR}/project"
 while read -r destination source archive; do
   case "$destination" in
     ''|'#'*) continue ;;
@@ -104,10 +109,16 @@ done < "$ASSET_MANIFEST"
 # macOS tar otherwise records com.apple.* extended attributes that GNU tar in
 # the guest reports as unknown LIBARCHIVE headers.
 COPYFILE_DISABLE=1 tar -czf "$INSTALLERS_TAR" -C "${ASSET_DIR}/installers" .
+COPYFILE_DISABLE=1 tar -czf "$LOCAL_CODE_TAR" -C "${ASSET_DIR}/local-code" .
 COPYFILE_DISABLE=1 tar -czf "$PROJECT_TAR" -C "${ASSET_DIR}/project" .
 base64 < "$INSTALLERS_TAR" > "$INSTALLERS_ARCHIVE"
+base64 < "$LOCAL_CODE_TAR" > "$LOCAL_CODE_ARCHIVE"
 base64 < "$PROJECT_TAR" > "$PROJECT_ARCHIVE"
-for archive in "$INSTALLERS_ARCHIVE" "$PROJECT_ARCHIVE"; do
+for archive in \
+  "$INSTALLERS_ARCHIVE" \
+  "$LOCAL_CODE_ARCHIVE" \
+  "$PROJECT_ARCHIVE"
+do
   if [ "$(wc -c < "$archive")" -gt 60000 ]; then
     echo "at=fatal msg=\"VM asset archive exceeds Lima's safe embedding size\" archive=$archive" >&2
     exit 1
@@ -115,6 +126,7 @@ for archive in "$INSTALLERS_ARCHIVE" "$PROJECT_ARCHIVE"; do
 done
 sed \
   -e "s|@AI_BUILD_INSTALLERS_ARCHIVE@|${INSTALLERS_ARCHIVE}|" \
+  -e "s|@AI_BUILD_LOCAL_CODE_ARCHIVE@|${LOCAL_CODE_ARCHIVE}|" \
   -e "s|@AI_BUILD_PROJECT_ARCHIVE@|${PROJECT_ARCHIVE}|" \
   "${REPO_DIR}/ai.lima.yaml" > "$VM_TEMPLATE"
 

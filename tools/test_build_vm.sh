@@ -56,6 +56,11 @@ if grep -F '@AI_BUILD_' "$captured_template" >/dev/null; then
   echo 'at=fatal msg="build_vm did not resolve the asset archive placeholder"' >&2
   exit 1
 fi
+if [[ $(find "$captured_archives" -name '*.tar.gz.b64' | wc -l) -ne 3 ]]; then
+  echo 'at=fatal msg="build_vm did not split assets into three archives"' >&2
+  exit 1
+fi
+test -s "$captured_archives/ai-build-local-code.tar.gz.b64"
 grep -F 'systemd-run' "$captured_template" >/dev/null
 grep -F 'env AI_VM_USER="{{.User}}"' \
   "$captured_template" >/dev/null
