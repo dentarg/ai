@@ -96,3 +96,23 @@ test('default transcript keeps Codex progress updates but hides their tool calls
   }
   assert.ok(compact.indexOf('Fixed issue 162') < compact.indexOf('Review done'));
 });
+
+test('title search matches words, phrases, exclusions and metadata fields', () => {
+  context.sessions = [
+    { path: 'a', tool: 'claude', repo: 'api', gitBranch: 'main', name: 'Fix login redirect' },
+    { path: 'b', tool: 'codex', repo: 'web', gitBranch: 'feature', firstPrompt: 'Redirect login page' },
+    { path: 'c', tool: 'claude', repo: 'web', gitBranch: 'main', name: 'Upgrade Rails' },
+  ];
+  vm.runInContext('state.sessions = sessions', context);
+  const search = (q) => vm.runInContext(
+    `state.filters.search = ${JSON.stringify(q)}; applyFilters(state.sessions).map(s => s.path).join()`,
+    context);
+  assert.equal(search(''), 'a,b,c');
+  assert.equal(search('login REDIRECT'), 'a,b');
+  assert.equal(search('"login redirect"'), 'a');
+  assert.equal(search('login -fix'), 'b');
+  assert.equal(search('repo:web'), 'b,c');
+  assert.equal(search('agent:claude -branch:feature'), 'a,c');
+  assert.equal(search('repo:web rails'), 'c');
+  vm.runInContext('state.sessions = []; state.filters.search = ""', context);
+});

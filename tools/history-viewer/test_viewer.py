@@ -77,6 +77,19 @@ class ManifestCache(unittest.TestCase):
                              "Renamed")
 
 
+class SearchTranscript(unittest.TestCase):
+    def test_requires_every_term_and_no_excluded_term(self):
+        path = write_rollout([{"text": "Deploy the Widget"},
+                              {"text": "fix flaky spec"}])
+        try:
+            match = viewer.search_transcript(path, ["widget", "flaky"], [])
+            self.assertEqual(match["matchCount"], 2)
+            self.assertIsNone(viewer.search_transcript(path, ["widget", "absent"], []))
+            self.assertIsNone(viewer.search_transcript(path, ["widget"], ["flaky"]))
+        finally:
+            path.unlink()
+
+
 class ModelPricing(unittest.TestCase):
     def test_refreshed_catalog_overrides_bundled_pricing(self):
         with tempfile.TemporaryDirectory() as tmp:

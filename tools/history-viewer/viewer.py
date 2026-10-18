@@ -1064,6 +1064,33 @@ class ViewerState:
         return candidate
 
 
+def search_transcript(path: Path, terms: list[str],
+                      exclude: list[str]) -> dict | None:
+    """Match a transcript holding every term and none of the excluded ones.
+
+    Terms are lowercase; any line may supply any term, so a session matches
+    when its words are spread over different messages.
+    """
+    seen: set[str] = set()
+    snippets = []
+    matches = 0
+    with path.open("r", encoding="utf-8", errors="replace") as f:
+        for lineno, line in enumerate(f, 1):
+            lower = line.lower()
+            if any(t in lower for t in exclude):
+                return None
+            hits = {t for t in terms if t in lower}
+            if not hits:
+                continue
+            seen |= hits
+            matches += 1
+            if len(snippets) < 3:
+                snippets.append({"line": lineno, "text": line.strip()[:240]})
+    if seen != set(terms):
+        return None
+    return {"matchCount": matches, "snippets": snippets}
+
+
 # pastehtml.dev: publish a single self-contained HTML file, get a private
 # shareable link (https://pastehtml.dev/llms.txt). Overridable for tests and
 # self-hosted instances.
@@ -1145,9 +1172,10 @@ def make_handler(state: ViewerState, html_path: Path):
             if path == "/api/session":
                 return self._serve_session(qs.get("path", [""])[0])
             if path == "/api/search":
-                q = qs.get("q", [""])[0]
+                terms = [t.strip().lower() for t in qs.get("term", []) if t.strip()]
+                exclude = [t.strip().lower() for t in qs.get("not", []) if t.strip()]
                 limit = int(qs.get("limit", ["50"])[0])
-                return self._serve_search(q, limit)
+                return self._serve_search(terms, exclude, limit)
             return self._send_error_json(HTTPStatus.NOT_FOUND, "not found")
 
         def do_POST(self):
@@ -1217,38 +1245,25 @@ def make_handler(state: ViewerState, html_path: Path):
             agent = "codex" if is_codex else "pi" if is_pi else "claude"
             return self._send_json(HTTPStatus.OK, {"path": rel, "agent": agent, "events": events})
 
-        def _serve_search(self, q: str, limit: int):
-            q = q.strip()
-            if len(q) < 2:
-                return self._send_json(HTTPStatus.OK, {"query": q, "results": []})
-            needle = q.lower()
+        def _serve_search(self, terms: list[str], exclude: list[str], limit: int):
+            if not any(len(t) >= 2 for t in terms):
+                return self._send_json(HTTPStatus.OK, {"results": []})
             results = []
             for session in state.manifest():
                 rel = session["path"]
                 resolved = state.resolve_session_path(rel)
                 if not resolved:
                     continue
-                snippets = []
-                matches = 0
                 try:
-                    with resolved.open("r", encoding="utf-8", errors="replace") as f:
-                        for lineno, line in enumerate(f, 1):
-                            if needle in line.lower():
-                                matches += 1
-                                if len(snippets) < 3:
-                                    snippets.append({"line": lineno, "text": line.strip()[:240]})
+                    match = search_transcript(resolved, terms, exclude)
                 except OSError:
                     continue
-                if matches:
-                    results.append({
-                        "path": rel,
-                        "sessionId": session.get("sessionId"),
-                        "matchCount": matches,
-                        "snippets": snippets,
-                    })
+                if match:
+                    results.append({"path": rel, "sessionId": session.get("sessionId"),
+                                     **match})
                     if len(results) >= limit:
                         break
-            return self._send_json(HTTPStatus.OK, {"query": q, "results": results})
+            return self._send_json(HTTPStatus.OK, {"results": results})
 
     return Handler
 

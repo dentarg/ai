@@ -23,7 +23,8 @@ Session summaries are kept in the cache file, keyed by each transcript's size an
 
 - Browse every Claude, Codex, and Pi session from the archive, most recently updated first — each card shows its `started → last-updated` time (with the start date spelled out when the session began on an earlier day; hover for full timestamps), and sessions are grouped under the day they were last active
 - Light / dark theme: follows the OS preference by default, with a topbar toggle (☾/☀) that pins your choice in `localStorage`
-- Clear agent distinction: each session is tagged with a coloured badge and a matching card stripe; filter by agent or branch, plus full-text search across all transcripts
+- Clear agent distinction: each session is tagged with a coloured badge and a matching card stripe; filter by agent or branch
+- Search matches session titles by default. Switch the scope to **Transcripts** to search full sessions on the server. Both scopes match all words, `"exact phrases"` and `-excluded` words; `repo:`, `branch:` and `agent:` (or `-repo:` etc.) narrow by session metadata
 - Transcript rendering: prompts, final answers, and Codex progress updates by default; "show intermediate steps" reveals other progress messages, thinking, tool calls, and results. A separate "show internals" toggle reveals metadata. Older transcripts without final-answer markers use the last prose response between prompts. Codex rollouts and Pi's branching session format are normalised into the same view
 - Export to markdown — **clean** (just the user/assistant prose) or **full** (thinking, tool calls, results, meta wrappers)
 - Publish to [pastehtml.dev](https://pastehtml.dev) — renders the transcript as currently shown (internals toggle included) into a self-contained HTML page and publishes it to a private shareable link (2 MB limit). The paste's `update_token` is kept in the browser's `localStorage`, so re-publishing the same session updates the existing paste and the shared link stays current. The server proxies the API (`POST /api/publish`, pastehtml.dev sends no CORS headers), so it needs outbound network access; point `PASTEHTML_API` at a self-hosted instance to override
@@ -52,6 +53,6 @@ Pure Python stdlib + a single HTML file — no dependencies, no build step. The 
     node --test test_transcript.cjs
     node --test test_profiles.cjs  # requires chromium on PATH
 
-The Node tests check profile-scoped stats, default transcript filtering, and both detail toggles.
+The Node tests check profile-scoped stats, default transcript filtering, both detail toggles, and the title search syntax.
 The browser test verifies the rendered profile selector, including switching back to all profiles.
-The Python tests cover Codex and Pi parsing and transcript normalisation, the persistent summary cache, plus the pastehtml.dev create/update/fallback logic (stdlib only, no fixtures on disk).
+The Python tests cover Codex and Pi parsing and transcript normalisation, the persistent summary cache, transcript search, plus the pastehtml.dev create/update/fallback logic (stdlib only, no fixtures on disk).

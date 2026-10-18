@@ -522,7 +522,7 @@ function renderMarkdown(src) {
 const state = {
   sessions: [],
   searchResults: null,   // null = no active search
-  filters: { search: "", branch: "", agent: "" },
+  filters: { search: "", scope: "title", branch: "", agent: "" },
   showInternals: false,
   showIntermediateSteps: false,
   statsRange: "all",     // "all" | "30d" | "7d"
@@ -574,16 +574,49 @@ document.body.addEventListener("click", (e) => {
   navigate(a.getAttribute("href"));
 });
 
+// ---------- search ----------
+// Words must all match; "quoted phrases" match verbatim; -word excludes;
+// repo:, branch: and agent: match session metadata (and can be negated).
+const QUERY_FIELDS = {
+  repo: s => s.repo,
+  branch: s => s.gitBranch,
+  agent: s => s.tool,
+};
+function parseQuery(q) {
+  const query = { terms: [], exclude: [], fields: [] };
+  for (const [, neg, field, quoted, bare] of q.matchAll(/(-?)(?:(\w+):)?(?:"([^"]*)"|(\S+))/g)) {
+    const value = (quoted ?? bare).toLowerCase();
+    if (!value) continue;
+    const key = field?.toLowerCase();
+    if (key in QUERY_FIELDS) query.fields.push({ key, value, neg: !!neg });
+    else (neg ? query.exclude : query.terms).push(field ? `${field.toLowerCase()}:${value}` : value);
+  }
+  return query;
+}
+function sessionTitle(s) { return s.name || s.firstPrompt || "(untitled)"; }
+function matchesQuery(s, query, scope) {
+  for (const f of query.fields) {
+    const hit = String(QUERY_FIELDS[f.key](s) || "").toLowerCase().includes(f.value);
+    if (hit === f.neg) return false;
+  }
+  // Transcript matches come from the server; only titles are checked here.
+  if (scope !== "title") return true;
+  const title = sessionTitle(s).toLowerCase();
+  return query.terms.every(t => title.includes(t)) && !query.exclude.some(t => title.includes(t));
+}
+function hasTranscriptQuery(query) { return query.terms.some(t => t.length >= 2); }
+
 // ---------- index page ----------
 function applyFilters(sessions) {
   const f = state.filters;
+  const query = parseQuery(f.search);
   const matches = state.searchResults ? new Map(state.searchResults.map(r => [r.path, r])) : null;
   return sessions.filter(s => {
     if (matches && !matches.has(s.path)) return false;
     if (f.branch && s.gitBranch !== f.branch) return false;
     if (!AGENTS.includes(s.tool)) return false;
     if (f.agent && s.tool !== f.agent) return false;
-    return true;
+    return matchesQuery(s, query, f.scope);
   });
 }
 
@@ -600,10 +633,15 @@ function renderIndexPage() {
   contentEl.innerHTML = `
     <div class="filters">
       <div class="search-wrap">
-        <input id="f-search" placeholder="Search transcripts…" value="${esc(f.search)}">
+        <input id="f-search" value="${esc(f.search)}" autocomplete="off" spellcheck="false"
+          placeholder='Search ${f.scope === "title" ? "titles" : "transcripts"} — "phrase", -word, repo:, branch:, agent:'>
         <button class="clear-search" id="f-search-clear" type="button" title="Clear search"
           style="${f.search ? "" : "display:none"}">×</button>
       </div>
+      <select id="f-scope" title="Search scope">
+        <option value="title"${f.scope === "title" ? " selected" : ""}>Titles</option>
+        <option value="text"${f.scope === "text" ? " selected" : ""}>Transcripts</option>
+      </select>
       <select id="f-agent"><option value="">All agents</option>${
         AGENTS.map(a => `<option value="${a}"${a===f.agent?" selected":""}>${agentLabel(a)}</option>`).join("")
       }</select>
@@ -623,6 +661,8 @@ function renderIndexPage() {
     state.filters.search = search.value;
     clearBtn.style.display = search.value ? "" : "none";
     clearTimeout(timer);
+    // Titles filter locally and instantly; transcripts hit the server.
+    if (state.filters.scope === "title") return drawSessions();
     timer = setTimeout(runSearchAndRedraw, 250);
   };
   search.addEventListener("input", onSearchInput);
@@ -630,6 +670,13 @@ function renderIndexPage() {
     search.value = "";
     onSearchInput();
     search.focus();
+  });
+
+  document.getElementById("f-scope").addEventListener("change", (e) => {
+    state.filters.scope = e.target.value;
+    search.placeholder = search.placeholder.replace(/titles|transcripts/,
+      e.target.value === "title" ? "titles" : "transcripts");
+    runSearchAndRedraw();
   });
 
   document.getElementById("f-agent").addEventListener("change", (e) => {
@@ -644,7 +691,7 @@ function renderIndexPage() {
 
   document.getElementById("f-reset").addEventListener("click", (e) => {
     e.preventDefault();
-    state.filters = { search: "", branch: "", agent: "" };
+    state.filters = { search: "", scope: "title", branch: "", agent: "" };
     state.searchResults = null;
     renderIndexPage();
   });
@@ -652,15 +699,22 @@ function renderIndexPage() {
   drawSessions();
 }
 
+let searchSeq = 0;
 async function runSearchAndRedraw() {
-  const q = state.filters.search.trim();
-  if (q.length < 2) {
+  const seq = ++searchSeq;
+  const query = parseQuery(state.filters.search);
+  if (state.filters.scope === "title" || !hasTranscriptQuery(query)) {
     state.searchResults = null;
     drawSessions();
     return;
   }
-  const r = await fetch("/api/search?q=" + encodeURIComponent(q) + "&limit=300");
+  const params = new URLSearchParams({ limit: "300" });
+  query.terms.forEach(t => params.append("term", t));
+  query.exclude.forEach(t => params.append("not", t));
+  const r = await fetch("/api/search?" + params);
   const data = await r.json();
+  // A slower, older query must not overwrite the results of a newer one.
+  if (seq !== searchSeq) return;
   state.searchResults = data.results;
   drawSessions();
 }
@@ -691,7 +745,7 @@ function drawSessions() {
     const rows = dayGroups.get(day).map(s => {
       const match = matches && matches.get(s.path);
       const href = "?s=" + encodeURIComponent(s.path);
-      const title = s.name || s.firstPrompt || "(untitled)";
+      const title = sessionTitle(s);
       const badge = `<span class="agent-badge agent-${esc(s.tool)}">${esc(agentLabel(s.tool))}</span> `;
       const started = sessionStarted(s), updated = sessionUpdated(s);
       const startTod = fmtTimeOfDay(started), updTod = fmtTimeOfDay(updated);
