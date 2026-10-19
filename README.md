@@ -159,6 +159,10 @@ bin/ai c <profile> --resume <session-id>
 # the profile is auto-detected from the original session.
 bin/ai cx --resume <session-id>
 
+# fork a saved conversation into a new session with its detected profile
+bin/ai c --resume <session-id> --fork
+bin/ai cx --resume <session-id> --fork
+
 # publish extra ports from the container to the host. each entry is either
 # "PORT" (host==container) or "SRC:DST" (host:container); comma-separate many.
 bin/ai c --ports 9999             # host 9999 -> container 9999
@@ -195,6 +199,9 @@ c --apikey sk-ant-...
 # profile is auto-detected from the session's saved .profile file.
 c --resume <session-id>
 
+# fork the saved Claude conversation (also accepts --fork-session)
+c --resume <session-id> --fork
+
 # launch gemini
 g
 
@@ -211,6 +218,9 @@ cx [<oauth-profile>] --profile <config-profile>
 # resume a prior Codex session (searches /history for the session id; a prefix is enough).
 # oauth and configuration profiles are auto-detected from the session.
 cx --resume <session-id>
+
+# fork the saved Codex conversation
+cx --resume <session-id> --fork
 
 # exit the container or VM session
 x
@@ -234,6 +244,15 @@ configuration such as
 `~/ai/settings/codex/default.config.toml` for the unprofiled account.
 `cx --resume <id>` searches archived Codex rollouts under `/history` and
 reuses the original Codex home before launching `codex resume <id>`.
+
+Add `--fork` to `bin/ai`, `c`, or `cx` with `--resume <id>` to create a new
+conversation ID from the saved history, preserving the original transcript.
+Claude launches with `--resume <id> --fork-session`; Codex launches with
+`codex fork <id>`. For Claude, the wrappers also accept `--fork-session` as an
+alias for `--fork`. Session ID prefixes and saved profile detection work as
+for normal resumes, including the saved Codex configuration profile. Forked
+transcripts are stored in the original session home. The option works with
+Podman and both Linux and macOS VMs and requires an explicit `--resume` ID.
 
 ## Prerequisites
 

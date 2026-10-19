@@ -131,12 +131,13 @@ valid_profile () {
 }
 
 usage () {
-  echo "Usage: $(basename "$0") [<auth-profile>] [--profile <config-profile>] [--resume <id>]"
+  echo "Usage: $(basename "$0") [<auth-profile>] [--profile <config-profile>] [--resume <id> [--fork]]"
   echo
   echo "  <auth-profile>       Use auth from /settings/codex_<profile>/auth.json."
   echo "  -p, --profile <name> Layer <name>.config.toml from the auth profile."
   echo "  -r, --resume <id>    Resume a prior Codex session; <id> may be a prefix."
   echo "                       Profiles are auto-detected if omitted."
+  echo "      --fork           Start a new session from --resume <id>."
   exit 1
 }
 
@@ -144,6 +145,7 @@ main () {
   local profile=""
   local config_profile=""
   local resume_id=""
+  local fork_session=0
   local jsonl=""
   local saved
   local settings_home
@@ -184,6 +186,10 @@ main () {
         }
         shift
         ;;
+      --fork)
+        fork_session=1
+        shift
+        ;;
       -h|--help)
         usage
         ;;
@@ -201,6 +207,11 @@ main () {
         ;;
     esac
   done
+
+  if [[ "$fork_session" == 1 && -z "$resume_id" ]]; then
+    echo 'at=fatal msg="--fork requires --resume"' >&2
+    exit 1
+  fi
 
   if [[ -n "$config_profile" ]] && ! valid_profile "$config_profile"; then
     echo "at=fatal msg=\"invalid Codex config profile\" profile=\"$config_profile\"" >&2
@@ -366,7 +377,13 @@ EOF
     --dangerously-bypass-hook-trust
     --search
   )
-  [[ -n "$resume_id" ]] && codex_cmd+=(resume "$resume_id")
+  if [[ -n "$resume_id" ]]; then
+    if [[ "$fork_session" == 1 ]]; then
+      codex_cmd+=(fork "$resume_id")
+    else
+      codex_cmd+=(resume "$resume_id")
+    fi
+  fi
 
   if [[ -t 1 ]]; then
     case "${TERM:-}" in

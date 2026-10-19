@@ -179,13 +179,15 @@ EOF
 }
 
 usage () {
-  echo "Usage: $(basename "$0") <profile> [--resume <id>] [--debug[=filter]] | --apikey <key> [...] | --resume <id> [...]"
+  echo "Usage: $(basename "$0") <profile> [--resume <id> [--fork]] [--debug[=filter]] | --apikey <key> [...] | --resume <id> [...]"
   echo
   echo "  <profile>            Use oauth credentials from /settings for the given profile"
   echo "  --apikey <key>       Use the provided Anthropic API key"
   echo "  -r, --resume <id>    Resume a prior session; profile is auto-detected if omitted."
   echo "                       <id> may be a prefix — the matching .jsonl under /history is located"
   echo "                       and ~/.claude is symlinked to its original home."
+  echo "      --fork           Start a new session from --resume <id>."
+  echo "      --fork-session   Alias for --fork."
   echo "  -d, --debug          Pass --debug to claude."
   echo "      --debug=<filter> Pass --debug <filter> to claude (e.g. --debug=api,hooks)."
   echo "      --remote         Enable Claude Code remote control for this session."
@@ -201,6 +203,7 @@ main () {
   local remote="${AI_REMOTE:-}"
   local fast="${AI_FAST:-}"
   local resume_id=""
+  local fork_session=0
   local jsonl=""
   local saved
   local settings_claude_home
@@ -222,6 +225,10 @@ main () {
       -r|--resume)
         resume_id="${2:?--resume requires a session id}"
         shift 2
+        ;;
+      --fork|--fork-session)
+        fork_session=1
+        shift
         ;;
       -d|--debug)
         debug_flag=(--debug)
@@ -252,6 +259,11 @@ main () {
         ;;
     esac
   done
+
+  if [[ "$fork_session" == 1 && -z "$resume_id" ]]; then
+    echo 'at=fatal msg="--fork requires --resume"' >&2
+    exit 1
+  fi
 
   if [[ -n "$resume_id" ]]; then
     if ! jsonl=$(find_resume_jsonl "$HISTORY_ROOT" "$resume_id"); then
@@ -373,6 +385,7 @@ main () {
   fi
 
   [[ -n "$resume_id" ]] && resume_flag=(--resume "$resume_id")
+  [[ "$fork_session" == 1 ]] && resume_flag+=(--fork-session)
 
   # Label remote-control sessions by the host directory rather than the
   # container hostname, so they're legible in the claude.ai/mobile session

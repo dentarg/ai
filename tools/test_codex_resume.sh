@@ -97,6 +97,8 @@ assert_equal "alpha" "$(printf '%s\n' "$output" | sed -n '1p')" \
   "resume did not load the saved Codex profile auth"
 assert_equal "alpha" "$(printf '%s\n' "$output" | sed -n '2p')" \
   "resume did not preserve the saved Codex profile"
+assert_equal "$(printf 'resume\n%s' "$session_id")" "$(printf '%s\n' "$output" | tail -2)" \
+  "resume did not invoke the native command with the full session ID"
 test -L "${tmpdir}/home/.codex"
 assert_equal "$run_dir" "$(readlink "${tmpdir}/home/.codex")" \
   "resume did not link the selected session home"
@@ -126,6 +128,26 @@ assert_equal "$run_dir" "$codex_cwd" \
   "Codex did not preserve the project working directory"
 grep -F 'status_line = ["current-dir",' \
   "${tmpdir}/home/.codex/config.toml" >/dev/null
+
+# Forks use the saved auth/config profiles and the resolved full session ID.
+printf '%s\n' work > "$run_dir/.config_profile"
+output=$(
+  HOME="${tmpdir}/home" HISTORY_ROOT="$tmpdir" SETTINGS_ROOT="$SETTINGS_ROOT" \
+  PATH="${tmpdir}/bin:$PATH" main --resume "${session_id:0:8}" --fork
+)
+assert_equal alpha "$(printf '%s\n' "$output" | sed -n '1p')" \
+  "fork did not load the saved Codex auth profile"
+assert_equal work "$(printf '%s\n' "$output" | sed -n '3p')" \
+  "fork did not load the saved Codex config profile"
+assert_equal "$(printf 'fork\n%s' "$session_id")" "$(printf '%s\n' "$output" | tail -2)" \
+  "fork did not invoke the native command with the full session ID"
+assert_equal "$run_dir" "$(readlink "${tmpdir}/home/.codex")" \
+  "fork did not use the original session home"
+if (main --fork) >"$tmpdir/fork-error" 2>&1; then
+  echo 'at=fatal msg="Codex accepted --fork without --resume"' >&2
+  exit 1
+fi
+grep -F -- '--fork requires --resume' "$tmpdir/fork-error" >/dev/null
 
 mkdir -p "${SETTINGS_ROOT}/codex"
 printf '%s\n' '{"profile":"default"}' > "${SETTINGS_ROOT}/codex/auth.json"

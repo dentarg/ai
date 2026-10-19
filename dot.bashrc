@@ -131,18 +131,21 @@ if [[ $- == *i* && "$auto_launch_requested" == true ]] && \
   codex_auto_start="${CODEX_AUTO_START:-}"
   codex_profile="${CODEX_PROFILE:-}"
   codex_resume="${CODEX_RESUME:-}"
-  unset AI_AUTO_LAUNCH CLAUDE_AUTO_START CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_PROFILE CODEX_RESUME
+  fork_session="${AI_FORK_SESSION:-}"
+  unset AI_AUTO_LAUNCH CLAUDE_AUTO_START CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_PROFILE CODEX_RESUME AI_FORK_SESSION
 
   if [[ -n "$codex_auto_start" || -n "$codex_resume" ]]; then
     start.sh || true
     cx_args=()
     [[ -n "$codex_profile" ]] && cx_args+=("$codex_profile")
     [[ -n "$codex_resume" ]] && cx_args+=(--resume "$codex_resume")
+    [[ "$fork_session" == 1 ]] && cx_args+=(--fork)
     cx "${cx_args[@]}"
   else
     c_args=()
     [[ -n "$profile" ]] && c_args+=("$profile")
     [[ -n "$resume" ]] && c_args+=(--resume "$resume")
+    [[ "$fork_session" == 1 ]] && c_args+=(--fork)
     c "${c_args[@]}"
   fi
 fi

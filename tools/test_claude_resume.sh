@@ -117,4 +117,27 @@ if grep -Eq '^--(model|effort)$' "$captured_args"; then
   exit 1
 fi
 
+printf '%s\n' alpha > "$run_dir/.profile"
+for fork_flag in '' --fork --fork-session; do
+  arguments=(--resume "${session_id:0:8}")
+  [[ -n "$fork_flag" ]] && arguments+=("$fork_flag")
+  HOME="$home_dir" HISTORY_ROOT="$tmpdir" SETTINGS_ROOT="$settings_root" \
+  CLAUDE_SETTINGS_FILE="$base_settings" CLAUDE_TEST_SETTINGS="$captured_settings" \
+  CLAUDE_TEST_ARGS="$captured_args" PLUGIN_ROOT="${tmpdir}/plugins" \
+  PLUGIN_BLOCKLIST="${tmpdir}/plugins.blocklist" PATH="${fake_bin}:$PATH" \
+    bash "$SCRIPT_DIR/claude.sh" "${arguments[@]}"
+  expected_args=(--dangerously-skip-permissions --resume "$session_id")
+  [[ -n "$fork_flag" ]] && expected_args+=(--fork-session)
+  diff -u <(printf '%s\n' "${expected_args[@]}") "$captured_args"
+  assert_equal "$run_dir" "$(readlink "$home_dir/.claude")" \
+    "resume or fork did not use the original session home"
+  assert_equal sonnet "$(jq -r .model "$captured_settings")" \
+    "resume or fork did not detect the saved Claude profile"
+done
+if (main alpha --fork) >"$tmpdir/fork-error" 2>&1; then
+  echo 'at=fatal msg="Claude accepted --fork without --resume"' >&2
+  exit 1
+fi
+grep -F -- '--fork requires --resume' "$tmpdir/fork-error" >/dev/null
+
 echo 'at=info msg="claude resume lookup tests passed"'

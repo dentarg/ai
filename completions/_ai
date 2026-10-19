@@ -39,7 +39,7 @@ _ai_commands_options() {
   local -a commands options values
   commands=(profile models session completion c claude cx codex)
   options=(
-    --resume --ports --udp-ports --vm --keep-vm --gpu --nested-virt
+    --resume --fork --fork-session --ports --udp-ports --vm --keep-vm --gpu --nested-virt
     --cpus --memory --github --1password --host-browser --remote --fast --help
     "${(@f)$(_ai_browser_profile_options)}"
     "${(@f)$(_ai_github_profile_options)}"
@@ -53,12 +53,12 @@ _ai_profiles_options() {
   local -a profiles options values
   profiles=("${(@f)$("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')}" )
   options=(
-    --resume --ports --udp-ports --vm --keep-vm --gpu --nested-virt
+    --resume --fork --ports --udp-ports --vm --keep-vm --gpu --nested-virt
     --cpus --memory --github --1password --host-browser --help
     "${(@f)$(_ai_browser_profile_options)}"
     "${(@f)$(_ai_github_profile_options)}"
   )
-  case "$words[2]" in c|claude) options+=(--remote --fast) ;; esac
+  case "$words[2]" in c|claude) options+=(--remote --fast --fork-session) ;; esac
   values=("${profiles[@]}" "${options[@]}")
   compadd -V ai-arguments -- "${values[@]}"
 }

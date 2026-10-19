@@ -104,7 +104,7 @@ launch_output="${tmpdir}/launch-output"
   TERM=xterm-ghostty \
   PATH="${fake_bin}:${PATH}" \
     "$REPO_DIR/bin/ai" --vm cx --host-browser --ports 9999,8888:7777 \
-    --udp-ports 41642:41641 >"$launch_output" 2>&1
+    --udp-ports 41642:41641 --resume=session-id --fork >"$launch_output" 2>&1
 )
 
 if grep -F 'terminfo setup noise' "$launch_output" >/dev/null; then
@@ -151,6 +151,8 @@ sed -n 's/.*\.portForwards = \(.*\) | \.timezone = .*/\1/p' "$log" | jq -e '
 ' >/dev/null
 grep -F '<AI_AUTO_LAUNCH=1>' "$log" >/dev/null
 grep -F '<CODEX_AUTO_START=1>' "$log" >/dev/null
+grep -F '<CODEX_RESUME=session-id>' "$log" >/dev/null
+grep -F '<AI_FORK_SESSION=1>' "$log" >/dev/null
 grep -F '<HOST_BROWSER_URL=https://host.lima.internal:' "$log" >/dev/null
 grep -F '<HOST_BROWSER_CA=/run/host-browser/ca.pem>' "$log" >/dev/null
 grep -F '<NODE_EXTRA_CA_CERTS=/run/host-browser/ca.pem>' "$log" >/dev/null
@@ -172,8 +174,10 @@ fallback_output="${tmpdir}/fallback-output"
   LIMACTL_LOG="$log" \
   TERM=xterm-ghostty \
   PATH="${fake_bin}:${PATH}" \
-    "$REPO_DIR/bin/ai" c --vm >"$fallback_output" 2>&1
+    "$REPO_DIR/bin/ai" c --vm --resume session-id --fork-session >"$fallback_output" 2>&1
 )
+grep -F '<CLAUDE_RESUME=session-id>' "$log" >/dev/null
+grep -F '<AI_FORK_SESSION=1>' "$log" >/dev/null
 grep -F '<TERM=xterm-256color>' "$log" >/dev/null
 grep -F 'falling back to xterm-256color' "$fallback_output" >/dev/null
 if grep -F '<tic>' "$log" >/dev/null; then

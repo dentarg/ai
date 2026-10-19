@@ -90,6 +90,10 @@ for selector in c claude cx codex; do
   grep -Fx "${prefix}_AUTO_START=1" "$PODMAN_ARGS_FILE" >/dev/null
   grep -Fx "${prefix}_PROFILE=alpha" "$PODMAN_ARGS_FILE" >/dev/null
   grep -Fx "${prefix}_RESUME=session-id" "$PODMAN_ARGS_FILE" >/dev/null
+  HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:$PATH" \
+    "$REPO_DIR/bin/ai" "$selector" --resume=session-id --fork >/dev/null
+  grep -Fx "${prefix}_RESUME=session-id" "$PODMAN_ARGS_FILE" >/dev/null
+  grep -Fx 'AI_FORK_SESSION=1' "$PODMAN_ARGS_FILE" >/dev/null
 done
 
 # Shell-only launches create a new container without auto-starting an agent.
@@ -107,7 +111,8 @@ for arguments in '' '--ports 9999'; do
   fi
 done
 
-for arguments in '--resume session-id' alpha 'alpha c' 'c cx' 'codex claude' 'c c'; do
+for arguments in '--resume session-id' 'c --fork' 'cx --fork' \
+  'c --resume= --fork' alpha 'alpha c' 'c cx' 'codex claude' 'c c'; do
   rm -f "$PODMAN_ARGS_FILE"
   if HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:$PATH" \
     "$REPO_DIR/bin/ai" $arguments >"$tmpdir/error" 2>&1; then
@@ -119,12 +124,13 @@ done
 
 # Exercise the shell's auto-launch block without guest-specific setup.
 cat > "$tmpdir/bashrc" <<'RC'
-c() { printf 'claude\n' >> "$AGENT_CALLS_FILE"; }
-cx() { printf 'codex\n' >> "$AGENT_CALLS_FILE"; }
+c() { printf 'claude\n' >> "$AGENT_CALLS_FILE"; printf '%s\n' "$@" > "$AGENT_ARGS_FILE"; }
+cx() { printf 'codex\n' >> "$AGENT_CALLS_FILE"; printf '%s\n' "$@" > "$AGENT_ARGS_FILE"; }
 start.sh() { :; }
 RC
 sed -n '/^auto_launch_requested=false/,$p' "$REPO_DIR/dot.bashrc" >> "$tmpdir/bashrc"
 export AGENT_CALLS_FILE="$tmpdir/agent-calls"
+export AGENT_ARGS_FILE="$tmpdir/agent-args"
 for agent in CLAUDE CODEX; do
   env AI_AUTO_LAUNCH=1 "${agent}_AUTO_START=1" \
     bash --noprofile --rcfile "$tmpdir/bashrc" -ic \
@@ -132,6 +138,18 @@ for agent in CLAUDE CODEX; do
     bash "$tmpdir/bashrc" >"$tmpdir/shell-output" 2>&1
 done
 printf 'claude\ncodex\n' > "$tmpdir/expected-calls"
+diff -u "$tmpdir/expected-calls" "$AGENT_CALLS_FILE"
+
+for agent in CLAUDE CODEX; do
+  # shellcheck disable=SC2016 # The expressions expand in the child shell.
+  env AI_AUTO_LAUNCH=1 "${agent}_AUTO_START=1" "${agent}_RESUME=session-id" \
+    AI_FORK_SESSION=1 bash --noprofile --rcfile "$tmpdir/bashrc" -ic \
+    'test -z "${AI_FORK_SESSION:-}${CLAUDE_RESUME:-}${CODEX_RESUME:-}" && source "$1"' \
+    bash "$tmpdir/bashrc" >"$tmpdir/shell-output" 2>&1
+  printf '%s\n' --resume session-id --fork > "$tmpdir/expected-args"
+  diff -u "$tmpdir/expected-args" "$AGENT_ARGS_FILE"
+done
+printf 'claude\ncodex\nclaude\ncodex\n' > "$tmpdir/expected-calls"
 diff -u "$tmpdir/expected-calls" "$AGENT_CALLS_FILE"
 
 echo 'at=info msg="ai agent label tests passed"'

@@ -24,7 +24,7 @@ _ai_complete() {
 
   case "$COMP_CWORD" in
     1)
-      values="profile models session completion c claude cx codex --resume --ports --udp-ports --vm
+      values="profile models session completion c claude cx codex --resume --fork --fork-session --ports --udp-ports --vm
         --keep-vm --gpu --nested-virt --cpus --memory --github --1password
         --host-browser --remote --fast --help
         $(_ai_browser_profile_options) $(_ai_github_profile_options)"
@@ -37,9 +37,9 @@ _ai_complete() {
         completion) values='bash zsh' ;;
         c|claude|cx|codex)
           values="$("$command" profile list 2>/dev/null | awk 'NR > 1 {print $1}')
-            --resume --vm --keep-vm --gpu --nested-virt --cpus --memory
+            --resume --fork --vm --keep-vm --gpu --nested-virt --cpus --memory
             --ports --udp-ports --github --1password --host-browser --help"
-          case "$first" in c|claude) values="$values --remote --fast" ;; esac
+          case "$first" in c|claude) values="$values --remote --fast --fork-session" ;; esac
           values="$values $(_ai_browser_profile_options) $(_ai_github_profile_options)"
           ;;
       esac

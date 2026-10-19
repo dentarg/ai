@@ -38,6 +38,8 @@ $(basename "$0") models --help to manage the cached model catalog.
 
 Options:
   -r, --resume <id>   Resume a prior Claude or Codex session
+      --fork          Start a new session from --resume <id>
+      --fork-session  Alias for --fork (Claude spelling)
       --ports <list>  Publish comma-separated PORT or HOST:CONTAINER ports
       --udp-ports <list>
                        Publish comma-separated UDP PORT or HOST:CONTAINER ports
@@ -106,6 +108,7 @@ is_true() {
 #   c|claude [profile]   launch Claude Code with an optional profile.
 #   cx|codex [profile]   launch Codex with an optional profile.
 #   -r, --resume <id>    resume a prior session with the selected agent.
+#   --fork               fork the resumed session with a new session ID.
 #   --ports <list>       extra ports to publish, comma-separated. Each entry is
 #                        "PORT" (host==container) or "SRC:DST" (host:container).
 #   --udp-ports <list>   extra UDP ports to publish, with the same syntax as
@@ -129,6 +132,7 @@ AGENT=""
 PROFILE=""
 CODEX_PROFILE=""
 RESUME=""
+FORK_SESSION=0
 PORTS=""
 UDP_PORTS=""
 CODEX_AUTO_START=""
@@ -166,6 +170,9 @@ while [ $# -gt 0 ]; do
       ;;
     --resume=*)
       RESUME=${1#--resume=}
+      ;;
+    --fork|--fork-session)
+      FORK_SESSION=1
       ;;
     --ports)
       shift
@@ -258,6 +265,11 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+if [ "$FORK_SESSION" -eq 1 ] && [ -z "$RESUME" ]; then
+  echo 'at=fatal msg="--fork requires --resume"' >&2
+  exit 1
+fi
 
 if [ -z "$AGENT" ] && [ -n "$RESUME" ]; then
   echo 'at=fatal msg="specify an agent: c or claude, cx or codex"' >&2
@@ -1096,6 +1108,7 @@ run_lima_vm() {
       set -- "$@" CLAUDE_RESUME="$RESUME"
     fi
   fi
+  [ "$FORK_SESSION" -eq 1 ] && set -- "$@" AI_FORK_SESSION=1
   if [ "$AGENT" = codex ]; then
     set -- "$@" CODEX_AUTO_START=1
   elif [ "$AGENT" = claude ]; then
@@ -1172,6 +1185,9 @@ CONTAINER_NAME=$(next_instance_name)
 set --
 if [ -n "$GITHUB_SESSION_DIR" ]; then
   set -- "$@" --volume "$GITHUB_SESSION_DIR/bridge:/run/github-bridge:ro"
+fi
+if [ "$FORK_SESSION" -eq 1 ]; then
+  set -- "$@" --env AI_FORK_SESSION=1
 fi
 
 podman run --rm --interactive --tty \
