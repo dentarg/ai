@@ -63,6 +63,20 @@ output=$(GH_DEBUG=api PATH="$fake_bin:$PATH" "$REPO_DIR/bin/ai" c --github=work)
 [[ "$output" == '{"number":12}' ]]
 grep -Fx GH_BRIDGE_TOKEN "$BRIDGE_TEST_ARGS" >/dev/null
 grep -E '/github\.[^/]+/bridge:/run/github-bridge:ro$' "$BRIDGE_TEST_ARGS" >/dev/null
+ruby -rtime -rjson - "$AI_DIR/logs/github-bridge.log" "$BRIDGE_TEST_ARGS" <<'RUBY'
+expected_session = File.read(ARGV[1])[/\/(github\.[^\/]+)\/bridge:\/run\/github-bridge:ro/, 1]
+events, sessions = [], []
+File.foreach(ARGV[0]) do |line|
+  fields = line.match(/\Aat=\w+ timestamp=(\S+) event=(\w+) /)
+  abort "audit event is missing a UTC timestamp" unless fields && Time.iso8601(fields[1]).utc?
+  session = line[/ session_id=("(?:\\.|[^"\\])*")/, 1]
+  abort "audit event is missing its bridge session ID" unless session
+  sessions << JSON.parse(session)
+  events << fields[2]
+end
+abort "audit session does not match the bridge" unless expected_session && sessions.uniq == [expected_session]
+abort "audit lifecycle is incomplete" unless %w[broker_started request_completed broker_stopped].all? { |event| events.include?(event) }
+RUBY
 if grep -E 'github_test_credential|GH_BRIDGE_TOKEN=|github-bridge.json|github-command-' "$BRIDGE_TEST_ARGS" "$AI_DIR/logs/github-bridge.log"; then
   echo 'at=fatal msg="GitHub bridge leaked host-only information"' >&2
   exit 1

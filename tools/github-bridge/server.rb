@@ -1,5 +1,6 @@
 require "socket"
 require "tmpdir"
+require "time"
 require "uri"
 require_relative "executor"
 require_relative "../onepassword-bridge/server"
@@ -129,9 +130,12 @@ module GitHubBridge
   end
 
   def self.log(level, event, project, operation = nil, repository = nil)
-    fields = { profile: ENV["GH_BRIDGE_PROFILE"], project: project, operation: operation, repository: repository }
+    fields = {
+      session_id: File.basename(ENV.fetch("GH_BRIDGE_SESSION_DIR", "unknown")),
+      profile: ENV["GH_BRIDGE_PROFILE"], project: project, operation: operation, repository: repository,
+    }
     details = fields.reject { |_, value| value.nil? }.map { |key, value| "#{key}=#{JSON.generate(value)}" }
-    puts (["at=#{level}", "event=#{event}"] + details).join(" ")
+    puts (["at=#{level}", "timestamp=#{Time.now.utc.iso8601(3)}", "event=#{event}"] + details).join(" ")
     $stdout.flush
   end
 

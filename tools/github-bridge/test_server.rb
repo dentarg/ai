@@ -4,6 +4,27 @@ require "open3"
 require_relative "server"
 
 class GitHubServerTest < Minitest::Test
+  def test_audit_log_includes_a_utc_timestamp_and_bridge_session_id
+    previous_directory = ENV["GH_BRIDGE_SESSION_DIR"]
+    ENV["GH_BRIDGE_SESSION_DIR"] = "/private/runtime/github.test-session"
+    before = Time.now
+    output, error = capture_io do
+      GitHubBridge.log("info", "read_allowed", "/project with spaces", "pr-view", "owner/repo")
+    end
+    assert_empty error
+    assert_match(/\Aat=info timestamp=(\S+) event=read_allowed /, output)
+    timestamp = Time.iso8601(output[/timestamp=(\S+)/, 1])
+    assert timestamp.utc?
+    assert_operator timestamp, :>=, before - 0.001
+    assert_operator timestamp, :<=, Time.now
+    assert_includes output, 'project="/project with spaces"'
+    assert_includes output, 'session_id="github.test-session"'
+    refute_includes output, "/private/runtime"
+    assert_equal 1, output.lines.size
+  ensure
+    ENV["GH_BRIDGE_SESSION_DIR"] = previous_directory
+  end
+
   def test_ci_downloads_preserve_bytes_and_never_publish_failed_or_overwritten_files
     Dir.mktmpdir do |directory|
       calls, paths = [], []

@@ -1001,8 +1001,12 @@ have a 60-second transfer deadline. The broker handles
 one request at a time. It exits with the session and removes its runtime directory.
 
 Audit events go to `$AI_DIR/logs/github-bridge.log` (default
-`~/ai/logs/github-bridge.log`) without tokens, token references, text bodies, or
-subprocess error output. Returned repository content is visible to the agent.
+`~/ai/logs/github-bridge.log`). Every event includes a UTC `timestamp` with
+millisecond precision and `session_id`, the unique `github.…` bridge identifier
+for that container/VM launch. Startup, request, and shutdown events share this
+ID; it identifies the bridge session rather than a Claude/Codex conversation.
+Logs omit tokens, token references, text bodies, and subprocess error output.
+Returned repository content is visible to the agent.
 
 Run the bridge tests with:
 
