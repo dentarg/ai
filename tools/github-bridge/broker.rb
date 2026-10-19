@@ -1,6 +1,7 @@
 require "json"
 require "openssl"
 require_relative "asset"
+require_relative "errors"
 
 module GitHubBridge
   Response = Struct.new(:status, :body)
@@ -102,9 +103,11 @@ module GitHubBridge
       output = @executor.call(request)
       @logger.call("info", "request_completed", operation, repository)
       Response.new(200, output)
-    rescue StandardError
-      @logger.call("error", "request_failed", operation, repository)
-      response(502, "GitHub request failed; check host access and policy")
+    rescue StandardError => error
+      details = { error_class: error.class.name }
+      details.merge!(error.details) if error.is_a?(RequestError)
+      @logger.call("error", "request_failed", operation, repository, details)
+      Response.new(502, "GitHub request failed; check host access and policy\n")
     end
 
     private

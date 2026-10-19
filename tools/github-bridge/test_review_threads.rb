@@ -24,6 +24,19 @@ class GitHubReviewThreadsTest < Minitest::Test
       "pullRequest" => { "number" => number, "repository" => { "nameWithOwner" => repository } } } } }
   end
 
+  def test_resolution_errors_identify_the_failing_graphql_step
+    @responses.concat([lookup, { "errors" => [{ "type" => "FORBIDDEN", "message" => "Resource not accessible by integration" }] }])
+    error = assert_raises(GitHubBridge::RequestError) { @threads.call(@request.merge("operation" => "pr-review-resolve")) }
+    assert_equal "review_thread_resolve", error.details.fetch(:stage)
+    assert_equal "FORBIDDEN", error.details.fetch(:github_error_type)
+    assert_equal "Resource not accessible by integration", error.details.fetch(:error_message)
+
+    @responses << { "errors" => [{ "type" => "NOT_FOUND", "message" => "Could not resolve to a node" }] }
+    error = assert_raises(GitHubBridge::RequestError) { @threads.call(@request.merge("operation" => "pr-review-resolve")) }
+    assert_equal "review_thread_lookup", error.details.fetch(:stage)
+    assert_equal "NOT_FOUND", error.details.fetch(:github_error_type)
+  end
+
   def test_thread_writes_check_repository_and_pr_before_mutating
     %w[pr-review-reply pr-review-resolve].each do |operation|
       [lookup(repository: "other/repo"), lookup(number: 13), { "data" => { "node" => nil } },

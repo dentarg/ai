@@ -4,6 +4,71 @@ require "stringio"
 require_relative "executor"
 
 class GitHubExecutorTest < Minitest::Test
+  def test_error_messages_are_redacted_before_truncation_and_remain_valid_utf8
+    secrets = ["secret_token", "private request body", "private title", "op://Agent/GitHub/token"]
+    prefix = "private request body | private title | op://Agent/GitHub/token\n"
+    message = prefix + "é" * ((4090 - prefix.bytesize) / 2) + "secret_token\u0000"
+    error = GitHubBridge::RequestError.new(error_message: message, exit_status: 1).redacted(secrets)
+    result = error.details.fetch(:error_message)
+    assert result.valid_encoding?
+    assert_operator result.bytesize, :<=, GitHubBridge::RequestError::MAX_MESSAGE_BYTES
+    refute_match(/[\u0000-\u001f]/, result)
+    secrets.each { |secret| refute_includes result, secret }
+    refute_includes result, "secret"
+    assert_includes result, "[REDACTED]"
+    assert_equal 1, error.details.fetch(:exit_status)
+  end
+
+  def test_credential_failures_do_not_disclose_1password_output
+    runner = Object.new
+    runner.define_singleton_method(:call) do |*, **|
+      raise GitHubBridge::CommandError.new(exit_status: 1, output: "private credential",
+                                          error_output: "op://Agent/GitHub/token and private credential")
+    end
+    policy = GitHubBridge::Policy.new(
+      "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+      "repositories" => ["owner/repo"], "operations" => ["pr-view"],
+    )
+    executor = GitHubBridge::Executor.new(policy: policy, gh: "/host/gh", op: "/host/op", directory: Dir.tmpdir, runner: runner)
+    error = assert_raises(GitHubBridge::RequestError) do
+      executor.call("operation" => "pr-view", "repository" => "owner/repo", "number" => 12)
+    end
+    assert_equal({ stage: "credential_read", error_class: "GitHubBridge::CommandError", exit_status: 1 }, error.details)
+  end
+
+  def test_api_failures_preserve_redacted_diagnostics_without_disclosing_response_data
+    Dir.mktmpdir do |directory|
+      gh = File.join(directory, "gh")
+      File.write(gh, "#!#{RbConfig.ruby}\n" + <<~'RUBY')
+        require "json"
+        puts JSON.generate("message" => "Resource not accessible by personal access token",
+                           "data" => {"body" => "private response body"})
+        warn "gh: denied #{ENV.fetch('GH_TOKEN')} (HTTP 403)"
+        exit 1
+      RUBY
+      File.chmod(0o755, gh)
+      runner = GitHubBridge::Runner.new
+      runner.define_singleton_method(:call) do |argv, **options|
+        argv.first == "/host/op" ? "secret_token\n" : super(argv, **options)
+      end
+      policy = GitHubBridge::Policy.new(
+        "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+        "repositories" => ["owner/repo"], "operations" => ["pr-view"],
+      )
+      executor = GitHubBridge::Executor.new(policy: policy, gh: gh, op: "/host/op", directory: directory, runner: runner)
+      error = assert_raises(GitHubBridge::RequestError) do
+        executor.call("operation" => "pr-view", "repository" => "owner/repo", "number" => 12)
+      end
+      assert_equal "github_api", error.details.fetch(:stage)
+      assert_equal 1, error.details.fetch(:exit_status)
+      assert_equal 403, error.details.fetch(:http_status)
+      assert_includes error.details.fetch(:error_message), "Resource not accessible"
+      assert_includes error.details.fetch(:error_message), "[REDACTED]"
+      refute_includes error.details.inspect, "secret_token"
+      refute_includes error.details.inspect, "private response body"
+    end
+  end
+
   def test_runner_streams_downloads_and_enforces_output_limits
     runner = GitHubBridge::Runner.new
     Tempfile.create("runner-download-") do |file|

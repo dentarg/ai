@@ -262,5 +262,7 @@ class GitHubBrokerTest < Minitest::Test
     assert_equal 502, response.status
     refute_includes response.body, "sensitive"
     refute_includes logs.inspect, "sensitive"
+    assert_equal 1, logs.size
+    assert_equal({ error_class: "RuntimeError" }, logs.first.last)
   end
 end

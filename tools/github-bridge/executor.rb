@@ -19,6 +19,7 @@ module GitHubBridge
             stdin.close
             streams = [stdout, stderr]
             output = destination || +"".b
+            error_output = +"".b
             bytes = 0
             until streams.empty?
               IO.select(streams).first.each do |stream|
@@ -31,9 +32,13 @@ module GitHubBridge
                 bytes += chunk.bytesize
                 raise "command output limit exceeded" if bytes > limit
                 output << chunk if stream == stdout
+                error_output << chunk if stream == stderr
               end
             end
-            raise "command failed" unless process.value.success?
+            status = process.value
+            unless status.success?
+              raise CommandError.new(exit_status: status.exitstatus, output: destination ? nil : output, error_output: error_output)
+            end
             output
           end
         ensure
@@ -54,6 +59,7 @@ module GitHubBridge
     end
 
     def call(request)
+      stage = "credential_read"
       token = @runner.call(
         [@op, "read", "--account", @policy.account, @policy.token],
         env: { "HOME" => Dir.home, "PATH" => "/usr/bin:/bin:/usr/sbin:/sbin" },
@@ -61,6 +67,7 @@ module GitHubBridge
       ).strip
       raise "invalid token" unless token.match?(/\A[A-Za-z0-9_]+\z/)
 
+      stage = "github_api"
       env = {
         "HOME" => @directory, "GH_CONFIG_DIR" => @directory, "GH_TOKEN" => token,
         "PATH" => "/usr/bin:/bin:/usr/sbin:/sbin", "GH_PROMPT_DISABLED" => "1",
@@ -125,6 +132,17 @@ module GitHubBridge
         output = JSON.generate(records) + "\n"
       end
       output.gsub(token, "[REDACTED]")
+    rescue StandardError => error
+      failure = if error.is_a?(RequestError)
+        error
+      elsif error.is_a?(CommandError) && stage == "github_api"
+        RequestError.command(error, stage: stage)
+      else
+        details = { stage: stage, error_class: error.class.name }
+        details[:exit_status] = error.exit_status if error.is_a?(CommandError)
+        RequestError.new(details)
+      end
+      raise failure.redacted([token, ENV["GH_BRIDGE_TOKEN"], @policy.token, request["body"], request["title"]])
     end
 
     private

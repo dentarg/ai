@@ -1005,8 +1005,15 @@ Audit events go to `$AI_DIR/logs/github-bridge.log` (default
 millisecond precision and `session_id`, the unique `github.…` bridge identifier
 for that container/VM launch. Startup, request, and shutdown events share this
 ID; it identifies the bridge session rather than a Claude/Codex conversation.
-Logs omit tokens, token references, text bodies, and subprocess error output.
-Returned repository content is visible to the agent.
+Failed requests include the failing stage and exception class. GitHub API
+failures also include a bounded, redacted `error_message`, the command's
+`exit_status`, and `http_status` or `github_error_type` when available. Review
+thread failures distinguish lookup, reply, and resolution. A failed request
+produces one `request_failed` record; it is not also logged as rejected.
+Tokens, token references, supplied text bodies, raw response data, and
+1Password command output are omitted. API diagnostics stay on the host; the
+guest receives a generic failure. Returned repository content is visible to
+the agent.
 
 Run the bridge tests with:
 

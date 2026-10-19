@@ -4,6 +4,46 @@ require "open3"
 require_relative "server"
 
 class GitHubServerTest < Minitest::Test
+  def test_approved_resolution_logs_api_diagnostics_once_and_returns_a_generic_failure
+    policy = GitHubBridge::Policy.new(
+      "account" => "my.1password.com", "token" => "op://Agent/GitHub/token",
+      "repositories" => ["owner/repo"], "operations" => ["pr-review-resolve"],
+    )
+    runner = Object.new
+    runner.define_singleton_method(:call) do |argv, **options|
+      next "secret_token\n" if argv.first == "/host/op"
+
+      query = JSON.parse(options.fetch(:input)).fetch("query")
+      if query == GitHubBridge::ReviewThreads::LOOKUP
+        JSON.generate("data" => { "node" => { "pullRequest" => { "number" => 12, "repository" => { "nameWithOwner" => "owner/repo" } } } })
+      else
+        output = JSON.generate("errors" => [{ "type" => "FORBIDDEN", "message" => "Resource not accessible by integration" }])
+        raise GitHubBridge::CommandError.new(exit_status: 1, output: output, error_output: "gh: denied secret_token (HTTP 403)")
+      end
+    end
+    executor = GitHubBridge::Executor.new(policy: policy, gh: "/host/gh", op: "/host/op", directory: Dir.tmpdir, runner: runner)
+    approvals = []
+    broker = GitHubBridge::Broker.new(policy: policy, token: "session-token", executor: executor,
+      approver: ->(request) { approvals << request; true },
+      logger: ->(*fields) { GitHubBridge.log(fields[0], fields[1], "/project", *fields.drop(2)) })
+    request = { "operation" => "pr-review-resolve", "repository" => "owner/repo", "number" => 12, "thread_id" => "PRRT_example" }
+    response = nil
+    output, = capture_io { response = broker.call(request, "session-token") }
+    assert_equal [request], approvals
+    assert_equal 502, response.status
+    refute_includes response.body, "Resource not accessible"
+    refute_includes response.body, "secret_token"
+    assert_equal 1, output.lines.size
+    assert_includes output, 'event=request_failed'
+    assert_includes output, 'stage="review_thread_resolve"'
+    assert_includes output, 'github_error_type="FORBIDDEN"'
+    assert_includes output, 'http_status=403'
+    assert_includes output, 'exit_status=1'
+    assert_includes output, 'Resource not accessible by integration'
+    refute_includes output, "secret_token"
+    refute_includes output, "request_rejected"
+  end
+
   def test_audit_log_includes_a_utc_timestamp_and_bridge_session_id
     previous_directory = ENV["GH_BRIDGE_SESSION_DIR"]
     ENV["GH_BRIDGE_SESSION_DIR"] = "/private/runtime/github.test-session"

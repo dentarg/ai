@@ -1,5 +1,6 @@
 require "json"
 require "timeout"
+require_relative "errors"
 
 module GitHubBridge
   class ReviewThreads
@@ -58,7 +59,7 @@ module GitHubBridge
 
     private
 
-    def query(document, variables)
+    def query(document, variables, stage:)
       output = @runner.call(
         [@gh, "api", "--hostname", "github.com", "graphql", "--input", "-"],
         env: @env, directory: @directory,
@@ -68,9 +69,11 @@ module GitHubBridge
       raise "review thread output limit exceeded" if @bytes > 2 * 1024 * 1024
 
       response = JSON.parse(output)
-      raise "GitHub GraphQL request failed" if response["errors"] && !response["errors"].empty?
+      raise RequestError.graphql(response["errors"], stage: stage) if response["errors"] && !response["errors"].empty?
 
       response.fetch("data")
+    rescue CommandError => error
+      raise RequestError.command(error, stage: stage)
     end
 
     def list(request)
@@ -78,7 +81,7 @@ module GitHubBridge
       variables = { "owner" => owner, "name" => name, "number" => request.fetch("number"), "cursor" => nil }
       records, cursors = [], []
       loop do
-        connection = query(LIST, variables).fetch("repository").fetch("pullRequest").fetch("reviewThreads")
+        connection = query(LIST, variables, stage: "review_thread_list").fetch("repository").fetch("pullRequest").fetch("reviewThreads")
         records.concat(connection.fetch("nodes"))
         page = connection.fetch("pageInfo")
         break unless page.fetch("hasNextPage")
@@ -94,18 +97,18 @@ module GitHubBridge
 
     def mutate(request)
       variables = { "id" => request.fetch("thread_id") }
-      thread = query(LOOKUP, variables).fetch("node")
+      thread = query(LOOKUP, variables, stage: "review_thread_lookup").fetch("node")
       pr = thread && thread["pullRequest"]
       unless pr && pr.fetch("number") == request.fetch("number") &&
           pr.fetch("repository").fetch("nameWithOwner").casecmp?(request.fetch("repository"))
-        raise "thread does not belong to the requested pull request"
+        raise RequestError.new(stage: "review_thread_lookup", error_message: "thread does not belong to the requested pull request")
       end
 
       case request.fetch("operation")
       when "pr-review-reply"
-        query(REPLY, variables.merge("body" => request.fetch("body"))).fetch("addPullRequestReviewThreadReply").fetch("comment")
+        query(REPLY, variables.merge("body" => request.fetch("body")), stage: "review_thread_reply").fetch("addPullRequestReviewThreadReply").fetch("comment")
       when "pr-review-resolve"
-        query(RESOLVE, variables).fetch("resolveReviewThread").fetch("thread")
+        query(RESOLVE, variables, stage: "review_thread_resolve").fetch("resolveReviewThread").fetch("thread")
       else
         raise "unsupported review thread operation"
       end

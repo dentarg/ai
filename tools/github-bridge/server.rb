@@ -129,11 +129,11 @@ module GitHubBridge
     end
   end
 
-  def self.log(level, event, project, operation = nil, repository = nil)
+  def self.log(level, event, project, operation = nil, repository = nil, diagnostics = {})
     fields = {
       session_id: File.basename(ENV.fetch("GH_BRIDGE_SESSION_DIR", "unknown")),
       profile: ENV["GH_BRIDGE_PROFILE"], project: project, operation: operation, repository: repository,
-    }
+    }.merge(diagnostics)
     details = fields.reject { |_, value| value.nil? }.map { |key, value| "#{key}=#{JSON.generate(value)}" }
     puts (["at=#{level}", "timestamp=#{Time.now.utc.iso8601(3)}", "event=#{event}"] + details).join(" ")
     $stdout.flush
@@ -150,7 +150,9 @@ module GitHubBridge
                               op: ENV.fetch("GH_BRIDGE_OP_BIN"), directory: command_directory)
       broker = Broker.new(policy: policy, token: ENV.fetch("GH_BRIDGE_TOKEN"), executor: executor,
                           approver: Approver.new(project, directory: command_directory),
-                          logger: ->(level, event, operation, repository) { log(level, event, project, operation, repository) })
+                          logger: ->(level, event, operation, repository, diagnostics = {}) {
+                            log(level, event, project, operation, repository, diagnostics)
+                          })
       server = Server.new(broker: broker, certificate: certificate, private_key: private_key)
       Signal.trap("TERM") { server.close }
       Signal.trap("INT") { server.close }
