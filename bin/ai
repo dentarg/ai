@@ -72,7 +72,8 @@ Environment:
                       Chrome Canary executable path
   AI_REMOTE           Enable remote control when set to 1, true, yes, or on
   AI_FAST             Enable fast mode when set to 1, true, yes, or on
-  PORT                Primary published port (default: 1337)
+  PORT                Primary guest listening port (default: 1337)
+  HOST_PORT           Set inside the guest to its primary host port
   AI_VM_BASE          Lima base instance to clone (ai-base or ai-base-gpu)
   AI_VM_HOST_PORT     Primary host port (default: choose a free port)
 EOF
@@ -819,17 +820,17 @@ refresh_claude_token() {
 [ -n "$PROFILE" ] && refresh_claude_token "$PROFILE"
 
 free_host_port() {
-  if [ -n "${AI_VM_HOST_PORT:-}" ]; then
-    case "$AI_VM_HOST_PORT" in
-      ''|*[!0-9]*) echo 'at=fatal msg="AI_VM_HOST_PORT must be numeric"' >&2; exit 1 ;;
+  if [ -n "${1:-}" ]; then
+    case "$1" in
+      *[!0-9]*) echo 'at=fatal msg="requested host port must be numeric"' >&2; exit 1 ;;
     esac
-    printf '%s\n' "$AI_VM_HOST_PORT"
+    printf '%s\n' "$1"
   elif command -v ruby >/dev/null 2>&1; then
     ruby -rsocket -e 's = TCPServer.new("127.0.0.1", 0); print s.addr[1]; s.close'
   elif command -v python3 >/dev/null 2>&1; then
     python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'
   else
-    echo 'at=fatal msg="ruby or python3 is required to allocate a Lima host port"' >&2
+    echo 'at=fatal msg="ruby or python3 is required to allocate a host port"' >&2
     exit 1
   fi
 }
@@ -989,7 +990,7 @@ run_lima_vm() {
   fi
 
   VM_NAME=$(next_instance_name)
-  primary_host_port=$(free_host_port)
+  primary_host_port=$(free_host_port "${AI_VM_HOST_PORT:-}")
 
   mounts_json=$(jq -cn \
     --arg bundle "$BUNDLE_DIR" \
@@ -1098,6 +1099,7 @@ run_lima_vm() {
     TERM="$guest_term" \
     HOST_DIR="$HOST_DIR_NAME" \
     PORT="$PORT" \
+    HOST_PORT="$primary_host_port" \
     AI_AUTO_LAUNCH=1
   [ -n "$PROFILE" ] && set -- "$@" CLAUDE_PROFILE="$PROFILE"
   [ -n "$CODEX_PROFILE" ] && set -- "$@" CODEX_PROFILE="$CODEX_PROFILE"
@@ -1181,6 +1183,7 @@ fi
 # SYS_PTRACE strace
 
 CONTAINER_NAME=$(next_instance_name)
+primary_host_port=$(free_host_port)
 
 set --
 if [ -n "$GITHUB_SESSION_DIR" ]; then
@@ -1198,7 +1201,8 @@ podman run --rm --interactive --tty \
   --cap-add=NET_RAW \
   --cap-add=SYS_PTRACE \
   --env HOST_DIR="$HOST_DIR_NAME" \
-  --env PORT=${PORT} \
+  --env PORT="$PORT" \
+  --env HOST_PORT="$primary_host_port" \
   ${PROFILE_ENV:-} \
   ${CODEX_PROFILE_ENV:-} \
   ${RESUME_ENV:-} \
@@ -1219,7 +1223,7 @@ podman run --rm --interactive --tty \
   --volume ${REPO_DIR}/claude:/claude:ro \
   --volume $(pwd):/app \
   --workdir /app \
-  --publish ${PORT} \
+  --publish "$primary_host_port:$PORT" \
   ${PUBLISH_PORTS:-} \
   --label cwd="${CWD_LABEL}" \
   --label agent="${AGENT}" \

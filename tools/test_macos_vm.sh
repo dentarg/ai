@@ -114,6 +114,8 @@ grep -F '<-L><127.0.0.1:45555:127.0.0.1:1337>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '<-L><127.0.0.1:8888:127.0.0.1:7777>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '</opt/homebrew/bin/bash>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '<CODEX_AUTO_START=1>' "$MACOS_TEST_LOG" >/dev/null
+grep -F '<PORT=1337>' "$MACOS_TEST_LOG" >/dev/null
+grep -F '<HOST_PORT=45555>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '<CODEX_RESUME=session-id>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '<AI_FORK_SESSION=1>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '<-O><exit><lima-ai-m-00-project-with-spaces>' "$MACOS_TEST_LOG" >/dev/null

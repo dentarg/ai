@@ -17,6 +17,16 @@ assert_label() {
   fi
 }
 
+assert_primary_port() {
+  local guest_port=$1
+  local host_port primary_mapping
+  host_port=$(sed -n 's/^HOST_PORT=//p' "$PODMAN_ARGS_FILE")
+  [[ "$host_port" =~ ^[0-9]+$ && "$host_port" -gt 0 && "$host_port" -le 65535 ]]
+  primary_mapping=$(awk 'previous == "--publish" { print; exit } { previous = $0 }' "$PODMAN_ARGS_FILE")
+  [[ "$primary_mapping" == "$host_port:$guest_port" ]]
+  grep -Fx "PORT=$guest_port" "$PODMAN_ARGS_FILE" >/dev/null
+}
+
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
@@ -40,6 +50,7 @@ AI_DIR="$ai_dir" \
 PATH="${fake_bin}:${REPO_DIR}/bin:${PATH}" \
   "$REPO_DIR/bin/ai" cx >/dev/null
 assert_label codex
+assert_primary_port 1337
 container_name=$(awk 'previous == "--name" { print; exit } { previous = $0 }' "$PODMAN_ARGS_FILE")
 container_hostname=$(awk 'previous == "--hostname" { print; exit } { previous = $0 }' "$PODMAN_ARGS_FILE")
 [[ "$container_name" == ai-c-00-* ]]
@@ -54,6 +65,11 @@ if grep -F '/host-workdir/' "$PODMAN_ARGS_FILE" >/dev/null; then
   echo 'at=fatal msg="project was mounted at a second working directory"' >&2
   exit 1
 fi
+
+HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:$PATH" \
+  PORT=8080 AI_VM_HOST_PORT=45555 "$REPO_DIR/bin/ai" --ports 8888:7777 >/dev/null
+assert_primary_port 8080
+grep -Fx '8888:7777' "$PODMAN_ARGS_FILE" >/dev/null
 
 mkdir -p "${ai_dir}/settings/codex_alpha"
 printf '{}\n' > "${ai_dir}/settings/codex_alpha/auth.json"

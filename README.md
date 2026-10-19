@@ -256,7 +256,8 @@ Podman and both Linux and macOS VMs and requires an explicit `--resume` ID.
 
 ## Prerequisites
 
-Podman is required for the default backend. Lima and `jq` are required for
+Podman is required for the default backend. Ruby or Python 3 is needed on the
+host to choose a free primary host port. Lima and `jq` are required for
 `--vm`. The optional 1Password bridge also requires 1Password 8 and 1Password
 CLI on the host.
 
@@ -568,10 +569,16 @@ sudo systemctl stop local-code-server
 LOCAL_CODE_GPU_LAYERS=18 local-code-server
 ```
 
-The primary guest port still comes from `PORT` (1337 by default), but the VM
-launcher chooses a free loopback host port and prints it when the VM is ready.
-Set `AI_VM_HOST_PORT` to request a fixed primary host port. Explicit `--ports`
-mappings remain fixed. GPU builds default to 24 CPUs and 48 GiB of memory;
+The primary guest port comes from `PORT` (1337 by default). Both container and
+VM launches choose a free host port and expose it inside the guest as
+`HOST_PORT`. Apps should listen on `PORT` and can use `HOST_PORT` when building
+browser-facing URLs. For example, a mapping of host port 45555 to guest port
+1337 sets `PORT=1337` and `HOST_PORT=45555`. This describes the primary TCP
+mapping; additional `--ports` and `--udp-ports` mappings remain explicit.
+VM forwards bind to host loopback and print the port when ready; set
+`AI_VM_HOST_PORT` to request a fixed primary host port for a VM.
+
+GPU builds default to 24 CPUs and 48 GiB of memory;
 other builds default to 4 CPUs and 8 GiB. These defaults can be changed with
 `AI_VM_CPUS`, `AI_VM_MEMORY` (GiB), and `AI_VM_DISK` (GiB); `AI_VM_BASE`
 changes the base instance name for both building and launching.

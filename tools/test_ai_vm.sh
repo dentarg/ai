@@ -150,6 +150,8 @@ sed -n 's/.*\.portForwards = \(.*\) | \.timezone = .*/\1/p' "$log" | jq -e '
   }
 ' >/dev/null
 grep -F '<AI_AUTO_LAUNCH=1>' "$log" >/dev/null
+grep -F '<PORT=1337>' "$log" >/dev/null
+grep -F '<HOST_PORT=45555>' "$log" >/dev/null
 grep -F '<CODEX_AUTO_START=1>' "$log" >/dev/null
 grep -F '<CODEX_RESUME=session-id>' "$log" >/dev/null
 grep -F '<AI_FORK_SESSION=1>' "$log" >/dev/null
@@ -170,6 +172,7 @@ fallback_output="${tmpdir}/fallback-output"
   HOME="${tmpdir}/home" \
   AI_DIR="$ai_dir" \
   AI_VM_HOST_PORT=45560 \
+  PORT=8080 \
   INFOCMP_STATUS=1 \
   LIMACTL_LOG="$log" \
   TERM=xterm-ghostty \
@@ -178,6 +181,9 @@ fallback_output="${tmpdir}/fallback-output"
 )
 grep -F '<CLAUDE_RESUME=session-id>' "$log" >/dev/null
 grep -F '<AI_FORK_SESSION=1>' "$log" >/dev/null
+grep -F '<PORT=8080>' "$log" >/dev/null
+grep -F '<HOST_PORT=45560>' "$log" >/dev/null
+grep -F '"guestPort":8080,"hostPort":45560' "$log" >/dev/null
 grep -F '<TERM=xterm-256color>' "$log" >/dev/null
 grep -F 'falling back to xterm-256color' "$fallback_output" >/dev/null
 if grep -F '<tic>' "$log" >/dev/null; then
