@@ -782,6 +782,9 @@ configured reference through host `op` for each request and passes the token
 only to host `gh`. It does not use your normal `gh` login or expose a token-read
 operation to the container.
 
+Resolving review threads currently also requires
+[`Contents: write`](https://github.com/orgs/community/discussions/204269).
+
 Configure access once on the host, from any directory:
 
 ```shell

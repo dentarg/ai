@@ -86,6 +86,9 @@ resolve merely because a reply was posted. Report the returned comment URL or
 resolution state. After an uncertain reply, reread comments before retrying
 to avoid duplicates; after uncertain resolution, reread `pr-review-threads`.
 
+Resolving review threads currently also requires
+[`Contents: write`](https://github.com/orgs/community/discussions/204269).
+
 ## Read issues
 
 ```sh
