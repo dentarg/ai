@@ -571,12 +571,14 @@ LOCAL_CODE_GPU_LAYERS=18 local-code-server
 
 The primary guest port comes from `PORT` (1337 by default). Both container and
 VM launches choose a free host port and expose it inside the guest as
-`HOST_PORT`. Apps should listen on `PORT` and can use `HOST_PORT` when building
-browser-facing URLs. For example, a mapping of host port 45555 to guest port
+`HOST_PORT`. At startup, they print `http://localhost:<host-port>` on a
+separate line for the primary TCP mapping and each `--ports` mapping.
+Apps should listen on `PORT` and can use `HOST_PORT` when building
+browser-facing URLs. For example, host port 45555 forwarded to guest port
 1337 sets `PORT=1337` and `HOST_PORT=45555`. This describes the primary TCP
 mapping; additional `--ports` and `--udp-ports` mappings remain explicit.
-VM forwards bind to host loopback and print the port when ready; set
-`AI_VM_HOST_PORT` to request a fixed primary host port for a VM.
+VM forwards bind to host loopback; set `AI_VM_HOST_PORT` to request a fixed
+primary host port for a VM.
 
 GPU builds default to 24 CPUs and 48 GiB of memory;
 other builds default to 4 CPUs and 8 GiB. These defaults can be changed with

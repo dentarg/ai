@@ -107,6 +107,8 @@ launch_output="${tmpdir}/launch-output"
     --udp-ports 41642:41641 --resume=session-id --fork >"$launch_output" 2>&1
 )
 
+diff -u <(printf 'http://localhost:%s\n' 45555 9999 8888) \
+  <(grep '^http://localhost:' "$launch_output")
 if grep -F 'terminfo setup noise' "$launch_output" >/dev/null; then
   echo 'at=fatal msg="successful terminfo installation was noisy"' >&2
   exit 1
@@ -183,6 +185,8 @@ grep -F '<CLAUDE_RESUME=session-id>' "$log" >/dev/null
 grep -F '<AI_FORK_SESSION=1>' "$log" >/dev/null
 grep -F '<PORT=8080>' "$log" >/dev/null
 grep -F '<HOST_PORT=45560>' "$log" >/dev/null
+diff -u <(printf 'http://localhost:%s\n' 45560) \
+  <(grep '^http://localhost:' "$fallback_output")
 grep -F '"guestPort":8080,"hostPort":45560' "$log" >/dev/null
 grep -F '<TERM=xterm-256color>' "$log" >/dev/null
 grep -F 'falling back to xterm-256color' "$fallback_output" >/dev/null

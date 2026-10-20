@@ -835,6 +835,14 @@ free_host_port() {
   fi
 }
 
+print_port_urls() (
+  printf 'http://localhost:%s\n' "$1"
+  IFS=,
+  for spec in $PORTS; do
+    printf 'http://localhost:%s\n' "${spec%%:*}"
+  done
+) >&2
+
 append_lima_forwards() {
   port_list=$1
   protocol=$2
@@ -1091,7 +1099,7 @@ run_lima_vm() {
       limactl shell --workdir /app "$VM_NAME" sh -c 'umask 077; cat > /workspace/.ai-host-browser-token'
   fi
 
-  echo "at=info msg=\"Lima VM ready\" vm=$VM_NAME port=$primary_host_port guest_port=$PORT" >&2
+  print_port_urls "$primary_host_port"
 
   set -- env \
     HOME=/workspace \
@@ -1192,6 +1200,8 @@ fi
 if [ "$FORK_SESSION" -eq 1 ]; then
   set -- "$@" --env AI_FORK_SESSION=1
 fi
+
+print_port_urls "$primary_host_port"
 
 podman run --rm --interactive --tty \
   "$@" \

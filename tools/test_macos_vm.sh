@@ -104,8 +104,10 @@ grep -F '<delete><--force><ai-base-macos>' "$MACOS_TEST_LOG" >/dev/null
 (
   cd "$tmpdir/project with spaces"
   MACOS_BASE_EXISTS=1 AI_DIR="$tmpdir/ai" AI_VM_HOST_PORT=45555 \
-    "$REPO_DIR/bin/ai" --macos cx --ports 9999,8888:7777 --resume session-id --fork >/dev/null
+    "$REPO_DIR/bin/ai" --macos cx --ports 9999,8888:7777 --resume session-id --fork >/dev/null 2>"$tmpdir/launch-output"
 )
+diff -u <(printf 'http://localhost:%s\n' 45555 9999 8888) \
+  <(grep '^http://localhost:' "$tmpdir/launch-output")
 grep -F '<ai-base-macos><ai-m-00-project-with-spaces>' "$MACOS_TEST_LOG" >/dev/null
 grep -F '/Users/Shared/ai/app' "$MACOS_TEST_LOG" >/dev/null
 grep -F 'bundle-macos' "$MACOS_TEST_LOG" >/dev/null
