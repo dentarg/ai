@@ -7,7 +7,7 @@ trap 'printf "at=error event=setup_failed line=%s\n" "$LINENO" >&2' ERR
 
 # Installer source pinned to a reviewed version of this repository.
 ai_revision=352a4a44a44f549666e485ab198011d569fd4ef9
-ruby_versions=(3.4.11 4.0.7)
+ruby_versions=(3.4.12 4.0.9)
 
 if [[ $(uname -s) != Linux || $(id -u) != 0 ]]; then
   echo 'at=error msg="This setup requires the root Linux cloud sandbox"' >&2
