@@ -11,10 +11,12 @@ while [ $# -gt 0 ]; do
     --resume) RESUME=1 ;;
     --update-claude) update_claude_version ;;
     --update-codex) update_codex_version ;;
+    --update-antigravity) update_antigravity_version ;;
     --update-plugins) update_plugin_manifest "$REPO_DIR/versions/codex-plugins" ;;
     --update-agents)
       update_claude_version
       update_codex_version
+      update_antigravity_version
       update_plugin_manifest "$REPO_DIR/versions/codex-plugins"
       ;;
     -h|--help)
@@ -68,7 +70,8 @@ trap 'exit 1' HUP INT TERM
 COPYFILE_DISABLE=1 /usr/bin/tar -chzf "$build_dir/assets.tar.gz" -C "$REPO_DIR" \
   lima/macos lima/assets/claude.sh lima/assets/gitconfig \
   dot.bashrc dot.gemrc gitignore-global versions inside_deps/_codex_plugins.sh \
-  inside_deps/npm-packages.txt tools/claude.sh tools/codex.sh tools/gemini.sh \
+  inside_deps/npm-packages.txt inside_deps/_antigravity.sh tools/antigravity.sh \
+  tools/claude.sh tools/codex.sh \
   tools/claude-hook.sh tools/claude-permission-hook.sh tools/claude-login.sh \
   tools/codex-hook.sh tools/gh-host.sh tools/agent-skills.sh skills \
   tools/op-read.sh tools/exit.sh bin/codex-login bin/refresh-tokens
@@ -124,6 +127,8 @@ limactl shell --workdir /workspace "$BASE_NAME" bash -lc '
   /opt/homebrew/bin/bash --version
   claude --version
   codex --version
+  antigravity-cli --version
+  test -x /usr/local/bin/g
   ruby --version
   erl -version
   rabbitmqctl version

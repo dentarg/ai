@@ -35,9 +35,16 @@ _ai_github_profile_options() {
     "$base/ai/github-bridge.json" 2>/dev/null || true
 }
 
+_ai_antigravity_profiles() {
+  local path
+  for path in "${AI_DIR:-${HOME}/ai}/settings"/antigravity_*(N/); do
+    print -r -- "${${path:t}#antigravity_}"
+  done
+}
+
 _ai_commands_options() {
   local -a commands options values
-  commands=(profile models session completion c claude cx codex)
+  commands=(profile models session completion c claude cx codex g antigravity)
   options=(
     --resume --fork --fork-session --ports --udp-ports --vm --keep-vm --gpu --nested-virt
     --cpus --memory --github --1password --host-browser --remote --fast --help
@@ -63,6 +70,18 @@ _ai_profiles_options() {
   compadd -V ai-arguments -- "${values[@]}"
 }
 
+_ai_antigravity_options() {
+  local -a profiles options
+  profiles=("${(@f)$(_ai_antigravity_profiles)}")
+  options=(
+    --resume --vm --macos --keep-vm --gpu --nested-virt --cpus --memory
+    --ports --udp-ports --github --1password --host-browser --help
+    "${(@f)$(_ai_browser_profile_options)}"
+    "${(@f)$(_ai_github_profile_options)}"
+  )
+  compadd -V ai-arguments -- "${profiles[@]}" "${options[@]}"
+}
+
 _ai() {
   local first=${words[2]:-}
   local action=${words[3]:-}
@@ -78,6 +97,7 @@ _ai() {
         session) _values command start attach list stop logs replay ports invite invitations revoke join --help ;;
         completion) _values shell bash zsh ;;
         c|claude|cx|codex) _ai_profiles_options ;;
+        g|antigravity) _ai_antigravity_options ;;
       esac
       ;;
     4)

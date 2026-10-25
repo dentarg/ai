@@ -21,6 +21,7 @@ FORCE=0
 GPU=0
 UPDATE_CLAUDE=0
 UPDATE_CODEX=0
+UPDATE_ANTIGRAVITY=0
 UPDATE_PLUGINS=0
 
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/ai-vm-build.XXXXXX")
@@ -31,7 +32,7 @@ trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
 usage () {
-  echo "Usage: ./build_vm [--force] [--gpu | --macos] [--update-claude] [--update-codex] [--update-plugins]" >&2
+  echo "Usage: ./build_vm [--force] [--gpu | --macos] [--update-claude] [--update-codex] [--update-antigravity] [--update-plugins]" >&2
   echo "       ./build_vm [--force] [--gpu | --macos] --update-agents" >&2
   exit "${1:-1}"
 }
@@ -42,8 +43,9 @@ while [ $# -gt 0 ]; do
     --gpu) GPU=1 ;;
     --update-claude) UPDATE_CLAUDE=1 ;;
     --update-codex) UPDATE_CODEX=1 ;;
+    --update-antigravity) UPDATE_ANTIGRAVITY=1 ;;
     --update-plugins) UPDATE_PLUGINS=1 ;;
-    --update-agents) UPDATE_CLAUDE=1; UPDATE_CODEX=1; UPDATE_PLUGINS=1 ;;
+    --update-agents) UPDATE_CLAUDE=1; UPDATE_CODEX=1; UPDATE_ANTIGRAVITY=1; UPDATE_PLUGINS=1 ;;
     -h|--help) usage 0 ;;
     *) echo "at=fatal msg=\"unknown option\" option=\"$1\"" >&2; usage ;;
   esac
@@ -85,6 +87,7 @@ fi
 
 [ "$UPDATE_CLAUDE" -eq 1 ] && update_claude_version
 [ "$UPDATE_CODEX" -eq 1 ] && update_codex_version
+[ "$UPDATE_ANTIGRAVITY" -eq 1 ] && update_antigravity_version
 [ "$UPDATE_PLUGINS" -eq 1 ] && \
   update_plugin_manifest "$REPO_DIR/versions/codex-plugins"
 
@@ -185,6 +188,8 @@ limactl shell "$BASE_NAME" sudo env AI_VM_GPU="$GPU" \
     docker compose version
     command -v codex
     command -v claude
+    antigravity-cli --version
+    test -s /usr/local/bin/g
     command -v fnox
     command -v tailcat
     command -v terraform

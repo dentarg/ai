@@ -26,17 +26,17 @@ Container = Struct.new(
 )
 
 AGENT_NAMES = {
+  "antigravity" => "Antigravity",
   "claude" => "Claude",
   "codex" => "Codex",
   "copilot" => "Copilot",
-  "gemini" => "Gemini",
 }.freeze
 
 AGENT_CLASSES = {
+  "Antigravity" => "agent-antigravity",
   "Claude" => "agent-claude",
   "Codex" => "agent-codex",
   "Copilot" => "agent-copilot",
-  "Gemini" => "agent-gemini",
 }.freeze
 
 # Podman emits Ports as an array of objects like:
@@ -132,13 +132,12 @@ end
 
 def agent_from_command(command)
   executable = File.basename(command.split.first.to_s).downcase
+  return "Antigravity" if %w[antigravity-cli agy antigravity].include?(executable)
   return "Claude" if executable == "claude"
   return "Codex" if executable == "codex"
-  return "Gemini" if executable == "gemini"
   return "Copilot" if executable == "copilot"
 
   return "Codex" if command.include?("@openai/codex")
-  return "Gemini" if command.include?("@google/gemini-cli")
   return "Copilot" if command.include?("@github/copilot")
 end
 
@@ -271,8 +270,8 @@ def render_html
           --codex-fg: #18794e;
           --copilot-bg: #f3e8ff;
           --copilot-fg: #7e22ce;
-          --gemini-bg: #e8f0ff;
-          --gemini-fg: #2457a6;
+          --antigravity-bg: #e8f0ff;
+          --antigravity-fg: #2457a6;
           --error: #b00;
         }
         @media (prefers-color-scheme: dark) {
@@ -298,8 +297,8 @@ def render_html
             --codex-fg: #7ee2a8;
             --copilot-bg: #3b2452;
             --copilot-fg: #d8a7ff;
-            --gemini-bg: #203457;
-            --gemini-fg: #8db8ff;
+            --antigravity-bg: #203457;
+            --antigravity-fg: #8db8ff;
             --error: #ff8a8a;
           }
         }
@@ -344,7 +343,7 @@ def render_html
         .agent-claude { color: var(--claude-fg); background: var(--claude-bg); }
         .agent-codex { color: var(--codex-fg); background: var(--codex-bg); }
         .agent-copilot { color: var(--copilot-fg); background: var(--copilot-bg); }
-        .agent-gemini { color: var(--gemini-fg); background: var(--gemini-bg); }
+        .agent-antigravity { color: var(--antigravity-fg); background: var(--antigravity-bg); }
         .cwd { white-space: nowrap; }
         .cwd-parent { color: var(--muted); }
         .cwd-name { color: var(--fg); font-weight: 700; }

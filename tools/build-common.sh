@@ -33,6 +33,27 @@ update_codex_version () {
   printf '%s\n' "$version" > "$REPO_DIR/versions/codex"
 }
 
+update_antigravity_version () (
+  set -e
+  release_dir=$(mktemp -d)
+  trap 'rm -rf "$release_dir"' EXIT
+  for platform in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64; do
+    curl -fsSL --retry 3 \
+      "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/$platform.json" \
+      -o "$release_dir/release.json"
+    jq -e --arg platform "$platform" '
+      select(
+        (.version | test("^[0-9]+\\.[0-9]+\\.[0-9]+$")) and
+        (.url | startswith("https://storage.googleapis.com/antigravity-public/antigravity-cli/")) and
+        (.sha512 | test("^[a-f0-9]{128}$"))
+      ) | {($platform): {version, url, sha512}}
+    ' "$release_dir/release.json" >> "$release_dir/releases.json"
+  done
+  jq -s add "$release_dir/releases.json" > "$release_dir/manifest.json"
+  mkdir -p "$REPO_DIR/versions"
+  mv "$release_dir/manifest.json" "$REPO_DIR/versions/antigravity-cli.json"
+)
+
 update_plugin_manifest () {
   file=$1
   tmp=$(mktemp)

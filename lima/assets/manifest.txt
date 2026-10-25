@@ -30,6 +30,8 @@ npm-packages.txt inside_deps/npm-packages.txt project
 rv-ruby-versions.txt inside_deps/rv-ruby-versions.txt project
 ruby-build-versions.txt inside_deps/ruby-build-versions.txt project
 install-agents.sh inside_deps/install-agents.sh project
+_antigravity.sh inside_deps/_antigravity.sh project
+antigravity-release.json versions/antigravity-cli.json project
 _codex_plugins.sh inside_deps/_codex_plugins.sh project
 claude-version versions/claude-code project
 codex-version versions/codex project
@@ -41,8 +43,8 @@ gitignore gitignore-global project
 start.sh tools/start.sh project
 screenshot.sh tools/screenshot.sh project
 claude.sh tools/claude.sh project
-gemini.sh tools/gemini.sh project
 codex.sh tools/codex.sh project
+antigravity.sh tools/antigravity.sh project
 exit.sh tools/exit.sh project
 loki.sh tools/loki.sh project
 gh-host.sh tools/gh-host.sh project

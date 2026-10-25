@@ -69,6 +69,7 @@ tar -tzf "$MACOS_TEST_ARCHIVE" | grep -Fx 'lima/macos/provision.sh' >/dev/null
 mkdir "$tmpdir/extracted"
 tar -xzf "$MACOS_TEST_ARCHIVE" -C "$tmpdir/extracted"
 for asset in lima/assets/claude.sh lima/assets/gitconfig \
+  inside_deps/_antigravity.sh versions/antigravity-cli.json tools/antigravity.sh \
   tools/agent-skills.sh skills/gh-host/SKILL.md skills/jactionlint/SKILL.md; do
   test -f "$tmpdir/extracted/$asset"
   test ! -L "$tmpdir/extracted/$asset"

@@ -96,10 +96,11 @@ PATH="${fake_bin}:${REPO_DIR}/bin:${PATH}" \
 assert_label claude
 
 # Each spelling selects the same agent, profile, and resume environment.
-for selector in c claude cx codex; do
+for selector in c claude cx codex g antigravity; do
   case "$selector" in
     c|claude) agent=claude; prefix=CLAUDE ;;
     cx|codex) agent=codex; prefix=CODEX ;;
+    g|antigravity) agent=antigravity; prefix=ANTIGRAVITY ;;
   esac
   HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:$PATH" \
     "$REPO_DIR/bin/ai" "$selector" >/dev/null
@@ -111,6 +112,7 @@ for selector in c claude cx codex; do
   grep -Fx "${prefix}_AUTO_START=1" "$PODMAN_ARGS_FILE" >/dev/null
   grep -Fx "${prefix}_PROFILE=alpha" "$PODMAN_ARGS_FILE" >/dev/null
   grep -Fx "${prefix}_RESUME=session-id" "$PODMAN_ARGS_FILE" >/dev/null
+  [[ "$agent" != antigravity ]] || continue
   HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:$PATH" \
     "$REPO_DIR/bin/ai" "$selector" --resume=session-id --fork >/dev/null
   grep -Fx "${prefix}_RESUME=session-id" "$PODMAN_ARGS_FILE" >/dev/null
@@ -126,14 +128,15 @@ for arguments in '' '--ports 9999'; do
   assert_label ''
   grep -Fx 'run' "$PODMAN_ARGS_FILE" >/dev/null
   grep -Fx -- '--interactive' "$PODMAN_ARGS_FILE" >/dev/null
-  if grep -E '^(CLAUDE|CODEX)_AUTO_START=' "$PODMAN_ARGS_FILE" >/dev/null; then
+  if grep -E '^(CLAUDE|CODEX|ANTIGRAVITY)_AUTO_START=' "$PODMAN_ARGS_FILE" >/dev/null; then
     echo 'at=fatal msg="shell-only launch auto-started an agent"' >&2
     exit 1
   fi
 done
 
 for arguments in '--resume session-id' 'c --fork' 'cx --fork' \
-  'c --resume= --fork' alpha 'alpha c' 'c cx' 'codex claude' 'c c'; do
+  'c --resume= --fork' alpha 'alpha c' 'c cx' 'codex claude' 'c c' \
+  'g --resume session-id --fork' 'g ../other' 'g alpha beta' 'g c'; do
   rm -f "$PODMAN_ARGS_FILE"
   if HOME="${tmpdir}/home" AI_DIR="$ai_dir" PATH="${fake_bin}:$PATH" \
     "$REPO_DIR/bin/ai" $arguments >"$tmpdir/error" 2>&1; then
@@ -147,6 +150,7 @@ done
 cat > "$tmpdir/bashrc" <<'RC'
 c() { printf 'claude\n' >> "$AGENT_CALLS_FILE"; printf '%s\n' "$@" > "$AGENT_ARGS_FILE"; }
 cx() { printf 'codex\n' >> "$AGENT_CALLS_FILE"; printf '%s\n' "$@" > "$AGENT_ARGS_FILE"; }
+g() { printf 'antigravity\n' >> "$AGENT_CALLS_FILE"; printf '%s\n' "$@" > "$AGENT_ARGS_FILE"; }
 start.sh() { :; }
 RC
 sed -n '/^auto_launch_requested=false/,$p' "$REPO_DIR/dot.bashrc" >> "$tmpdir/bashrc"
@@ -161,6 +165,15 @@ done
 printf 'claude\ncodex\n' > "$tmpdir/expected-calls"
 diff -u "$tmpdir/expected-calls" "$AGENT_CALLS_FILE"
 
+env AI_AUTO_LAUNCH=1 ANTIGRAVITY_AUTO_START=1 ANTIGRAVITY_PROFILE=alpha \
+  ANTIGRAVITY_RESUME=session-id bash --noprofile --rcfile "$tmpdir/bashrc" -ic \
+  'test -z "${ANTIGRAVITY_AUTO_START:-}${ANTIGRAVITY_PROFILE:-}${ANTIGRAVITY_RESUME:-}" && source "$1"' \
+  bash "$tmpdir/bashrc" >"$tmpdir/shell-output" 2>&1
+printf '%s\n' --profile alpha --conversation session-id > "$tmpdir/expected-args"
+diff -u "$tmpdir/expected-args" "$AGENT_ARGS_FILE"
+printf 'antigravity\n' >> "$tmpdir/expected-calls"
+diff -u "$tmpdir/expected-calls" "$AGENT_CALLS_FILE"
+
 for agent in CLAUDE CODEX; do
   # shellcheck disable=SC2016 # The expressions expand in the child shell.
   env AI_AUTO_LAUNCH=1 "${agent}_AUTO_START=1" "${agent}_RESUME=session-id" \
@@ -170,7 +183,7 @@ for agent in CLAUDE CODEX; do
   printf '%s\n' --resume session-id --fork > "$tmpdir/expected-args"
   diff -u "$tmpdir/expected-args" "$AGENT_ARGS_FILE"
 done
-printf 'claude\ncodex\nclaude\ncodex\n' > "$tmpdir/expected-calls"
+printf 'claude\ncodex\nantigravity\nclaude\ncodex\n' > "$tmpdir/expected-calls"
 diff -u "$tmpdir/expected-calls" "$AGENT_CALLS_FILE"
 
 echo 'at=info msg="ai agent label tests passed"'

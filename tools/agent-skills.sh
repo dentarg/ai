@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Shared by the Claude Code and Codex launchers.
+# Shared by the coding agent launchers.
 configure_host_skills () {
   local skill_home=$1
   link_image_skill "$skill_home" jactionlint

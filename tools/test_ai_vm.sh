@@ -168,6 +168,14 @@ grep -F '<stop>' "$log" >/dev/null
 grep -F '<delete> <--force>' "$log" >/dev/null
 
 : > "$log"
+HOME="${tmpdir}/home" AI_DIR="$ai_dir" AI_VM_HOST_PORT=45555 \
+  LIMACTL_LOG="$log" PATH="${fake_bin}:${REPO_DIR}/bin:$PATH" \
+  "$REPO_DIR/bin/ai" g work --vm --resume conversation-id >/dev/null 2>&1
+grep -F '<ANTIGRAVITY_AUTO_START=1>' "$log" >/dev/null
+grep -F '<ANTIGRAVITY_PROFILE=work>' "$log" >/dev/null
+grep -F '<ANTIGRAVITY_RESUME=conversation-id>' "$log" >/dev/null
+
+: > "$log"
 fallback_output="${tmpdir}/fallback-output"
 (
   cd "$project"

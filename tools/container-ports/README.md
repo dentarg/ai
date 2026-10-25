@@ -26,5 +26,5 @@ directory stored in each container's `cwd` label.
 
 New containers identify their auto-launched coding agent with an `agent` label.
 For older containers and sessions where the agent was started manually, the
-app falls back to detecting Claude, Codex, Gemini, or Copilot in the live
+app falls back to detecting Antigravity, Claude, Codex, or Copilot in the live
 process list.

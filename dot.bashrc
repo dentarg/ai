@@ -123,6 +123,9 @@ auto_launch_requested=false
 if [[ -n "${CLAUDE_AUTO_START:-}" || -n "${CLAUDE_PROFILE:-}" || -n "${CLAUDE_RESUME:-}" || -n "${CODEX_AUTO_START:-}" || -n "${CODEX_PROFILE:-}" || -n "${CODEX_RESUME:-}" ]]; then
   auto_launch_requested=true
 fi
+if [[ -n "${ANTIGRAVITY_AUTO_START:-}" || -n "${ANTIGRAVITY_PROFILE:-}" || -n "${ANTIGRAVITY_RESUME:-}" ]]; then
+  auto_launch_requested=true
+fi
 
 if [[ $- == *i* && "$auto_launch_requested" == true ]] && \
    { [[ "${AI_AUTO_LAUNCH:-}" == 1 ]] || [[ "$(tty)" == "$(readlink -f /dev/console)" ]]; }; then
@@ -131,10 +134,20 @@ if [[ $- == *i* && "$auto_launch_requested" == true ]] && \
   codex_auto_start="${CODEX_AUTO_START:-}"
   codex_profile="${CODEX_PROFILE:-}"
   codex_resume="${CODEX_RESUME:-}"
+  antigravity_auto_start="${ANTIGRAVITY_AUTO_START:-}"
+  antigravity_profile="${ANTIGRAVITY_PROFILE:-}"
+  antigravity_resume="${ANTIGRAVITY_RESUME:-}"
   fork_session="${AI_FORK_SESSION:-}"
   unset AI_AUTO_LAUNCH CLAUDE_AUTO_START CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_PROFILE CODEX_RESUME AI_FORK_SESSION
+  unset ANTIGRAVITY_AUTO_START ANTIGRAVITY_PROFILE ANTIGRAVITY_RESUME
 
-  if [[ -n "$codex_auto_start" || -n "$codex_resume" ]]; then
+  if [[ -n "$antigravity_auto_start" || -n "$antigravity_profile" || -n "$antigravity_resume" ]]; then
+    start.sh || true
+    antigravity_args=()
+    [[ -n "$antigravity_profile" ]] && antigravity_args+=(--profile "$antigravity_profile")
+    [[ -n "$antigravity_resume" ]] && antigravity_args+=(--conversation "$antigravity_resume")
+    g "${antigravity_args[@]}"
+  elif [[ -n "$codex_auto_start" || -n "$codex_resume" ]]; then
     start.sh || true
     cx_args=()
     [[ -n "$codex_profile" ]] && cx_args+=("$codex_profile")

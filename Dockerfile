@@ -85,6 +85,7 @@ Type=simple
 Environment=HOME=$HOME
 PassEnvironment=HOST_DIR PORT HOST_PORT CLAUDE_PROFILE CLAUDE_RESUME CODEX_AUTO_START CODEX_PROFILE CODEX_RESUME AI_REMOTE AI_FAST OP_BRIDGE_URL OP_BRIDGE_TOKEN OP_BRIDGE_CA
 PassEnvironment=AI_FORK_SESSION
+PassEnvironment=ANTIGRAVITY_AUTO_START ANTIGRAVITY_PROFILE ANTIGRAVITY_RESUME
 PassEnvironment=GH_BRIDGE_URL GH_BRIDGE_TOKEN GH_BRIDGE_CA
 PassEnvironment=HOST_BROWSER_URL HOST_BROWSER_TOKEN HOST_BROWSER_CA NODE_EXTRA_CA_CERTS
 ExecStart=/bin/bash
@@ -107,21 +108,26 @@ EOT
 RUN systemctl enable shell.service
 
 #
-# Coding agents (Claude Code, Codex)
+# Coding agents (Claude Code, Codex, Antigravity CLI)
 #
 # Agent versions are pinned in versions/ and refreshed by build_image flags.
 
 # Codex — npm global, pinned version
 COPY versions/codex /tmp/codex-version
 COPY versions/claude-code /tmp/claude-version
+COPY versions/antigravity-cli.json /tmp/antigravity-release.json
 COPY inside_deps/_claude.sh /tmp/claude-installer.sh
+COPY inside_deps/_antigravity.sh /tmp/antigravity-installer.sh
 COPY inside_deps/install-agents.sh /tmp/install-agents.sh
 RUN bash /tmp/install-agents.sh \
       "$(cat /tmp/codex-version)" \
       "$(cat /tmp/claude-version)" \
       /tmp/claude-installer.sh \
+      /tmp/antigravity-release.json \
+      /tmp/antigravity-installer.sh \
     && rm /tmp/codex-version /tmp/claude-version \
-          /tmp/claude-installer.sh /tmp/install-agents.sh
+          /tmp/claude-installer.sh /tmp/install-agents.sh \
+          /tmp/antigravity-release.json /tmp/antigravity-installer.sh
 
 # Codex plugins — clone pinned marketplaces and build the cache/configuration
 # copied into each ephemeral session by tools/codex.sh.
@@ -158,8 +164,8 @@ ENV LC_ALL=C.UTF-8
 COPY ./tools/start.sh /usr/local/bin/start.sh
 COPY ./tools/screenshot.sh /usr/local/bin/screenshot.sh
 COPY ./tools/claude.sh /usr/local/bin/c
-COPY ./tools/gemini.sh /usr/local/bin/g
 COPY ./tools/codex.sh /usr/local/bin/cx
+COPY ./tools/antigravity.sh /usr/local/bin/g
 COPY ./tools/exit.sh /usr/local/bin/x
 COPY ./tools/loki.sh /usr/local/bin/loki
 COPY ./tools/gh-host.sh /usr/local/bin/gh-host
@@ -179,8 +185,8 @@ COPY bin/refresh-tokens /usr/local/bin/refresh-tokens
 RUN chmod +x /usr/local/bin/start.sh \
              /usr/local/bin/screenshot.sh \
              /usr/local/bin/c \
-             /usr/local/bin/g \
              /usr/local/bin/cx \
+             /usr/local/bin/g \
              /usr/local/bin/x \
              /usr/local/bin/loki \
              /usr/local/bin/gh-host \

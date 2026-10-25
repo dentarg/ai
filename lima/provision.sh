@@ -102,7 +102,9 @@ docker rm "$amqpcat_container" >/dev/null
 run_as_vm_user bash /tmp/ai-build/install-agents.sh \
   "$(cat /tmp/ai-build/codex-version)" \
   "$(cat /tmp/ai-build/claude-version)" \
-  /tmp/ai-build/_claude.sh
+  /tmp/ai-build/_claude.sh \
+  /tmp/ai-build/antigravity-release.json \
+  /tmp/ai-build/_antigravity.sh
 
 install -d -o "$AI_VM_USER" -g "$AI_VM_GROUP" /opt/codex-plugins
 run_as_vm_user bash /tmp/ai-build/_codex_plugins.sh \
@@ -112,8 +114,8 @@ chown -R root:root /opt/codex-plugins
 install -m 755 /tmp/ai-build/start.sh /usr/local/bin/start.sh
 install -m 755 /tmp/ai-build/screenshot.sh /usr/local/bin/screenshot.sh
 install -m 755 /tmp/ai-build/claude.sh /usr/local/bin/c
-install -m 755 /tmp/ai-build/gemini.sh /usr/local/bin/g
 install -m 755 /tmp/ai-build/codex.sh /usr/local/bin/cx
+install -m 755 /tmp/ai-build/antigravity.sh /usr/local/bin/g
 install -m 755 /tmp/ai-build/exit.sh /usr/local/bin/x
 install -m 755 /tmp/ai-build/loki.sh /usr/local/bin/loki
 install -m 755 /tmp/ai-build/gh-host.sh /usr/local/bin/gh-host

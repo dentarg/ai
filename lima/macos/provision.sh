@@ -30,6 +30,7 @@ while IFS= read -r package; do
 done < "$assets/inside_deps/npm-packages.txt"
 npm install -g "@openai/codex@$(cat "$assets/versions/codex")"
 bash "$assets/lima/assets/claude.sh" "$(cat "$assets/versions/claude-code")"
+bash "$assets/inside_deps/_antigravity.sh" "$assets/versions/antigravity-cli.json"
 rm -rf "$HOME/.claude"
 # This is a generated cache, and the installer expects an empty destination.
 sudo rm -rf /opt/codex-plugins
@@ -42,7 +43,7 @@ sudo install -d /opt/ai-skills/gh-host
 sudo install -m 644 "$assets/skills/gh-host/SKILL.md" /opt/ai-skills/gh-host/SKILL.md
 sudo install -d /opt/ai-skills/jactionlint
 sudo install -m 644 "$assets/skills/jactionlint/SKILL.md" /opt/ai-skills/jactionlint/SKILL.md
-for mapping in claude.sh:c codex.sh:cx gemini.sh:g claude-hook.sh:claude-hook \
+for mapping in claude.sh:c codex.sh:cx antigravity.sh:g claude-hook.sh:claude-hook \
   claude-permission-hook.sh:claude-permission-hook claude-login.sh:claude-login \
   codex-hook.sh:codex-hook gh-host.sh:gh-host op-read.sh:op-read exit.sh:x; do
   sudo install -m 755 "$assets/tools/${mapping%:*}" "/usr/local/bin/${mapping#*:}"

@@ -1,12 +1,13 @@
 # `ai` sandbox
 
-A disposable Podman container or Lima virtual machine for running coding agents (Claude Code, Gemini CLI, OpenAI Codex, GitHub Copilot) with `--dangerously-skip-permissions` / `--dangerously-bypass-approvals-and-sandbox` enabled by default.
+A disposable Podman container or Lima virtual machine for running coding agents (Claude Code, Antigravity CLI, OpenAI Codex, GitHub Copilot) with `--dangerously-skip-permissions` / `--dangerously-bypass-approvals-and-sandbox` enabled by default.
 
 ## Contents
 
 - [Why](#why)
 - [Setup](#setup)
 - [Prerequisites](#prerequisites)
+- [Antigravity CLI](#antigravity-cli)
 - [Host browser](#host-browser)
 - [1Password bridge](#1password-bridge)
 - [GitHub bridge](#github-bridge)
@@ -80,7 +81,7 @@ OpenAI and Anthropic fields used here, and cache the compact result under
 model never downloads the registry.
 
 Optionally, add `AGENTS.md` to `$HOME/ai/settings` — it becomes `CLAUDE.md`
-for Claude Code, `GEMINI.md` for Gemini CLI, and is copied into Codex's
+for Claude Code, `GEMINI.md` for Antigravity CLI, and is copied into Codex's
 session config.
 
 Optionally, add `sentry.token` to `$HOME/ai/settings` to enable the
@@ -115,7 +116,7 @@ source <(bin/ai completion zsh)
 # launch a new Podman container with an interactive shell
 bin/ai
 
-# select an agent explicitly: c or claude, cx or codex
+# select an agent explicitly: c or claude, cx or codex, g or antigravity
 # profiles and resumed sessions require an agent
 # start Claude Code in Podman and share the current working directory
 bin/ai c
@@ -202,7 +203,7 @@ c --resume <session-id>
 # fork the saved Claude conversation (also accepts --fork-session)
 c --resume <session-id> --fork
 
-# launch gemini
+# launch Google Antigravity CLI
 g
 
 # launch openai codex
@@ -276,12 +277,13 @@ bin/setup-vm
 # check upstream "latest" endpoints.
 ./build_image
 
-# update pinned Claude Code, Codex and plugin marketplace versions, then rebuild
+# update pinned agents and plugin marketplaces, then rebuild
 ./build_image --update-agents
 
 # update only one pinned version file
 ./build_image --update-claude
 ./build_image --update-codex
+./build_image --update-antigravity
 ./build_image --update-plugins
 
 # rebuild all layers and pull latest base image
@@ -317,8 +319,9 @@ The default base is `ai-base-macos`. If tool installation fails, run
 provisioning in the existing VM, preserving its installed OS and packages.
 `--force` deletes and rebuilds it instead; these options cannot be combined.
 The existing
-`--update-agents`, `--update-claude`, `--update-codex`, and `--update-plugins`
-options also work. `AI_VM_BASE`, `AI_VM_CPUS`, `AI_VM_MEMORY`, and `AI_VM_DISK`
+`--update-agents`, `--update-claude`, `--update-codex`, `--update-antigravity`,
+and `--update-plugins` options also work. `AI_VM_BASE`, `AI_VM_CPUS`,
+`AI_VM_MEMORY`, and `AI_VM_DISK`
 override the build defaults. `AI_VM_BUILD_TIMEOUT` controls each Lima startup
 (default `60m`); subsequent tool installation streams directly over SSH.
 The host must support the macOS 26 restore image supplied by the installed
@@ -606,6 +609,52 @@ bin/vm <instance> docker ps
 limactl stop <instance>
 limactl delete <instance>
 ```
+
+## Antigravity CLI
+
+[Google Antigravity CLI](https://antigravity.google/docs/getting-started/)
+runs inside the same sandbox as the other agents. Rebuild the image or Lima
+base to install it, then launch it with:
+
+```shell
+bin/ai g
+bin/ai g work
+bin/ai g work --vm
+bin/ai antigravity work --macos
+bin/ai g work --resume <conversation-id>
+```
+
+On first launch, select Google OAuth, open the displayed URL in your host
+browser, and paste the authorization response back into the CLI when prompted.
+Each profile creates its own persistent state automatically; `ai profile`
+continues to manage Claude and Codex profiles. Resume with the same profile
+used to create the conversation, or use `/resume` inside the CLI. Use `/fork`
+inside Antigravity to fork a conversation.
+
+Global configuration lives under
+`~/ai/settings/antigravity` (or `antigravity_<profile>`). The CLI state directory
+is linked to `~/ai/history/antigravity` (or `antigravity_<profile>`), keeping
+conversations, OAuth fallback credentials, logs, settings, and installed plugins
+across sandbox restarts. The keyring scope under `~/.config/antigravity` is
+linked to the profile's `keyring` directory in settings.
+The launcher points `~/.gemini` at the selected profile. Any existing real
+`~/.gemini` directory is saved under `~/.gemini-backup.*` first. Shared
+`~/ai/settings/AGENTS.md` instructions and the bundled host skills are loaded
+for Antigravity.
+
+Inside an existing sandbox, use the wrapper and native CLI options:
+
+```shell
+g
+g --profile work
+g --profile work --conversation <conversation-id>
+g --profile work models
+```
+
+The wrapper enables `--dangerously-skip-permissions`. Release URLs and SHA-512
+checksums for Linux and macOS on AMD64 and ARM64 are pinned in
+`versions/antigravity-cli.json`. Both builders accept `--update-antigravity`;
+`--update-agents` refreshes these pins too.
 
 ## Host browser
 
@@ -1609,7 +1658,7 @@ bin/setup-vm
 
 - [x] Claude Code
 - [x] GitHub Copilot
-- [x] Google Gemini
+- [x] Google Antigravity CLI
 - [x] Node.js
 - [x] Bun ~~TypeScript~~
 - [x] Ruby

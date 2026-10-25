@@ -14,6 +14,14 @@ _ai_browser_profile_options() {
   done
 }
 
+_ai_antigravity_profiles() {
+  local path
+  for path in "${AI_DIR:-${HOME}/ai}/settings"/antigravity_*; do
+    [[ -d "$path" ]] || continue
+    printf '%s\n' "${path##*/antigravity_}"
+  done
+}
+
 _ai_complete() {
   local command=${COMP_WORDS[0]}
   local current=${COMP_WORDS[COMP_CWORD]}
@@ -24,7 +32,7 @@ _ai_complete() {
 
   case "$COMP_CWORD" in
     1)
-      values="profile models session completion c claude cx codex --resume --fork --fork-session --ports --udp-ports --vm
+      values="profile models session completion c claude cx codex g antigravity --resume --fork --fork-session --ports --udp-ports --vm
         --keep-vm --gpu --nested-virt --cpus --memory --github --1password
         --host-browser --remote --fast --help
         $(_ai_browser_profile_options) $(_ai_github_profile_options)"
@@ -41,6 +49,12 @@ _ai_complete() {
             --ports --udp-ports --github --1password --host-browser --help"
           case "$first" in c|claude) values="$values --remote --fast --fork-session" ;; esac
           values="$values $(_ai_browser_profile_options) $(_ai_github_profile_options)"
+          ;;
+        g|antigravity)
+          values="$(_ai_antigravity_profiles) --resume --vm --macos --keep-vm
+            --gpu --nested-virt --cpus --memory --ports --udp-ports --github
+            --1password --host-browser --help
+            $(_ai_browser_profile_options) $(_ai_github_profile_options)"
           ;;
       esac
       ;;

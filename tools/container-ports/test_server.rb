@@ -95,6 +95,7 @@ class ContainerPortsTest < Minitest::Test
       id: "new",
       labels: { "agent" => "codex" },
     )
+    google = Container.new(id: "google", labels: { "agent" => "antigravity" })
     legacy = Container.new(id: "old", labels: {})
     lookups = []
     detector = Object.new
@@ -103,10 +104,11 @@ class ContainerPortsTest < Minitest::Test
       ["Claude"]
     end
 
-    detector.send(:attach_agents, [labeled, legacy])
+    detector.send(:attach_agents, [labeled, google, legacy])
 
     assert_equal ["old"], lookups
     assert_equal "Codex", labeled.agent
+    assert_equal "Antigravity", google.agent
     assert_equal "Claude", legacy.agent
   end
 
@@ -135,10 +137,17 @@ class ContainerPortsTest < Minitest::Test
     assert_operator maximum, :<=, LOOKUP_WORKERS
   end
 
+  def test_detects_native_antigravity
+    assert_equal(
+      "Antigravity",
+      agent_from_command("/workspace/.local/bin/antigravity-cli --conversation session-id"),
+    )
+  end
+
   def test_detects_node_based_agents
     assert_equal(
-      "Gemini",
-      agent_from_command("node /usr/lib/node_modules/@google/gemini-cli/index.js"),
+      "Copilot",
+      agent_from_command("node /usr/lib/node_modules/@github/copilot/index.js"),
     )
   end
 

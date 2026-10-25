@@ -19,10 +19,11 @@ REPO_DIR=$SCRIPT_DIR
 FORCE=0
 UPDATE_CLAUDE=0
 UPDATE_CODEX=0
+UPDATE_ANTIGRAVITY=0
 UPDATE_PLUGINS=0
 
 usage () {
-  echo "Usage: ./build_image [--force] [--update-claude] [--update-codex] [--update-plugins]" >&2
+  echo "Usage: ./build_image [--force] [--update-claude] [--update-codex] [--update-antigravity] [--update-plugins]" >&2
   echo "       ./build_image [--force] --update-agents" >&2
   exit 1
 }
@@ -38,12 +39,16 @@ for arg in "$@"; do
     --update-codex)
       UPDATE_CODEX=1
       ;;
+    --update-antigravity)
+      UPDATE_ANTIGRAVITY=1
+      ;;
     --update-plugins)
       UPDATE_PLUGINS=1
       ;;
     --update-agents)
       UPDATE_CLAUDE=1
       UPDATE_CODEX=1
+      UPDATE_ANTIGRAVITY=1
       UPDATE_PLUGINS=1
       ;;
     -h|--help)
@@ -58,6 +63,7 @@ done
 
 [ "$UPDATE_CLAUDE" -eq 1 ] && update_claude_version
 [ "$UPDATE_CODEX" -eq 1 ] && update_codex_version
+[ "$UPDATE_ANTIGRAVITY" -eq 1 ] && update_antigravity_version
 [ "$UPDATE_PLUGINS" -eq 1 ] && update_plugins_versions
 
 set -x
