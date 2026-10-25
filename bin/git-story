@@ -1,0 +1,87 @@
+#!/bin/bash
+
+set -euo pipefail
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") DIRECTORY [COMMAND] [OPTIONS...]
+
+Explore a Git repository with git-history-ui in the ai container.
+Use . explicitly for the current directory. No arguments prints this help.
+The repository is mounted read-only; cache, annotations, and presets persist
+under \$AI_DIR/git-history-ui (default: \$HOME/ai/git-history-ui).
+
+Examples:
+  $(basename "$0") .
+  $(basename "$0") /path/to/repo --author "Jane Doe"
+  $(basename "$0") . wrapped --all-authors --json
+  $(basename "$0") . pr-impact --base main --head feature > report.md
+  $(basename "$0") . presets list
+  $(basename "$0") . --help
+
+The UI runs in the foreground. Open the printed URL; if prompted, use any
+username and the printed password. Ctrl+C stops and removes the container.
+PORT sets the host port (default: 3000); the wrapper manages the server's
+--host, --port, --token, and --no-open options. Subcommand options pass through.
+GIT_HISTORY_UI_TOKEN optionally supplies a password instead of generating one.
+EOF
+}
+
+case "${1:-}" in
+  ''|-h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+directory=$1
+shift
+if [[ ! -d $directory ]]; then
+  printf 'Directory not found: %s\n' "$directory" >&2
+  exit 1
+fi
+repo_dir=$(git -C "$directory" rev-parse --show-toplevel)
+repo_dir=$(cd "$repo_dir" && pwd -P)
+common_dir=$(git -C "$repo_dir" rev-parse --path-format=absolute --git-common-dir)
+common_dir=$(cd "$common_dir" && pwd -P)
+
+state_dir=${AI_DIR:-"$HOME/ai"}/git-history-ui
+mkdir -p "$state_dir"
+state_dir=$(cd "$state_dir" && pwd -P)
+
+container=(podman run --rm --init --stop-signal SIGTERM
+  --volume "$repo_dir:$repo_dir:ro"
+  --volume "$state_dir:/workspace/.git-history-ui"
+  --workdir "$repo_dir"
+  --env GIT_CONFIG_COUNT=1
+  --env GIT_CONFIG_KEY_0=safe.directory
+  --env "GIT_CONFIG_VALUE_0=$repo_dir"
+  --env GHUI_LLM_PROVIDER=heuristic)
+
+# Preserve host paths so linked worktrees and submodules can find their Git data.
+case "$common_dir/" in
+  "$repo_dir/"*) ;;
+  *) container+=(--volume "$common_dir:$common_dir:ro") ;;
+esac
+
+case "${1:-}" in
+  wrapped|pr-impact|presets|protocol|help|-h|--help|-v|--version)
+    ;;
+  *)
+    port=${PORT:-3000}
+    if [[ ! $port =~ ^[0-9]{1,5}$ ]] || ((10#$port < 1 || 10#$port > 65535)); then
+      printf 'Invalid PORT: %s\n' "$port" >&2
+      exit 1
+    fi
+    port=$((10#$port))
+    GIT_HISTORY_UI_TOKEN=${GIT_HISTORY_UI_TOKEN:-$(openssl rand -hex 24)}
+    export GIT_HISTORY_UI_TOKEN
+    # A non-default internal port also prevents presets from overriding it.
+    container+=(--publish "127.0.0.1:$port:1337" --env GIT_HISTORY_UI_TOKEN)
+    set -- "$@" --host 0.0.0.0 --port 1337 --no-open --token "$GIT_HISTORY_UI_TOKEN"
+    printf 'Open http://127.0.0.1:%s\nPassword: %s\n' "$port" "$GIT_HISTORY_UI_TOKEN" >&2
+    ;;
+esac
+
+exec "${container[@]}" --entrypoint /bin/bash ai:latest \
+  -c 'exec git-history-ui "$@"' git-history-ui "$@"

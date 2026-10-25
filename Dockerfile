@@ -60,6 +60,14 @@ COPY inside_deps/install-utils.sh \
      /tmp/ai-build/
 RUN bash /tmp/ai-build/install-system-tools.sh && rm -rf /tmp/ai-build
 
+# Build the reviewed source with locked dependencies; updates require a review.
+COPY versions/git-history-ui /tmp/ai-build/git-history-ui-version
+COPY inside_deps/install-git-history-ui.sh \
+     inside_deps/git-history-ui-dependencies.patch \
+     /tmp/ai-build/
+RUN bash /tmp/ai-build/install-git-history-ui.sh /tmp/ai-build/git-history-ui-version \
+    && rm -rf /tmp/ai-build
+
 # amqpcat - AMQP CLI tool
 COPY --from=cloudamqp/amqpcat /amqpcat /usr/bin/amqpcat
 

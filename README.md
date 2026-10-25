@@ -6,6 +6,7 @@ A disposable Podman container or Lima virtual machine for running coding agents 
 
 - [Why](#why)
 - [Setup](#setup)
+- [Git history UI](#git-history-ui)
 - [Prerequisites](#prerequisites)
 - [Host browser](#host-browser)
 - [1Password bridge](#1password-bridge)
@@ -253,6 +254,48 @@ alias for `--fork`. Session ID prefixes and saved profile detection work as
 for normal resumes, including the saved Codex configuration profile. Forked
 transcripts are stored in the original session home. The option works with
 Podman and both Linux and macOS VMs and requires an explicit `--resume` ID.
+
+## Git history UI
+
+`bin/git-story` runs [git-history-ui](https://github.com/beingmartinbmc/git-history-ui)
+from `ai:latest` in a disposable Podman container. It requires Podman, Git,
+and OpenSSL on the host. Rebuild the image after changing its pin.
+
+```shell
+bin/git-story                           # help; starts nothing
+bin/git-story .                         # current repository
+bin/git-story /path/to/repo              # another repository
+PORT=3001 bin/git-story .                # a different localhost port
+bin/git-story . --author "Jane Doe"      # upstream UI options
+bin/git-story . wrapped --all-authors --json
+bin/git-story . pr-impact --base main --head feature > report.md
+bin/git-story . presets list
+bin/git-story . pr-impact --help
+bin/git-story . --help                   # upstream help
+```
+
+The directory is required and comes first; put a subcommand immediately after
+it. All remaining arguments pass through without shell interpolation. The
+wrapper manages the UI's `--host`, `--port`, `--token`, and `--no-open` options;
+use `PORT` to change the host port (the internal port is 1337). CLI subcommands
+do not publish a port, so they can run while a UI is already open. Their stdout
+and exit status are preserved.
+
+Open the printed localhost URL. When the browser asks for credentials, enter
+any username and the printed password. `GIT_HISTORY_UI_TOKEN` can supply a
+password; otherwise each launch generates one. Ctrl+C stops the foreground
+server and removes its container.
+
+The repository root and any external Git metadata needed by a linked worktree
+or submodule are mounted **read-only**, at their original absolute paths.
+Cache, annotations, and presets persist separately in
+`${AI_DIR:-$HOME/ai}/git-history-ui`; upstream distinguishes repositories by
+their paths. Report output paths refer to the container: redirect stdout on
+the host to save a report beside your code. `protocol` subcommands run inside
+the disposable container and do not register a host URL handler.
+
+See the [source review and update procedure](reviews/git-history-ui.md).
+Reviews for tools included in the image live in [reviews/](reviews/README.md).
 
 ## Prerequisites
 
