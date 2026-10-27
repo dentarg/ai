@@ -1342,7 +1342,7 @@ port from an agent container. Ports must be selected when creating the session.
 
 ### Invite remote participants
 
-The VM needs Tailcat (tested with v0.4.0), OpenSSH server, and a running systemd
+The VM needs Tailcat (bundled version: v0.7.0), OpenSSH server, and a running systemd
 user manager. Enable persistent user services once if needed:
 `sudo loginctl enable-linger "$USER"`. The invitation commands run as your
 normal VM user and do not change the VM's existing SSH server.

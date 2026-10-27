@@ -90,10 +90,10 @@ pip install mitmproxy
 
 # Tailcat — netcat over Tailscale's data plane. Checksums come from the
 # checksums.txt file for the pinned release.
-tailcat_version=0.4.0
+tailcat_version=0.7.0
 case "$arch" in
-  amd64) tailcat_sha=38ff4b45fe56b32c75738c10dfed4f0b68d33bee49a19695f4bb9f9ec5d6e3c0 ;;
-  arm64) tailcat_sha=8f1835a3522ecfc855c9f4ece51c2266781fd03ce76da48036b08c4b86193899 ;;
+  amd64) tailcat_sha=a8ad05230255186d9e8444ab8d7ebc8e7cca19283701404b49785531bf3c2af4 ;;
+  arm64) tailcat_sha=14e04174e8a6b27f9d5d0eccc3f986772456f2b2526c7bf8c1b71deec25cec7f ;;
   *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
 esac
 download \
