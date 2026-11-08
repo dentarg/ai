@@ -14,6 +14,7 @@ git-lfs
 gpg
 gpg-agent
 htop
+imagemagick
 inetutils-traceroute
 iputils-ping
 iputils-tracepath

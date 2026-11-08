@@ -9,7 +9,7 @@ if [[ ! -x /opt/homebrew/bin/brew ]]; then
 fi
 eval "$(/opt/homebrew/bin/brew shellenv)"
 brew install bash coreutils findutils gnu-sed gnu-tar grep jq git git-lfs \
-  ripgrep ast-grep bat ncurses node@22 ruby python go rust mise fnox \
+  ripgrep ast-grep bat imagemagick ncurses node@22 ruby python go rust mise fnox \
   postgresql@17 redis lavinmq erlang@28 rabbitmq toxiproxy hashicorp/tap/terraform
 brew tap jdx/jactionlint https://github.com/jdx/jactionlint
 brew install --cask jdx/jactionlint/jactionlint

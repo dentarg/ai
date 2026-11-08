@@ -35,7 +35,7 @@ printf 'at=info event=install_packages\n'
 apt-get update -qq
 apt-get -o Dpkg::Options::=--force-confold install -y --no-install-recommends \
   bat build-essential ca-certificates cmake curl erlang-dev erlang-nox file git git-lfs gnupg \
-  htop jq less libcurl4-openssl-dev libffi-dev libgmp-dev liblz4-dev \
+  htop imagemagick jq less libcurl4-openssl-dev libffi-dev libgmp-dev liblz4-dev \
   libpq-dev libreadline-dev libssl-dev libyaml-dev libzstd-dev lsof \
   netcat-openbsd pkg-config postgresql-client rabbitmq-server ragel ripgrep rsync \
   shellcheck silversearcher-ag socat sqlite3 strace tmux tree unzip \
