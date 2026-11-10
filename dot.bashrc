@@ -62,7 +62,7 @@ alias x=exit
 
 link_dotfiles () {
   local dir=${1:-/settings/dotfiles}
-  local file base target
+  local file base target excludes_file
 
   for file in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
     [[ -e "$file" || -L "$file" ]] || continue
@@ -75,6 +75,19 @@ link_dotfiles () {
     [[ -d "$target" && ! -L "$target" ]] && continue
     ln -sfn "$file" "$target"
   done
+
+  # Check after linking: the personal ignore file may be another dotfile.
+  file="$dir/.gitconfig"
+  target="$HOME/.gitconfig"
+  [[ -f "$file" && -L "$target" ]] || return 0
+  excludes_file=$(git config --file "$file" --includes --path \
+    --get core.excludesFile) || return 0
+  if [[ -n "$excludes_file" && ! -f "$excludes_file" ]]; then
+    # Keep host settings intact and override only the missing ignore path.
+    rm -f "$target"
+    git config --file "$target" include.path "$file"
+    git config --file "$target" core.excludesFile /etc/gitignore
+  fi
 }
 
 __git_ps1() {

@@ -56,6 +56,9 @@ install -m 644 "$assets/dot.bashrc" "$HOME/.bashrc"
 install -m 644 "$assets/dot.gemrc" "$HOME/.gemrc"
 sudo install -m 644 "$assets/lima/assets/gitconfig" /etc/gitconfig
 sudo install -m 644 "$assets/gitignore-global" /etc/gitignore
+# Homebrew Git reads its own system config; retain its credential helper.
+sudo "$(command -v git)" config --system --fixed-value --replace-all \
+  include.path /etc/gitconfig /etc/gitconfig
 git lfs install
 # Native macOS gems stay separate from the Linux bundle cache on the host.
 mkdir -p "$HOME/.local/bin"

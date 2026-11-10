@@ -63,6 +63,14 @@ Repeat the pull to update, or use a `sha-<full-commit-sha>` tag to select a
 particular source revision. Registry digests can be used for an exact image.
 `./build_image` still builds the local `ai:latest` image for development.
 
+The container, Linux VM, macOS VM, and Claude cloud setup install
+[`gitignore-global`](gitignore-global) as `/etc/gitignore`, ignoring `.DS_Store`
+in every repository by default. A personal `core.excludesFile` setting overrides
+this default. When a mounted `.gitconfig` points to an ignore file that does not
+exist inside the sandbox, shell startup falls back to `/etc/gitignore` through a
+sandbox-local config that includes the mounted settings. The mounted dotfiles
+are not edited.
+
 Drop per-profile OAuth credentials in `$HOME/ai/settings` as
 `.credentials.<profile>.json`. They get mounted into the container and copied
 into `~/.claude/` when you launch claude with a matching profile. See the
@@ -1083,7 +1091,7 @@ Paste this into the cloud environment's **Setup script** field:
 
 ```bash
 #!/bin/bash
-# provisioning-revision: 2026-11-08-1 (change to refresh the cache)
+# provisioning-revision: 2026-11-10-1 (change to refresh the cache)
 set -euo pipefail
 
 script=$(mktemp)

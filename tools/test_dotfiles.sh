@@ -32,6 +32,22 @@ link_dotfiles "$dotfiles"
 [[ ! -e "$HOME/.bashrc" && ! -e "$HOME/.bash_profile" ]]
 [[ ! -L "$HOME/dotfiles" && ! -L "$HOME/.." ]]
 
+# Host-only ignore paths must not disable the sandbox's shared ignore rules.
+git config --file "$dotfiles/.gitconfig" core.excludesFile "$HOME/.gitignore_personal"
+git config --file "$dotfiles/.gitconfig" alias.personal status
+cp "$dotfiles/.gitconfig" "$tmpdir/original-gitconfig"
+link_dotfiles "$dotfiles"
+link_dotfiles "$dotfiles"
+[[ $(git config --file "$HOME/.gitconfig" --includes --get core.excludesFile) == /etc/gitignore ]]
+[[ $(git config --file "$HOME/.gitconfig" --includes --get alias.personal) == status ]]
+cmp "$tmpdir/original-gitconfig" "$dotfiles/.gitconfig"
+
+# Once the personal ignore file exists, use its rules again.
+touch "$dotfiles/.gitignore_personal"
+link_dotfiles "$dotfiles"
+[[ $(readlink "$HOME/.gitconfig") == "$dotfiles/.gitconfig" ]]
+[[ $(git config --file "$HOME/.gitconfig" --includes --get core.excludesFile) == "$HOME/.gitignore_personal" ]]
+
 mkdir "$tmpdir/empty"
 link_dotfiles "$tmpdir/empty"
 link_dotfiles "$tmpdir/missing"

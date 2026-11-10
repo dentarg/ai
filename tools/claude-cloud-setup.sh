@@ -41,6 +41,12 @@ apt-get -o Dpkg::Options::=--force-confold install -y --no-install-recommends \
   shellcheck silversearcher-ag socat sqlite3 strace tmux tree unzip \
   vim wget zip zlib1g-dev zsh
 
+printf 'at=info event=configure_git_ignores\n'
+download "https://raw.githubusercontent.com/dentarg/ai/$ai_revision/gitignore-global" \
+  --output "$setup_tmp/gitignore-global"
+install -m 644 "$setup_tmp/gitignore-global" /etc/gitignore
+git config --system core.excludesFile /etc/gitignore
+
 # Keep RabbitMQ opt-in: LavinMQ uses the same default AMQP port.
 service rabbitmq-server stop
 systemctl disable rabbitmq-server
